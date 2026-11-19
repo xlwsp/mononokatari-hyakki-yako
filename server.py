@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""なかまサバイバー サーバー（Python 標準ライブラリのみ）
+"""モノノカタリ -百鬼夜行- サーバー（Python 標準ライブラリのみ）
 
 - HTTP でゲームのファイルを配信
 - /ws で WebSocket（プレイヤーの接続）
@@ -422,7 +422,7 @@ async def main():
     server = await asyncio.start_server(handle, '0.0.0.0', PORT)
     asyncio.create_task(world.run())
     print('=' * 52)
-    print(' なかまサバイバー サーバー起動（ずっと続く世界）')
+    print(' モノノカタリ -百鬼夜行- サーバー起動（ずっと続く世界）')
     print(f'  このPC:        http://localhost:{PORT}')
     ip = lan_ip()
     if ip:

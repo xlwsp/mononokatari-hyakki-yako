@@ -208,10 +208,10 @@
 
       const cx = wide ? w * 0.4 : w / 2;
       const logoY = Math.max(48, h * 0.1);
-      const logo = this.add.text(cx, logoY, 'なかまサバイバー', TO(64 * s + 10, '#fff8ea', '#4a3a2e', 10 * s + 3))
+      const logo = this.add.text(cx, logoY, 'モノノカタリ', TO(64 * s + 10, '#fff8ea', '#4a3a2e', 10 * s + 3))
         .setOrigin(0.5).setShadow(0, 6, 'rgba(0,0,0,0.3)', 0, true, true);
       this.tweens.add({ targets: logo, scale: 1.03, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-      this.add.text(cx, logoY + 40 * s + 18, '〜 モンスターを育てて最強をめざせ 〜', TO(16 * s + 6, '#ffe7a8', '#4a3a2e', 4)).setOrigin(0.5);
+      this.add.text(cx, logoY + 40 * s + 18, '― 百鬼夜行 ―', TO(22 * s + 8, '#ffe7a8', '#4a3a2e', 4)).setOrigin(0.5);
 
       // メニューパネル
       const pw = Math.min(560, w - 20);
