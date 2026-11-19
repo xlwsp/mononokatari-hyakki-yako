@@ -132,7 +132,7 @@
     const dyn = [];
     const clearDyn = () => { dyn.forEach(o => o.active && o.destroy()); dyn.length = 0; };
     const status = add(scene.add.text(w / 2, y + ph / 2, '読み込み中…', T(16, C.soft)).setOrigin(0.5).setDepth(62));
-    add(scene.add.text(w / 2, y + 58, 'モンスターをえらんで、アイテムをタップで装備', T(13, C.soft)).setOrigin(0.5).setDepth(62));
+    add(scene.add.text(w / 2, y + 58, 'アイテムをタップで装備（攻撃UP・連射UP・スキル強化カードの効果も乗る）', T(12, C.soft)).setOrigin(0.5).setDepth(62));
 
     const draw = () => {
       clearDyn();

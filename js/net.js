@@ -47,7 +47,8 @@
         relay.on('close', () => this.onLost && this.onLost('サーバーとの接続が切れました')),
       ];
     }
-    set onSnapshot(fn) { this._onSnap = fn; if (fn) { this.pending.forEach(fn); this.pending = []; } }
+    // 画面の準備中にたまった分は、新しい数個だけ渡す（一度に大量に処理して固まらないように）
+    set onSnapshot(fn) { this._onSnap = fn; if (fn) { this.pending.slice(-3).forEach(fn); this.pending = []; } }
     sendInput(x, y) {
       const now = performance.now();
       if (now - this.lastSend < 45) return;

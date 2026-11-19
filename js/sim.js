@@ -125,18 +125,20 @@
 
   // 強化カード。{skill} {trait} はモンスターごとのスキル名・特性名に置き換わる
   const UPGRADES = {
-    dmg:      { name: '攻撃力 UP', desc: '通常攻撃のダメージ +20%', ok: () => true, apply: p => { p.dmgMul *= 1.2; } },
+    // 強化は「足し算」で積み上がる（枚数に比例して強くなる。何枚でも取れる）
+    dmg:      { name: '攻撃力 UP', desc: '攻撃のダメージ +20%', ok: () => true, apply: p => { p.dmgMul += 0.2; } },
     rate:     { name: '連射 UP', desc: '通常攻撃の間隔 -13%', ok: p => p.rateMul > 0.35, apply: p => { p.rateMul *= 0.87; } },
     extra:    { name: '弾数 +1', desc: '通常攻撃の弾が1つ増える', ok: p => p.extra < 4, apply: p => { p.extra++; } },
     pierce:   { name: '貫通弾', desc: '弾が敵を貫通 +1', ok: p => p.pierce < 3, apply: p => { p.pierce++; } },
-    skillPow: { name: '{skill} 強化', desc: '{skill}の威力 +45%', ok: () => true, apply: p => { p.skillPow *= 1.45; } },
+    skillPow: { name: '{skill} 強化', desc: '{skill}の威力 +45%', ok: () => true, apply: p => { p.skillPow += 0.45; } },
     skillCd:  { name: '{skill} 連発', desc: '{skill}のクールタイム -22%', ok: p => p.skillCd > 0.3, apply: p => { p.skillCd *= 0.78; } },
     area:     { name: '{skill} 拡大', desc: '{skill}の範囲 +30%', ok: p => SPECIES[p.sp].skill.area && p.areaMul < 2.6, apply: p => { p.areaMul *= 1.3; } },
-    hp:       { name: 'タフネス', desc: '最大HP +25% & 全回復', ok: () => true, apply: p => { p.mhp *= 1.25; p.hp = p.mhp; } },
+    // HPカードは30枚まで。増え方は「掛け算」ではなく「足し算」（レベルが高いほど少し多く増える）
+    hp:       { name: 'タフネス', desc: '最大HPアップ & 全回復（30枚まで）', ok: p => (p.hpCards || 0) < 30, apply: p => { p.hpCards = (p.hpCards || 0) + 1; p.mhp += SPECIES[p.sp].hp * 0.25 * (1 + 0.04 * p.lv) * (p.evo ? 2.5 : 1); p.hp = p.mhp; } },
     regen:    { name: '自然回復', desc: '毎秒HPが回復 +1.5', ok: p => p.regen < 9, apply: p => { p.regen += 1.5; } },
     magnet:   { name: 'マグネット', desc: '経験値の吸引範囲 +40%', ok: p => p.magnet < 450, apply: p => { p.magnet *= 1.4; } },
-    bump:     { name: '体当たり強化', desc: 'ぶつかったときのダメージ +25%', ok: () => true, apply: p => { p.bumpMul *= 1.25; } },
-    trait:    { name: '{trait} 覚醒', desc: '【{trait}】の効果 大アップ＋攻撃と体当たり +10%', ok: p => p.traitLv < 5, apply: p => { p.traitLv++; p.dmgMul *= 1.1; p.bumpMul *= 1.1; } },
+    bump:     { name: '体当たり強化', desc: 'ぶつかったときのダメージ +25%', ok: () => true, apply: p => { p.bumpMul += 0.25; } },
+    trait:    { name: '{trait} 覚醒', desc: '【{trait}】の効果 大アップ＋攻撃と体当たり +10%', ok: p => p.traitLv < 5, apply: p => { p.traitLv++; p.dmgMul += 0.1; p.bumpMul += 0.1; } },
   };
   const UPGRADE_KEYS = Object.keys(UPGRADES);
   function upgradeText(key, sp) {
@@ -356,7 +358,7 @@
       const pos = this.spawnPos();
       Object.assign(p, {
         x: pos.x, y: pos.y, tx: null, ty: null,
-        hp: def.hp, mhp: def.hp, lv: 1, xp: 0, xpn: xpNeed(1), txp: 0, evo: 0,
+        hp: def.hp, mhp: def.hp, lv: 1, xp: 0, xpn: xpNeed(1), txp: 0, evo: 0, hpCards: 0,
         alive: true, kills: 0, score: 0, bossKills: 0, pkills: 0, pkScore: 0,
         spd: def.spd, espd: def.spd, dmgMul: 1, rateMul: 1, extra: 0, pierce: 0, skillPow: 1, skillCd: 1, areaMul: 1,
         magnet: 150, regen: 0, bumpMul: 1, traitLv: 1, poisonT: 0, poisonDps: 0, pslowT: 0, alarmCd: 0, lastBump: -99, hitCd: {},
@@ -392,9 +394,15 @@
     // ---------- セーブ（続きから遊べるように） ----------
     exportSave(p) {
       if (!p || !p.alive) return null;
-      const o = { sp: p.sp, pc: p.choices.length, evo2: 1 };
+      const o = { sp: p.sp, pc: p.choices.length, evo2: 1, hp2: 1, cards2: 1 };
       for (const k of SAVE_KEYS) o[k] = typeof p[k] === 'number' ? Math.round(p[k] * 1000) / 1000 : p[k];
       return o;
+    }
+    // カードなしのときの最大HP（レベルアップと進化の分だけ）
+    baseHp(p) {
+      const h = SPECIES[p.sp].hp, pre = Math.min(p.lv, EVOLVE_LV) - 1, post = Math.max(0, p.lv - EVOLVE_LV);
+      const v = h + h * 0.08 * pre;
+      return p.evo ? v * 2.5 + h * 0.08 * 2.5 * post : v + h * 0.08 * post;
     }
     loadSave(p, o) {
       if (!o || o.sp !== p.sp) return;
@@ -403,8 +411,20 @@
       p.xpn = xpNeed(p.lv);
       // 進化レベルが10→30に変わる前のセーブ：Lv30未満なら進化前に戻す（Lv30で改めて進化）
       if (p.evo && p.lv < EVOLVE_LV) { p.evo = 0; p.mhp /= 1.5; }
+      // 強化カードが掛け算だったころのセーブは、取った枚数に換算して足し算に直す
+      if (!o.cards2) {
+        const conv = (v, f, step) => (v > 1 ? 1 + Math.log(v) / Math.log(f) * step : v);
+        p.dmgMul = conv(p.dmgMul, 1.2, 0.2);
+        p.bumpMul = conv(p.bumpMul, 1.25, 0.25);
+        p.skillPow = conv(p.skillPow, 1.4, 0.45);
+      }
+      // HPカードが掛け算だったころのセーブは、HPが大きくなりすぎているので上限をかける
+      if (!o.hp2) {
+        const cap = this.baseHp(p) + SPECIES[p.sp].hp * 0.25 * (1 + 0.04 * p.lv) * (p.evo ? 2.5 : 1) * 10;
+        if (p.mhp > cap) { p.mhp = cap; p.hpCards = 10; }
+      }
       // Lv30以上で前のルールのまま進化していた人は、新しい進化の強さに合わせる
-      if (p.evo && !o.evo2) { p.mhp *= 2.5 / 1.5; p.spd *= 1.15; p.regen += 3; }
+      if (p.evo && !o.evo2) { if (o.hp2) p.mhp *= 2.5 / 1.5; p.spd *= 1.15; p.regen += 3; }
       p.hp = clamp(p.hp, p.mhp * 0.3, p.mhp); // 少なくとも3割は回復した状態で再開
       for (let i = 0; i < Math.min(6, o.pc | 0); i++) this.makeChoices(p); // 選び残したカード
     }
@@ -1051,14 +1071,16 @@
       if (!it) return;
       const def = ITEMS[it.t], n = RARITIES[it.r].n;
       const R = this.radius(p) + 46, hitR = 24 + it.r * 2;
-      const dmg = def.dmg * RARITIES[it.r].pow * this.lvMul(p);
+      // 装備も、カードで上げた攻撃力・スキル威力についていく
+      const dmg = def.dmg * RARITIES[it.r].pow * this.lvMul(p) * p.dmgMul * Math.sqrt(p.skillPow);
+      const cd = 0.35 * Math.sqrt(p.rateMul);
       const base = this.time * ORBIT_SPEED;
       for (let i = 0; i < n; i++) {
         const a = base + (i / n) * Math.PI * 2;
         const ox = p.x + Math.cos(a) * R, oy = p.y - 20 + Math.sin(a) * R;
         this.enemiesIn(ox, oy, hitR, e => {
           if ((e.oc || 0) > this.time) return;
-          e.oc = this.time + 0.35;
+          e.oc = this.time + cd;
           this.damage(e, dmg, p, def.slow || 0);
           if (def.heal) p.hp = Math.min(p.mhp, p.hp + p.mhp * def.heal);
         });
@@ -1438,7 +1460,7 @@
 
   // セーブする項目（レベル・経験値・強化の状態など）
   const SAVE_KEYS = ['lv', 'xp', 'txp', 'evo', 'hp', 'mhp', 'kills', 'score', 'bossKills', 'pkills', 'pkScore', 'spd',
-    'dmgMul', 'rateMul', 'extra', 'pierce', 'skillPow', 'skillCd', 'areaMul', 'magnet', 'regen', 'bumpMul', 'traitLv', 'revived'];
+    'hpCards', 'dmgMul', 'rateMul', 'extra', 'pierce', 'skillPow', 'skillCd', 'areaMul', 'magnet', 'regen', 'bumpMul', 'traitLv', 'revived'];
 
   // モンスターの解放：累計で獲得した経験値で順に解放（強いモンスターほど後ろ）
   const UNLOCKS = [

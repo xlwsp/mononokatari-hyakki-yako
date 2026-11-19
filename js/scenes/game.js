@@ -202,6 +202,21 @@
       this.chunks.set(key, { objs, trees });
     }
 
+    // 最初の位置がわかったら、まわりの地面をまとめて先に作る（遊び始めてから少しずつ作るとカクつくため）。
+    // そのあいだは画面をフェードインで隠す
+    warmUp(me) {
+      this.warmed = true;
+      const cam = this.cameras.main;
+      const hw = cam.width / cam.zoom / 2 + 500, hh = cam.height / cam.zoom / 2 + 700;
+      const x0 = Math.floor((me.x - hw) / CHUNK), x1 = Math.floor((me.x + hw) / CHUNK);
+      const y0 = Math.floor((me.y - hh) / CHUNK), y1 = Math.floor((me.y + hh) / CHUNK);
+      for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+        const k = cx + ',' + cy;
+        if (!this.chunks.has(k)) this.makeChunk(k);
+      }
+      cam.fadeIn(450, 20, 30, 20);
+    }
+
     updateChunks() {
       const v = this.cameras.main.worldView;
       const x0 = Math.floor((v.x - 300) / CHUNK), x1 = Math.floor((v.right + 300) / CHUNK);
@@ -271,6 +286,7 @@
       this.latest = s;
       const mine = s.p.find(p => p.id === this.myId);
       if (mine) this.me = Object.assign({}, mine, s.me);
+      if (mine && !this.warmed) this.warmUp(mine);
       if (s.me && typeof s.me.tx === 'number') {
         const got = Unlock.track(s.me.tx);
         if (got && this.ui) { this.ui.banner(`🔓 ${GD.SPECIES[got].name} 解放！`, '#ffe07a'); Sfx.play('milestone'); }
