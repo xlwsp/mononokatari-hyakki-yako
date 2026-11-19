@@ -1,0 +1,8 @@
+# 元画像（大きいので公開しない。ゲームでは assets/ の加工済み画像を使う）
+images/
+# ダウンロードしたツールと秘密の設定
+tools/bin/
+tools/online.conf
+tools/github.conf
+__pycache__/
+.DS_Store
