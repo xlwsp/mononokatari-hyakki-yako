@@ -11,6 +11,15 @@ PC（キーボード）とスマホ（縦画面・ドラッグ操作）の両方
 | 自分のPC・同じWi-Fiで遊ぶ | `python3 server.py` → http://localhost:8000 |
 | **インターネットに公開**（URLを知っている人なら誰でも） | `bash start_online.sh` |
 
+### ずっと同じURLで遊んでもらう（GitHub Pages）
+
+遊ぶ人に送るURL: **https://xlwsp.github.io/nakama-survivor/**
+
+- ゲームの画面は GitHub Pages から配信。ゲームの計算はこのMacで行う
+- `bash start_online.sh` を起動すると、その時のサーバーのURLが GitHub（`server` ブランチの `server.json`）に自動で書き込まれ、
+  ページは開いたときにそこを見て自動でつなぐ。止めると「サーバーが止まっているかも」と表示される
+- ゲームのファイルを変更したら `bash publish_github.sh` で GitHub に反映（1〜2分で公開ページに反映）
+
 - ゲームの計算はサーバー（このMac）が macOS 標準の JavaScriptCore（jsc）で行います。
   だれかが抜けたりスマホを閉じたりしても、世界は止まりません。追加インストールは不要です。
 - **ずっと同じURLで公開したいとき**（おすすめ）：ngrok の無料アカウントを作り、`tools/online.conf` に
