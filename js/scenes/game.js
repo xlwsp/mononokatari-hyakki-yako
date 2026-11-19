@@ -23,7 +23,7 @@
     }
 
     create() {
-      Unlock.reset();
+      Unlock.reset(this.session.cont);
       const W = GD.WORLD.w, H = GD.WORLD.h;
       this.map = GD.generateMap(this.session.seed);
       this.cameras.main.setBackgroundColor('#3f6b37');
@@ -73,6 +73,7 @@
       });
       this.scene.launch('UI');
       this.ui = this.scene.get('UI');
+      if (this.session.cont) this.time.delayedCall(700, () => this.ui.banner('つづきから！', '#ffe07a'));
     }
 
     applyZoom() {

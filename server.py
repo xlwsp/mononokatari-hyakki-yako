@@ -31,6 +31,52 @@ JSC = '/System/Library/Frameworks/JavaScriptCore.framework/Versions/Current/Help
 DRIVER = os.path.join(ROOT, 'tools', 'sim_driver.js')
 MAX_BUFFER = 1024 * 1024  # 送信が詰まったプレイヤーにはスナップショットを間引く
 VERSION = str(int(time.time()))  # キャッシュ対策（起動ごとに変わる）
+SAVE_FILE = os.path.join(ROOT, 'tools', 'saves.json')  # tools/ は配信しない
+
+
+# ---------------- セーブ（端末ごとの合言葉 tok で保存。サーバーを再起動しても残る） ----------------
+class Saves:
+    def __init__(self):
+        self.data = {}
+        self.dirty = False
+        try:
+            with open(SAVE_FILE, encoding='utf-8') as f:
+                self.data = json.load(f)
+        except Exception:
+            self.data = {}
+
+    def get(self, tok):
+        return self.data.get(tok) if tok else None
+
+    def put(self, tok, state):
+        if not tok:
+            return
+        if state is None:
+            if tok in self.data:
+                del self.data[tok]
+                self.dirty = True
+        else:
+            self.data[tok] = {'s': state, 't': int(time.time())}
+            self.dirty = True
+
+    def flush(self):
+        if not self.dirty:
+            return
+        self.dirty = False
+        # 60日遊ばれていないセーブは片付ける
+        old = time.time() - 60 * 86400
+        self.data = {k: v for k, v in self.data.items() if v.get('t', 0) > old}
+        tmp = SAVE_FILE + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(self.data, f, separators=(',', ':'))
+        os.replace(tmp, SAVE_FILE)
+
+
+saves = Saves()
+
+
+def valid_tok(t):
+    return isinstance(t, str) and 16 <= len(t) <= 64 and all(ch in '0123456789abcdef' for ch in t)
 
 mimetypes.add_type('application/javascript', '.js')
 mimetypes.add_type('image/png', '.png')
@@ -91,6 +137,7 @@ class Client:
         self.name = 'Player'
         self.joined = False
         self.closed = False
+        self.tok = None
 
     def send_raw(self, text: str, droppable=False):
         if self.closed:
@@ -114,6 +161,8 @@ class World:
         self.joins, self.leaves, self.respawns, self.choices = [], [], [], []
         self.inputs = {}
         self.members = set()
+        self.toks = {}  # プレイヤーid → セーブの合言葉
+        self.last_flush = time.monotonic()
 
     async def start(self):
         self.seed = random.randint(1, 2 ** 31 - 1)
@@ -166,10 +215,24 @@ class World:
                 if line.startswith('#'):
                     log(line[:300])
                     continue
+                if line.startswith('!S\t'):
+                    _, pid, js = line.split('\t', 2)
+                    tok = world.toks.get(pid)
+                    try:
+                        saves.put(tok, json.loads(js))
+                    except Exception:
+                        pass
+                    continue
                 pid, _, js = line.partition('\t')
                 c = clients.get(pid)
                 if c and c.joined:
                     c.send_raw('{"t":"st","s":' + js + '}', droppable=True)
+            if time.monotonic() - self.last_flush > 5:
+                self.last_flush = time.monotonic()
+                try:
+                    saves.flush()
+                except Exception as e:
+                    log('save error:', repr(e))
             nxt += TICK
             delay = nxt - time.monotonic()
             if delay > 0:
@@ -203,16 +266,36 @@ def handle_msg(c: Client, text: str):
             c.send({'t': 'full'})
             return
         c.name = str(m.get('name') or 'Player').strip()[:12] or 'Player'
+        tok = m.get('tok')
+        tok = tok if valid_tok(tok) else None
+        # 同じ端末で2つ同時に遊んでいるときは、後から来た方はセーブしない
+        if tok and any(o.joined and o.tok == tok for o in clients.values() if o is not c):
+            tok = None
+        c.tok = tok
+        state = None
+        if tok:
+            if m.get('cont'):
+                rec = saves.get(tok)
+                state = rec and rec.get('s')
+            else:
+                saves.put(tok, None)  # 初めから
+            world.toks[c.id] = tok
         c.joined = True
         world.members.add(c.id)
-        world.joins.append([c.id, c.name, str(m.get('sp') or '')])
-        c.send({'t': 'joined', 'id': c.id, 'seed': world.seed, 'v': VERSION})
+        world.joins.append([c.id, c.name, str(m.get('sp') or ''), state])
+        c.send({'t': 'joined', 'id': c.id, 'seed': world.seed, 'v': VERSION, 'cont': 1 if state else 0, 'sp': state['sp'] if state else None})
         log(c.name, 'joined', '(online %d)' % len(world.members))
     elif t == 'respawn':
         if c.joined:
             world.respawns.append([c.id, str(m.get('sp') or '')])
     elif t == 'leave':
         leave(c)
+    elif t == 'save?':
+        # タイトル画面用：続きからのデータがあるか
+        tok = m.get('tok')
+        rec = saves.get(tok) if valid_tok(tok) else None
+        st = rec and rec.get('s')
+        c.send({'t': 'save', 'd': {'sp': st['sp'], 'lv': st['lv'], 'ev': st['evo']} if st else None})
 
 
 def leave(c: Client):
@@ -220,6 +303,7 @@ def leave(c: Client):
         c.joined = False
         world.members.discard(c.id)
         world.leaves.append(c.id)
+        asyncio.get_event_loop().call_later(3, world.toks.pop, c.id, None)  # 抜けたときのセーブを受け取ってから消す
         log(c.name, 'left', '(online %d)' % len(world.members))
 
 
@@ -329,6 +413,12 @@ async def main():
     if not os.path.exists(JSC):
         print('JavaScriptCore (jsc) が見つかりません。macOS で実行してください。')
         sys.exit(1)
+    import signal
+
+    def on_term():
+        saves.flush()  # kill されたときもセーブを書き出してから終わる
+        os._exit(0)
+    asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, on_term)
     server = await asyncio.start_server(handle, '0.0.0.0', PORT)
     asyncio.create_task(world.run())
     print('=' * 52)
@@ -349,3 +439,5 @@ if __name__ == '__main__':
         asyncio.run(main())
     except KeyboardInterrupt:
         pass
+    finally:
+        saves.flush()  # 止めるときにセーブを書き出す

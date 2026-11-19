@@ -6,3 +6,5 @@ tools/online.conf
 tools/github.conf
 __pycache__/
 .DS_Store
+tools/saves.json
+tools/saves.json.tmp

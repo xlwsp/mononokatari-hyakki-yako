@@ -365,11 +365,29 @@
       this.pmap.set(id, p);
       return p;
     }
-    join(id, name, sp) {
+    join(id, name, sp, save) {
       if (this.pmap.has(id)) return this.pmap.get(id);
       // 満員ならBotに抜けてもらう
       if (this.players.length >= MAX_PLAYERS) this.removeBot();
-      return this.addPlayer(id, String(name || 'Player').slice(0, 12), false, sp);
+      const p = this.addPlayer(id, String(name || 'Player').slice(0, 12), false, save && SPECIES[save.sp] ? save.sp : sp);
+      if (save) this.loadSave(p, save);
+      return p;
+    }
+
+    // ---------- セーブ（続きから遊べるように） ----------
+    exportSave(p) {
+      if (!p || !p.alive) return null;
+      const o = { sp: p.sp, pc: p.choices.length };
+      for (const k of SAVE_KEYS) o[k] = typeof p[k] === 'number' ? Math.round(p[k] * 1000) / 1000 : p[k];
+      return o;
+    }
+    loadSave(p, o) {
+      if (!o || o.sp !== p.sp) return;
+      for (const k of SAVE_KEYS) if (typeof o[k] === typeof p[k]) p[k] = o[k];
+      p.lv = clamp(p.lv | 0, 1, 999);
+      p.xpn = xpNeed(p.lv);
+      p.hp = clamp(p.hp, p.mhp * 0.3, p.mhp); // 少なくとも3割は回復した状態で再開
+      for (let i = 0; i < Math.min(6, o.pc | 0); i++) this.makeChoices(p); // 選び残したカード
     }
     remove(id) {
       const p = this.pmap.get(id);
@@ -1223,6 +1241,10 @@
       return s;
     }
   }
+
+  // セーブする項目（レベル・経験値・強化の状態など）
+  const SAVE_KEYS = ['lv', 'xp', 'txp', 'evo', 'hp', 'mhp', 'kills', 'score', 'bossKills', 'pkills', 'pkScore', 'spd',
+    'dmgMul', 'rateMul', 'extra', 'pierce', 'skillPow', 'skillCd', 'areaMul', 'magnet', 'regen', 'bumpMul', 'traitLv', 'revived'];
 
   // モンスターの解放：累計で獲得した経験値で順に解放（強いモンスターほど後ろ）
   const UNLOCKS = [

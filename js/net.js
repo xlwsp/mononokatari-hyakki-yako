@@ -79,12 +79,40 @@
     return info.ws;
   }
 
-  // サーバーにつないで世界に参加する。成功したら Session を返す
-  function connect(name, sp) {
-    return serverUrl().catch(e => { throw new Error(e.message || 'サーバーの場所がわかりませんでした'); }).then(url => openSession(url, name, sp));
+  // この端末の合言葉（セーブの持ち主を見分ける。ほかの人には見えない）
+  function token() {
+    let t = null;
+    try { t = localStorage.getItem('nakama_tok'); } catch (e) { /* noop */ }
+    if (!t || !/^[0-9a-f]{32}$/.test(t)) {
+      const a = new Uint8Array(16);
+      crypto.getRandomValues(a);
+      t = Array.from(a, b => b.toString(16).padStart(2, '0')).join('');
+      try { localStorage.setItem('nakama_tok', t); } catch (e) { /* noop */ }
+    }
+    return t;
   }
 
-  function openSession(url, name, sp) {
+  let urlCache = null;
+  const getUrl = () => (urlCache || (urlCache = serverUrl().catch(e => { urlCache = null; throw new Error(e.message || 'サーバーの場所がわかりませんでした'); })));
+
+  // サーバーにつないで世界に参加する。cont=true なら続きから。成功したら Session を返す
+  function connect(name, sp, cont) {
+    return getUrl().then(url => openSession(url, name, sp, cont)).catch(e => { urlCache = null; throw e; });
+  }
+
+  // 続きからのデータがあるか聞く（{sp, lv, ev} か null）
+  function saveInfo() {
+    return getUrl().then(url => new Promise((resolve, reject) => {
+      let relay;
+      try { relay = new Relay(url); } catch (e) { reject(e); return; }
+      const timer = setTimeout(() => { relay.close(); reject(new Error('timeout')); }, 8000);
+      relay.on('open', () => relay.send({ t: 'save?', tok: token() }));
+      relay.on('save', m => { clearTimeout(timer); relay.close(); resolve(m.d || null); });
+      relay.on('error', () => { clearTimeout(timer); reject(new Error('error')); });
+    }));
+  }
+
+  function openSession(url, name, sp, cont) {
     return new Promise((resolve, reject) => {
       if (location.protocol === 'file:') { reject(new Error('server.py を起動して http://localhost:8000 を開いてね')); return; }
       let relay;
@@ -92,15 +120,15 @@
       const offs = [];
       const done = () => offs.forEach(f => f());
       const timer = setTimeout(() => { done(); relay.close(); reject(new Error('サーバーが応答しません')); }, 10000);
-      offs.push(relay.on('open', () => relay.send({ t: 'join', name, sp })));
+      offs.push(relay.on('open', () => relay.send({ t: 'join', name, sp, tok: token(), cont: !!cont })));
       offs.push(relay.on('joined', m => {
         clearTimeout(timer); done();
-        resolve(new Session({ myId: m.id, seed: m.seed, relay, sp, name }));
+        const ss = new Session({ myId: m.id, seed: m.seed, relay, sp, name }); ss.cont = !!m.cont; if (m.sp) ss.sp = m.sp; resolve(ss);
       }));
       offs.push(relay.on('full', () => { clearTimeout(timer); done(); relay.close(); reject(new Error('満員です（最大50人）。少し待ってね')); }));
       offs.push(relay.on('error', () => { clearTimeout(timer); done(); reject(new Error('サーバーに接続できませんでした（今はサーバーが止まっているかも）')); }));
     });
   }
 
-  window.Net = { Relay, Session, connect };
+  window.Net = { Relay, Session, connect, saveInfo };
 })();

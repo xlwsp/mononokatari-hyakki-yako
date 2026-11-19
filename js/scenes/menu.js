@@ -17,6 +17,7 @@
     next() { return GD.UNLOCKS.find(([, v]) => v > this.total) || null; },
     // サーバーから届く「今の命で稼いだEXP」を足していく。新しく解放されたモンスターを返す
     track(tx) {
+      if (this.lastTx < 0) { this.lastTx = tx; return null; } // 続きから：セーブ済みの分は数えない
       if (tx < this.lastTx) this.lastTx = 0; // 再出撃で0に戻った
       const d = tx - this.lastTx;
       this.lastTx = tx;
@@ -28,7 +29,7 @@
       const got = GD.UNLOCKS.find(([, v]) => v > before && v <= this.total);
       return got ? got[0] : null;
     },
-    reset() { this.lastTx = 0; },
+    reset(cont) { this.lastTx = cont ? -1 : 0; },
     save() {
       if (!this.dirty) return; // 増えていないときは書かない（他のタブの値を消さないように）
       this.dirty = false;
@@ -147,13 +148,17 @@
   // ---------------- Title ----------------
   class TitleScene extends Phaser.Scene {
     constructor() { super('Title'); }
-    init(data) { this.notice = data && data.msg; }
+    init(data) {
+      this.notice = data && data.msg;
+      if (!(data && data.keep)) this.saveData = undefined; // 画面の向きが変わっただけのときは確認し直さない
+      this.confirmBox = null; this.nameAsk = null;
+    }
     create() {
       this.sp = store.get('sp', 'gekomaru');
       if (!GD.SPECIES[this.sp] || !Unlock.ok(this.sp)) this.sp = 'gekomaru';
       this.connecting = false;
       this.build();
-      this.onResize = () => { this.saveName(); this.scene.restart({ msg: this.msgText && this.msgText.text }); };
+      this.onResize = () => { this.saveName(); this.scene.restart({ msg: this.msgText && this.msgText.text, keep: true }); };
       this.scale.on('resize', this.onResize);
       this.onKey = e => {
         const ae = document.activeElement;
@@ -215,7 +220,7 @@
       // 先にピッカーの高さを測るため仮配置
       const tmp = monsterPicker(this, cx, -9999, pw - 30, this.sp, () => {});
       const gridH = tmp.height; tmp.destroy();
-      const ph = 84 + gridH + 150 + 56;
+      const ph = 84 + gridH + 150 + 74;
       panel(this, cx - pw / 2, py, pw, ph);
       this.add.text(cx - pw / 2 + 22, py + 18, 'なまえ', T(17, C.soft));
       const inputW = pw - 120;
@@ -233,10 +238,19 @@
       const infoY = gridTop + gridH + 12;
       this.infoTitle = this.add.text(cx, infoY, '', T(17, C.brownCss)).setOrigin(0.5, 0);
       this.infoLine = this.add.text(cx, infoY + 24, '', T(12, C.soft, { align: 'center', wordWrap: { width: pw - 30, useAdvancedWrap: true } })).setOrigin(0.5, 0);
-      unlockInfo(this, cx, py + ph - 128, pw);
+      unlockInfo(this, cx, py + ph - 146, pw);
       this.goBtn = null;
-      const btn = button(this, cx, py + ph - 42, Math.min(360, pw - 40), 56, 'オンラインで遊ぶ', () => this.go(), { color: 0xef7a6a, dark: 0xb24a3e, size: 24 });
-      this.tweens.add({ targets: btn, scale: 1.04, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      // 続きから（オートセーブ）／初めから
+      const bw = Math.min(240, (pw - 50) / 2), by = py + ph - 60;
+      this.contBtn = button(this, cx - bw / 2 - 8, by, bw, 56, '続きから', () => this.go(true), { color: 0xef7a6a, dark: 0xb24a3e, size: 22 });
+      this.newBtn = button(this, cx + bw / 2 + 8, by, bw, 56, '初めから', () => this.goNew(), { color: C.blue, dark: C.blueDark, size: 22 });
+      this.contInfo = this.add.text(cx - bw / 2 - 8, by + 36, '確認中…', T(12, C.soft)).setOrigin(0.5, 0);
+      this.add.text(cx + bw / 2 + 8, by + 36, '選んだモンスターでLv1から', T(12, C.soft)).setOrigin(0.5, 0);
+      this.setSave(this.saveData === undefined ? null : this.saveData, this.saveData === undefined);
+      if (this.saveData === undefined) {
+        Net.saveInfo().then(d => { this.saveData = d; if (this.sys.isActive()) this.setSave(d); })
+          .catch(() => { this.saveData = null; if (this.sys.isActive()) this.setSave(null, false, true); });
+      }
       this.pick(this.sp);
 
       this.msgText = this.add.text(cx, py + ph + 20, this.notice || '', TO(15, '#fff', '#4a3a2e', 4)).setOrigin(0.5);
@@ -251,6 +265,42 @@
     }
 
     msg(s) { this.msgText.setText(s); }
+
+    // 続きからのデータの表示
+    setSave(d, checking, failed) {
+      if (!this.contBtn) return;
+      this.contBtn.setDisabled(!d);
+      if (checking) { this.contInfo.setText('セーブを確認中…'); this.contBtn.setDisabled(true); return; }
+      if (d) {
+        const sp = GD.SPECIES[d.sp];
+        this.contInfo.setText(`${d.ev ? sp.evoName : sp.name}  Lv${d.lv}`);
+        this.contTween = this.contTween || this.tweens.add({ targets: this.contBtn, scale: 1.04, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      } else {
+        this.contInfo.setText(failed ? 'サーバーにつながりません' : 'セーブデータなし');
+        if (!failed) this.tweens.add({ targets: this.newBtn, scale: 1.04, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      }
+    }
+
+    // 初めから：セーブがあるときは確認する
+    goNew() {
+      if (this.connecting || this.nameAsk || this.confirmBox) return;
+      if (!Unlock.ok(this.sp)) { this.go(false); return; }
+      if (!this.saveData) { this.go(false); return; }
+      const w = this.scale.width, h = this.scale.height;
+      const pw = Math.min(420, w - 30), ph = 190, x = w / 2 - pw / 2, y = h / 2 - ph / 2;
+      const sp = GD.SPECIES[this.saveData.sp];
+      const dim = this.add.rectangle(0, 0, w, h, 0x1d1020, 0.6).setOrigin(0).setInteractive().setDepth(50);
+      const box = this.add.container(0, 0).setDepth(51);
+      box.add(panel(this, x, y, pw, ph));
+      box.add(this.add.text(w / 2, y + 34, '初めからにする？', TO(24, '#fff8ea', '#4a3a2e', 6)).setOrigin(0.5));
+      box.add(this.add.text(w / 2, y + 72, `今のセーブ（${this.saveData.ev ? sp.evoName : sp.name} Lv${this.saveData.lv}）は消えます`, T(14, '#c0392b', { align: 'center', wordWrap: { width: pw - 30 } })).setOrigin(0.5));
+      const close = () => { [dim, box, b1, b2].forEach(o => o.destroy()); this.confirmBox = null; };
+      const b1 = button(this, w / 2 - 80, y + ph - 44, 140, 48, '初めから', () => { close(); this.go(false); }, { color: C.blue, dark: C.blueDark, size: 20 }).setDepth(52);
+      const b2 = button(this, w / 2 + 80, y + ph - 44, 140, 48, 'やめる', close, { color: C.gray, dark: C.grayDark, size: 20 }).setDepth(52);
+      box.setScale(0.6).setAlpha(0);
+      this.tweens.add({ targets: box, scale: 1, alpha: 1, duration: 220, ease: 'Back.out' });
+      this.confirmBox = { close };
+    }
 
     // 名前が空のまま始めようとしたら、名前を入れてもらうカットイン（空のままOKなら「ゆうしゃ」で始める）
     askName() {
@@ -274,7 +324,7 @@
         if (this.input_) this.input_.node.value = v || 'ゆうしゃ';
         this.nameAsked = true;
         close();
-        this.go();
+        this.go(this.goCont);
       };
       inp.node.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') ok(); });
       const btn = button(this, w / 2, y + ph - 36, 200, 48, 'OK', ok, { color: 0xef7a6a, dark: 0xb24a3e, size: 22 }).setDepth(52);
@@ -289,16 +339,19 @@
       this.nameAsk = { close };
     }
 
-    go() {
-      if (this.connecting || this.nameAsk) return; // 連打で二重参加しないように
+    go(cont) {
+      if (this.connecting || this.nameAsk || this.confirmBox) return; // 連打で二重参加しないように
+      if (cont === undefined) { if (this.saveData) cont = true; else { this.goNew(); return; } } // Enter キー
+      this.goCont = cont;
       if (!this.nameAsked && !(this.input_ && this.input_.node.value.trim())) { this.askName(); return; }
-      if (!Unlock.ok(this.sp)) { this.msg(`🔒 ${GD.SPECIES[this.sp].name} は累計 ${GD.UNLOCK_AT[this.sp].toLocaleString()} EXP で解放されます`); Sfx.play('click'); return; }
+      if (!cont && !Unlock.ok(this.sp)) { this.msg(`🔒 ${GD.SPECIES[this.sp].name} は累計 ${GD.UNLOCK_AT[this.sp].toLocaleString()} EXP で解放されます`); Sfx.play('click'); return; }
       this.connecting = true;
       Sfx.init();
       UI.mobileEnter();
       this.saveName();
       this.msg('接続中…');
-      Net.connect(this.getName(), this.sp).then(session => {
+      Net.connect(this.getName(), cont ? (this.saveData && this.saveData.sp) || this.sp : this.sp, cont).then(session => {
+        if (cont && !session.cont) { session.leave(); this.connecting = false; this.saveData = null; this.setSave(null); this.msg('セーブデータが見つかりませんでした。「初めから」で遊んでね'); return; }
         this.scene.start('Game', { session });
       }).catch(e => {
         this.connecting = false;
