@@ -54,7 +54,7 @@
     const ui = overlay(scene, '🎲 ガチャ', 540, 620);
     const { x, y, pw, ph, w, add } = ui;
     const ptsText = add(scene.add.text(w / 2, y + 62, '読み込み中…', TO(20, '#7ae8ff', '#1a2a40', 5)).setOrigin(0.5).setDepth(62));
-    add(scene.add.text(w / 2, y + 88, '5レベル上がるごとに 10P。100P で1回引ける', T(13, C.soft)).setOrigin(0.5).setDepth(62));
+    add(scene.add.text(w / 2, y + 88, '5レベルごとにポイント（高レベルほど多い）・進化で100P', T(13, C.soft)).setOrigin(0.5).setDepth(62));
     const rates = GD.RARITIES.map(r => `${r.name} ${r.rate}%`).join('　');
     add(scene.add.text(w / 2, y + 108, rates, T(11, C.soft, { align: 'center', wordWrap: { width: pw - 30 } })).setOrigin(0.5, 0).setDepth(62));
     const stageY = y + 128, stageH = ph - 128 - 140;

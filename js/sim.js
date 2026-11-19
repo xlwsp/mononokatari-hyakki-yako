@@ -441,7 +441,8 @@
     // 体の大きさ（レベルと進化で大きくなる。見た目と当たり判定の両方に使う）
     // 最初は敵より小さく、強くなるほど大きくなる
     radius(p) { return GameSim.size(p.lv, p.evo) / 2; }
-    static size(lv, evo) { return (40 + 4 * Math.min(lv, 50)) * (evo ? 1.3 : 1); }
+    // 大きさ：Lv20までは1レベル4ずつ、そこから先は1レベル1.2ずつ（上限なし）
+    static size(lv, evo) { return (40 + 4 * Math.min(lv, 20) + 1.2 * Math.max(0, lv - 20)) * (evo ? 1.3 : 1); }
     // 体当たりのダメージ（レベル・進化・攻撃力・体当たり強化で上がる）
     bumpPower(p) { return 24 * this.lvMul(p) * p.bumpMul; }
 
@@ -487,9 +488,11 @@
         p.hp = Math.min(p.mhp, p.hp + p.mhp * 0.2);
         this.makeChoices(p);
         this.ev({ e: 'lu', p: p.id, lv: p.lv, x: r1(p.x), y: r1(p.y) });
-        if (p.human && p.lv % 5 === 0) this.ev({ e: 'pt', p: p.id, n: 10 }); // 5レベルごとにガチャポイント
+        // 5レベルごとにガチャポイント。レベルが高いほどたくさん（Lv5:10P, Lv10:20P, Lv30:60P, Lv50:100P…）
+        if (p.human && p.lv % 5 === 0) this.ev({ e: 'pt', p: p.id, n: 10 * (p.lv / 5) });
         if (!p.evo && p.lv >= EVOLVE_LV) {
           p.evo = 1;
+          if (p.human) this.ev({ e: 'pt', p: p.id, n: 100 }); // 進化ボーナス
           p.mhp *= 2.5; p.hp = p.mhp; // HP2.5倍＆全回復
           p.spd *= 1.15; p.magnet *= 1.3; p.regen += 3; // 足が速く、吸い寄せ範囲も広く、自然回復も
           this.ev({ e: 'evo', p: p.id, sp: p.sp, x: r1(p.x), y: r1(p.y) });

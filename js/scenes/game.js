@@ -332,7 +332,7 @@
       }
       this.watchFps(dt);
       if (this.me) {
-        const want = Phaser.Math.Clamp(1.25 - (monsterH(this.me.lv, this.me.ev) - 40) / 420, 0.8, 1.25);
+        const want = Phaser.Math.Clamp(1.25 - (monsterH(this.me.lv, this.me.ev) - 40) / 420, 0.7, 1.25);
         this.zoomCur += (want - this.zoomCur) * Math.min(1, dt * 2);
         this.cameras.main.setZoom(this.baseZoom * this.zoomCur * this.punch);
       }
