@@ -463,8 +463,60 @@ def process_creatures():
             print('wrote', key, sprite.size)
 
 
+# ---------------- 大妖（ビッグボス）とタイトル画面の背景 ----------------
+def make_bigboss_and_title():
+    p = os.path.join(SRC, 'BigBoss.png')
+    if os.path.exists(p):
+        im = Image.open(p).convert('RGBA')
+        im = im.resize((im.width // 2, im.height // 2), Image.LANCZOS)
+        px = im.load()
+        w, h = im.size
+        seen = bytearray(w * h)
+
+        def is_bg(x, y):
+            r, g, b, _ = px[x, y]
+            return min(r, g, b) > 225 and max(r, g, b) - min(r, g, b) < 22
+        q = deque()
+        for x in range(w):
+            q.append((x, 0)); q.append((x, h - 1))
+        for y in range(h):
+            q.append((0, y)); q.append((w - 1, y))
+        while q:
+            x, y = q.popleft()
+            i = y * w + x
+            if seen[i] or not is_bg(x, y):
+                continue
+            seen[i] = 1
+            if x > 0: q.append((x - 1, y))
+            if x < w - 1: q.append((x + 1, y))
+            if y > 0: q.append((x, y - 1))
+            if y < h - 1: q.append((x, y + 1))
+        for y in range(h):
+            for x in range(w):
+                if seen[y * w + x]:
+                    px[x, y] = (255, 255, 255, 0)
+                elif (x and seen[y * w + x - 1]) or (x < w - 1 and seen[y * w + x + 1]):
+                    r, g, b, _ = px[x, y]
+                    px[x, y] = (r, g, b, int(255 * max(0.35, 1 - smooth(150, 245, (r + g + b) / 3))))
+        bbox = im.getchannel('A').point(lambda a: 255 if a > 40 else 0).getbbox()
+        im = fit_height(im.crop(bbox), 400)
+        im.save(os.path.join(OUT, 'bigboss.png'), optimize=True)
+        print('wrote bigboss', im.size)
+    t = os.path.join(SRC, 'title_menu.png')
+    if os.path.exists(t):
+        im = Image.open(t).convert('RGB')
+        im = im.resize((1600, round(im.height * 1600 / im.width)), Image.LANCZOS)
+        im.save(os.path.join(OUT, 'title_bg.jpg'), quality=84, optimize=True)
+        print('wrote title_bg', im.size)
+
+
 if __name__ == '__main__':
     import sys as _sys
-    if 'creatures' not in _sys.argv[1:]:
-        main()
-    process_creatures()
+    args = _sys.argv[1:]
+    if 'big' in args:  # 大妖とタイトル背景だけ作り直す
+        make_bigboss_and_title()
+    else:
+        if 'creatures' not in args:
+            main()
+        process_creatures()
+        make_bigboss_and_title()

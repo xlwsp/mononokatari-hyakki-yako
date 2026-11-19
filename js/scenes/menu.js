@@ -1,7 +1,7 @@
 // 起動・タイトル（モンスター選び）・やられた画面
 (function () {
   'use strict';
-  const { T, TO, C, panel, button, keyNav, forestBackdrop } = UI;
+  const { T, TO, TB, C, panel, button, keyNav, forestBackdrop } = UI;
 
   const store = {
     get(k, d) { try { const v = localStorage.getItem('nakama_' + k); return v == null ? d : v; } catch (e) { return d; } },
@@ -58,6 +58,39 @@
       scene.add.text(cx, by + 16, '全モンスター解放済み！', T(12, C.soft)).setOrigin(0.5, 0);
     }
     return 50;
+  }
+  // タイトル画面の背景：物置の絵。ロビーではツボに寄って暗くぼかし、妖気がただよう
+  const TBG = { w: 1600, h: 900, potX: 770, potY: 610 };
+  function titleBackdrop(scene, zoomed) {
+    const w = scene.scale.width, h = scene.scale.height;
+    const cover = Math.max(w / TBG.w, h / TBG.h);
+    const objs = [];
+    scene.cameras.main.setBackgroundColor('#0c0816');
+    if (zoomed) {
+      const sc = cover * 1.9;
+      const img = scene.add.image(w / 2 + (TBG.w / 2 - TBG.potX) * sc, h * 0.5 + (TBG.h / 2 - TBG.potY) * sc, 'title_bg').setScale(sc);
+      if (img.preFX) img.preFX.addBlur(1, 2, 2, 1.2);
+      objs.push(img);
+      objs.push(scene.add.rectangle(0, 0, w, h, 0x0a0614, 0.5).setOrigin(0));
+      // ツボからただよう妖気
+      for (let i = 0; i < 14; i++) {
+        const c = scene.add.circle(Phaser.Math.Between(0, w), h + 20, Phaser.Math.Between(3, 8), Phaser.Math.RND.pick([0xb070ff, 0x8a5aff, 0xffd090]), 0.5).setBlendMode('ADD');
+        scene.tweens.add({ targets: c, y: -30, x: c.x + Phaser.Math.Between(-80, 80), alpha: 0, duration: Phaser.Math.Between(6000, 11000), delay: Phaser.Math.Between(0, 8000), repeat: -1 });
+        objs.push(c);
+      }
+    } else {
+      // ロゴが切れないように（縦長の画面では横幅に合わせ、すき間はぼかした絵でうめる）
+      const sc = Math.max(Math.min(w / TBG.w, h / TBG.h), Math.min(cover, w / 980));
+      if (sc < cover) {
+        const back = scene.add.image(w / 2, h / 2, 'title_bg').setScale(cover * 1.05);
+        if (back.preFX) back.preFX.addBlur(1, 3, 3, 1.5);
+        objs.push(back, scene.add.rectangle(0, 0, w, h, 0x0a0614, 0.6).setOrigin(0));
+      }
+      const img = scene.add.image(w / 2, h / 2, 'title_bg').setScale(sc);
+      objs.push(img);
+      objs.bottom = h / 2 + TBG.h / 2 * sc;
+    }
+    return objs;
   }
   const V = () => (window.GV && window.GV !== '__VERSION__' ? '?v=' + window.GV : '');
 
@@ -129,9 +162,10 @@
         bar.fillStyle(C.cream, 1); bar.fillRoundedRect(w / 2 - 160, h / 2, 320 * v, 18, 9);
       });
       this.load.on('loaderror', f => { label.setText('読み込みエラー: ' + f.src); });
-      for (const k of ['tree1', 'tree2', 'tree3', 'rock', 'bush', 'flower1', 'flower2']) {
+      for (const k of ['tree1', 'tree2', 'tree3', 'rock', 'bush', 'flower1', 'flower2', 'bigboss']) {
         this.load.image(k, 'assets/' + k + '.png' + V());
       }
+      this.load.image('title_bg', 'assets/title_bg.jpg' + V());
       for (const k of GD.SPECIES_KEYS) {
         for (const suf of ['', '_e']) {
           this.load.image('cr_' + k + suf, 'assets/cr_' + k + suf + '.png' + V());
@@ -151,7 +185,7 @@
     init(data) {
       this.notice = data && data.msg;
       if (!(data && data.keep)) this.saveData = undefined; // 画面の向きが変わっただけのときは確認し直さない
-      this.confirmBox = null; this.nameAsk = null; this.rankBox = null; this.shopBox = null; this.maintBox = null;
+      this.confirmBox = null; this.nameAsk = null; this.rankBox = null; this.shopBox = null; this.maintBox = null; this.splash = null;
     }
     create() {
       this.sp = store.get('sp', 'gekomaru');
@@ -163,7 +197,7 @@
       this.onKey = e => {
         const ae = document.activeElement;
         if (ae && ae.tagName === 'INPUT') return;
-        if (this.rankBox || this.confirmBox || this.nameAsk || this.shopBox || this.maintBox) return;
+        if (this.rankBox || this.confirmBox || this.nameAsk || this.shopBox || this.maintBox || this.splash) return;
         const keys = PICK_KEYS(), i = keys.indexOf(this.sp), cols = this.picker.cols;
         const move = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
         if (move) { this.pick(keys[(i + move + keys.length) % keys.length]); Sfx.init(); Sfx.play('click'); }
@@ -194,7 +228,7 @@
 
     build() {
       const w = this.scale.width, h = this.scale.height;
-      forestBackdrop(this);
+      titleBackdrop(this, true);
       const wide = w > 900;
       const s = Math.min(1, w / 1000, h / 720);
 
@@ -209,10 +243,10 @@
 
       const cx = wide ? w * 0.4 : w / 2;
       const logoY = Math.max(48, h * 0.1);
-      const logo = this.add.text(cx, logoY, 'モノノカタリ', TO(64 * s + 10, '#fff8ea', '#4a3a2e', 10 * s + 3))
-        .setOrigin(0.5).setShadow(0, 6, 'rgba(0,0,0,0.3)', 0, true, true);
+      // ロゴ（タイトル絵と同じ、古い紙のような金色の筆文字）
+      const logo = this.add.text(cx, logoY, 'モノノカタリ', TB(64 * s + 10, '#f8e6bc', '#2a160a', 8 * s + 3)).setOrigin(0.5);
       this.tweens.add({ targets: logo, scale: 1.03, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-      this.add.text(cx, logoY + 40 * s + 18, '― 百鬼夜行 ―', TO(22 * s + 8, '#ffe7a8', '#4a3a2e', 4)).setOrigin(0.5);
+      this.add.text(cx, logoY + 40 * s + 18, '― 百鬼夜行 ―', TB(22 * s + 8, '#e0c0ff', '#1a0a2a', 4)).setOrigin(0.5);
 
       // メニューパネル
       const pw = Math.min(560, w - 20);
@@ -222,8 +256,11 @@
       const tmp = monsterPicker(this, cx, -9999, pw - 30, this.sp, () => {});
       const gridH = tmp.height; tmp.destroy();
       const ph = 84 + gridH + 150 + 74;
-      panel(this, cx - pw / 2, py, pw, ph);
-      this.add.text(cx - pw / 2 + 22, py + 18, 'なまえ', T(17, C.soft));
+      // 古い紙のようなパネル＋金のフチ
+      panel(this, cx - pw / 2, py, pw, ph, { color: 0xf6ead0, alpha: 0.95, border: 0x8a5a1a, borderW: 4, shadow: 0.5 });
+      this.add.graphics().lineStyle(1.5, 0xc89a4a, 0.8).strokeRoundedRect(cx - pw / 2 + 6, py + 6, pw - 12, ph - 12, 13);
+      const BR = (sz, col) => T(sz, col, { fontFamily: UI.BRUSH, fontStyle: 'normal' });
+      this.add.text(cx - pw / 2 + 22, py + 16, 'なまえ', BR(19, '#5a3a1a'));
       const inputW = pw - 120;
       this.input_ = this.add.dom(cx - pw / 2 + 92 + inputW / 2, py + 30, 'input', [
         `width:${inputW}px`, 'height:40px', 'box-sizing:border-box', 'border-radius:12px', 'border:3px solid #4a3a2e',
@@ -234,7 +271,7 @@
       this.input_.node.value = store.get('name', '');
       this.input_.node.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') this.input_.node.blur(); });
 
-      this.add.text(cx, py + 66, 'モンスターをえらぶ', T(15, C.soft)).setOrigin(0.5);
+      this.add.text(cx, py + 66, '― 妖怪をえらぶ ―', BR(17, '#5a3a1a')).setOrigin(0.5);
       this.picker = monsterPicker(this, cx, gridTop, pw - 30, this.sp, k => this.pick(k));
       const infoY = gridTop + gridH + 12;
       this.infoTitle = this.add.text(cx, infoY, '', T(17, C.brownCss)).setOrigin(0.5, 0);
@@ -243,8 +280,8 @@
       this.goBtn = null;
       // 続きから（オートセーブ）／初めから
       const bw = Math.min(240, (pw - 50) / 2), by = py + ph - 60;
-      this.contBtn = button(this, cx - bw / 2 - 8, by, bw, 56, '続きから', () => this.go(true), { color: 0xef7a6a, dark: 0xb24a3e, size: 22 });
-      this.newBtn = button(this, cx + bw / 2 + 8, by, bw, 56, '初めから', () => this.goNew(), { color: C.blue, dark: C.blueDark, size: 22 });
+      this.contBtn = button(this, cx - bw / 2 - 8, by, bw, 56, '続きから', () => this.go(true), { color: 0xd0503e, dark: 0x7a2418, size: 26, brush: true });
+      this.newBtn = button(this, cx + bw / 2 + 8, by, bw, 56, '初めから', () => this.goNew(), { color: 0x6a54b0, dark: 0x352668, size: 26, brush: true });
       this.contInfo = this.add.text(cx - bw / 2 - 8, by + 36, '確認中…', T(12, C.soft)).setOrigin(0.5, 0);
       this.add.text(cx + bw / 2 + 8, by + 36, '選んだモンスターでLv1から', T(12, C.soft)).setOrigin(0.5, 0);
       this.setSave(this.saveData === undefined ? null : this.saveData, this.saveData === undefined);
@@ -281,6 +318,7 @@
           button(this, 86, 30 + i * 52, 148, 42, label, fn, { color: col, dark, size: 18 });
         }
       });
+      if (!window.__titleSeen && !this.notice) this.showSplash();
       if (this.notice && /メンテナンス/.test(this.notice)) this.showMaint();
       else Net.ping().then(r => { if (r && r.maint && this.sys.isActive()) this.showMaint(); }).catch(() => {});
     }
@@ -353,7 +391,36 @@
     }
 
     // メンテナンス中：遊べないようにして、終わったら自動で最新版を読み込み直す
+    // 最初に開いたときだけ：タイトルの絵を大きく見せる。タップでロビーへ
+    showSplash() {
+      const w = this.scale.width, h = this.scale.height;
+      const objs = titleBackdrop(this, false);
+      const subY = Math.min(h * 0.8, objs.bottom + 40), s = Math.min(1, w / 700);
+      const sub = this.add.text(w / 2, subY, '― 百 鬼 夜 行 ―', TB(40 * s + 14, '#e8c8ff', '#1a0a2a', 6)).setOrigin(0.5).setAlpha(0);
+      const tap = this.add.text(w / 2, Math.min(h - 30, subY + 52 * s + 26), UI.isMobile() ? 'タップしてはじめる' : 'クリック / Enter ではじめる', TB(20 * s + 8, '#fbeccb', '#2a160a', 4)).setOrigin(0.5).setAlpha(0);
+      objs.push(sub, tap);
+      this.tweens.add({ targets: sub, alpha: 1, duration: 1200, delay: 300 });
+      this.tweens.add({ targets: tap, alpha: { from: 0.25, to: 1 }, duration: 900, delay: 1200, yoyo: true, repeat: -1 });
+      const all = this.add.container(0, 0, objs).setDepth(100);
+      const zone = this.add.zone(0, 0, w, h).setOrigin(0).setInteractive().setDepth(101);
+      this.hideInput(true);
+      this.splash = { close: () => {
+        if (!this.splash) return;
+        this.splash = null;
+        window.__titleSeen = true;
+        this.input.keyboard.off('keydown', onKey);
+        zone.destroy();
+        this.hideInput(false);
+        this.tweens.add({ targets: all, alpha: 0, scale: 1.15, x: -w * 0.075, y: -h * 0.075, duration: 450, ease: 'Quad.in', onComplete: () => all.destroy() });
+      } };
+      const go = () => { Sfx.init(); Sfx.play('click'); UI.mobileEnter(); this.splash && this.splash.close(); };
+      const onKey = e => { if (e.key === 'Enter' || e.key === ' ') go(); };
+      zone.on('pointerdown', go);
+      this.time.delayedCall(200, () => this.splash && this.input.keyboard.on('keydown', onKey));
+    }
+
     showMaint() {
+      if (this.splash) this.splash.close();
       if (this.maintBox) return;
       const w = this.scale.width, h = this.scale.height;
       const objs = [];

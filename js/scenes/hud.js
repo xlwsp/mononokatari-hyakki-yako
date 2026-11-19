@@ -1,12 +1,14 @@
 // HUD（HP・レベル・スコア・ランキング・レーダー・スキル・強化カード・演出・仮想スティック）
 (function () {
   'use strict';
-  const { T, TO, C, button } = UI;
+  const { T, TO, TB, C, button } = UI;
   // 強化カードの種類ごとの色とアイコン
   const UP_COLOR = { dmg: 0xe8505a, rate: 0xe8505a, extra: 0xe8505a, pierce: 0xe8505a, skillPow: 0xf08a20, skillCd: 0xf08a20, area: 0xf08a20,
     hp: 0x3cb85a, regen: 0x3cb85a, magnet: 0x3a8ae8, bump: 0xe8505a, trait: 0x9a5ae8 };
   const UP_TAG = { dmg: 'ATTACK', rate: 'ATTACK', extra: 'ATTACK', pierce: 'ATTACK', skillPow: 'SKILL', skillCd: 'SKILL', area: 'SKILL',
     hp: 'GUARD', regen: 'GUARD', magnet: 'SUPPORT', bump: 'ATTACK', trait: 'POWER' };
+  const UP_SHORT = { dmg: '攻撃', rate: '連射', extra: '弾数', pierce: '貫通', skillPow: '技威力', skillCd: '技連発', area: '技範囲', hp: 'HP', regen: '回復', magnet: '吸引', bump: '体当り', trait: '覚醒' };
+  const UP_ORDER = ['dmg', 'rate', 'extra', 'pierce', 'bump', 'skillPow', 'skillCd', 'area', 'hp', 'regen', 'magnet', 'trait'];
   const UP_ICON = { dmg: '⚔️', rate: '⚡', extra: '✨', pierce: '🏹', skillPow: '💥', skillCd: '⏱️', area: '🌀', hp: '❤️', regen: '💚', magnet: '🧲', bump: '💢', trait: '👑' };
 
   class UIScene extends Phaser.Scene {
@@ -81,6 +83,14 @@
       this.comboText = this.add.text(0, 0, '', TO(30, '#ffe07a', '#3a2a20', 7)).setOrigin(1, 0.5).setDepth(34).setAlpha(0);
       this.comboSub = this.add.text(0, 0, 'COMBO', TO(13, '#fff', '#3a2a20', 4)).setOrigin(1, 0.5).setDepth(34).setAlpha(0);
       this.bannerText = null;
+      // 持っているカード（アイコン×枚数）
+      this.cardBag = this.add.text(0, 0, '', T(12, '#fff8ea', { lineSpacing: 3 })).setDepth(3);
+      this.cardBagG = this.add.graphics().setDepth(2);
+      this.cardBagKey = '';
+      // 大妖のHPバー
+      this.bbG = this.add.graphics().setDepth(3);
+      this.bbName = this.add.text(0, 0, '大妖 オオマガツ　Lv200', TB(16, '#e8d0ff', '#1a0a2a', 4)).setOrigin(0.5, 1).setDepth(4).setVisible(false);
+      this.bbHint = this.add.text(0, 0, '', TO(12, '#e8d0ff', '#1a0a2a', 3)).setOrigin(0.5, 0).setDepth(4).setVisible(false);
       this.layout();
       this.onResize = () => { this.layout(); if (this.cards) { this.hideCards(); this.cardSeq = -1; } };
       this.scale.on('resize', this.onResize);
@@ -166,6 +176,8 @@
 
       this.drawRanking(s, me);
       this.drawSkill(me);
+      this.drawCardBag();
+      this.drawBigBoss(me);
       this.drawMinimap(s, me);
 
       // レベルアップカード
@@ -236,6 +248,55 @@
       this.skZone.setPosition(x + w / 2, cy).setSize(w, h);
       if (this.skZone.input) this.skZone.input.hitArea.setTo(0, 0, w, h);
       this.skPos = { x, y, w };
+    }
+
+    // 持っているカード：スキル欄の上に「⚔️攻撃×3」のように並べる
+    drawCardBag() {
+      const cards = this.gs.myCards || {}, L = this.L;
+      const short = L.compact;
+      const parts = UP_ORDER.filter(k => cards[k] > 0).map(k => `${UP_ICON[k]}${short ? '' : UP_SHORT[k]}×${cards[k]}${k === 'hp' ? '/30' : ''}`);
+      const key = parts.join(' ') + '|' + L.w + '|' + (this.skPos ? this.skPos.y : 0);
+      if (key === this.cardBagKey) return;
+      this.cardBagKey = key;
+      const g = this.cardBagG;
+      g.clear();
+      if (!parts.length || !this.skPos) { this.cardBag.setText(''); return; }
+      const w = Math.min(L.portrait ? L.w - 20 : 330, L.w - 20);
+      this.cardBag.setText(parts.join('  ')).setWordWrapWidth(w - 16, true).setFontSize(short ? 13 : 12);
+      const h = this.cardBag.height + 10;
+      const x = L.portrait ? (L.w - w) / 2 : this.skPos.x, y = this.skPos.y - h - 8;
+      g.fillStyle(0x161c30, 0.62); g.fillRoundedRect(x, y, Math.min(w, this.cardBag.width + 16), h, 8);
+      g.lineStyle(1.5, 0xf0c35a, 0.6); g.strokeRoundedRect(x, y, Math.min(w, this.cardBag.width + 16), h, 8);
+      this.cardBag.setPosition(x + 8, y + 5);
+    }
+
+    // 大妖：近くにいるときは画面上にHPバー。いないときは出現までの秒数（30秒前から）
+    drawBigBoss(me) {
+      const bb = this.gs.bb, g = this.bbG, L = this.L;
+      g.clear();
+      const meX = this.gs.local ? this.gs.local.x : me.x, meY = this.gs.local ? this.gs.local.y : me.y;
+      const y0 = this.protText.y + (this.protText.visible ? 26 : 4);
+      if (bb && Math.hypot(bb[0] - meX, bb[1] - meY) < 2600) {
+        const w = Math.min(420, L.w - (L.portrait ? 150 : 40)), x = L.cx - w / 2, y = y0 + 22;
+        this.bbName.setVisible(true).setPosition(L.cx, y - 2);
+        this.bar(g, x, y, w, 14, bb[2] / 1000, 0xa050ff, 0x140820);
+        this.bbHint.setVisible(true).setPosition(L.cx, y + 16).setText(`${(bb[2] / 10).toFixed(1)}%　倒すと世界の中央に経験値がばらまかれる！`);
+      } else if (!bb && this.gs.bbt > 0 && this.gs.bbt <= 30) {
+        this.bbName.setVisible(false);
+        this.bbHint.setVisible(true).setPosition(L.cx, y0).setText(`👹 大妖が世界の中央に現れるまで ${this.gs.bbt}秒`);
+      } else { this.bbName.setVisible(false); this.bbHint.setVisible(false); }
+    }
+    bigBossFx(spawn, name) {
+      if (!this.ready) return;
+      if (spawn) {
+        FX.flash(this, 0x5a2090, 0.5, 400);
+        FX.stamp(this, '大妖 出現', '#d8a8ff', this.L.h * 0.28, this.L.compact ? 46 : 64);
+        this.time.delayedCall(900, () => this.banner('世界の中央に Lv200 の大妖が現れた！', '#e8d0ff'));
+      } else {
+        FX.flash(this, 0xffffff, 0.7, 400);
+        this.stampFx('大妖 討伐！', '#ffe07a');
+        this.time.delayedCall(900, () => this.banner(name ? `${name} がとどめ！ 中央に経験値が散らばった！` : '中央に経験値が散らばった！ 急げ！', '#ffe07a'));
+      }
     }
 
     // 自分のモンスターの説明（スキル・特性・強化の状態）
@@ -350,6 +411,23 @@
           g.fillTriangle(px + Math.cos(a) * 6, py + Math.sin(a) * 6, px + Math.cos(a + 2.4) * 5, py + Math.sin(a + 2.4) * 5, px + Math.cos(a - 2.4) * 5, py + Math.sin(a - 2.4) * 5);
         }
       }
+      // 大妖（どこにいても表示。範囲外は紫の矢印）
+      const bb = this.gs.bb;
+      if (bb) {
+        let [px, py] = toR(bb[0], bb[1]);
+        if (inside(px, py, 9)) {
+          g.fillStyle(0x10001a, 0.9); g.fillCircle(px, py, 10);
+          g.fillStyle(0xa050ff, blink); g.fillCircle(px, py, 8);
+          g.lineStyle(2, 0xe8d0ff, blink); g.strokeCircle(px, py, 12);
+        } else {
+          const dx = bb[0] - meX, dy = bb[1] - meY;
+          const t = (S / 2 - 9) / Math.max(Math.abs(dx), Math.abs(dy));
+          px = cx + dx * t; py = cy + dy * t;
+          const a = Math.atan2(dy, dx);
+          g.fillStyle(0xb070ff, 1);
+          g.fillTriangle(px + Math.cos(a) * 9, py + Math.sin(a) * 9, px + Math.cos(a + 2.4) * 7, py + Math.sin(a + 2.4) * 7, px + Math.cos(a - 2.4) * 7, py + Math.sin(a - 2.4) * 7);
+        }
+      }
       g.fillStyle(0xffffff, 1); g.fillCircle(cx, cy, 5);
       g.lineStyle(2, 0x2a6aff, 1); g.strokeCircle(cx, cy, 5);
       // 右下に世界全体の中での自分の位置（小さな全体図）
@@ -360,6 +438,7 @@
       const mx = wx + meX / GD.WORLD.w * ws, my = wy + meY / GD.WORLD.h * ws;
       g.lineStyle(1, 0xffffff, 0.5); g.strokeRect(mx - vw / 2, my - vh / 2, vw, vh);
       g.fillStyle(0xffffff, 1); g.fillCircle(mx, my, 2.5);
+      if (bb) { g.fillStyle(0xb070ff, blink); g.fillCircle(wx + bb[0] / GD.WORLD.w * ws, wy + bb[1] / GD.WORLD.h * ws, 3.5); }
       if (bountyPos) { g.fillStyle(0xffd84f, blink); g.fillCircle(wx + bountyPos[0] / GD.WORLD.w * ws, wy + bountyPos[1] / GD.WORLD.h * ws, 2.5); }
       g.lineStyle(3, 0xf0c35a, 1); g.strokeRoundedRect(x0, y0, S, S, 10);
     }
@@ -399,8 +478,11 @@
         const ds = this.add.text(0, (descTop + chh / 2 - 8) / 2, up.desc, T(14 * fsz, '#3a2414', { align: 'center', lineSpacing: 2, wordWrap: { width: cw - 26, useAdvancedWrap: true } })).setOrigin(0.5);
         if (ds.height > chh / 2 - descTop - 12) ds.setScale((chh / 2 - descTop - 12) / ds.height);
         const kh = this.add.text(cw / 2 - 9, chh / 2 - 6, String(i + 1), TO(12, '#ffd76a', '#1a1020', 3)).setOrigin(1, 1);
+        // いま持っている枚数
+        const have = (this.gs.myCards || {})[key] || 0;
+        const hv = this.add.text(0, -chh / 2 - 15, have ? `いま ×${have}` : 'はじめて', TO(13 * fsz, have ? '#ffe07a' : '#d8f0ff', '#1a1020', 4)).setOrigin(0.5, 1);
         const zone = this.add.zone(0, 0, cw, chh).setInteractive({ useHandCursor: true });
-        c.add([g, tag, icon, nm, ds, kh, zone]);
+        c.add([g, tag, icon, nm, ds, kh, hv, zone]);
         const card = { c, g, cw, chh, x, y: cy };
         card.draw = sel => {
           g.clear();
@@ -564,7 +646,8 @@
     banner(msg, color) {
       if (!this.ready) return;
       if (this.bannerText) this.bannerText.destroy();
-      const t = this.add.text(this.L.w / 2, this.L.h * 0.3, msg, TO(this.L.compact ? 28 : 40, color || '#fff', '#3a2a20', 8)).setOrigin(0.5).setDepth(36).setScale(0.3);
+      const t = this.add.text(this.L.w / 2, this.L.h * 0.3, msg, Object.assign(TB(this.L.compact ? 26 : 38, color || '#fff', '#2a160a', 8), { shadow: undefined })).setOrigin(0.5).setDepth(36).setScale(0.3);
+      if (t.width > this.L.w - 20) t.setFontSize(Math.floor((this.L.compact ? 26 : 38) * (this.L.w - 20) / t.width));
       this.bannerText = t;
       this.tweens.add({ targets: t, scale: 1, duration: 300, ease: 'Back.out' });
       this.tweens.add({ targets: t, alpha: 0, y: t.y - 30, delay: 1300, duration: 500, onComplete: () => { t.destroy(); if (this.bannerText === t) this.bannerText = null; } });

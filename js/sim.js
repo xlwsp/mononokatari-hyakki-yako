@@ -24,6 +24,11 @@
   const PARADE_LV = 20;        // 百鬼夜行に巻き込まれるレベル
   const PARADE_TIME = 45;      // 百鬼夜行を生き延びる時間
   const BOUNTY_LV = 15;        // 賞金首になるレベル
+  const BIG_LV = 200;          // 大妖（ビッグボス）のレベル
+  const BIG_FIRST = 90;        // 世界ができてから大妖が現れるまで（秒）
+  const BIG_RESPAWN = 420;     // 倒されてから次の大妖が現れるまで（秒）
+  const BIG_HP = 600000;       // 大妖のHP（みんなで削る）
+  const BIG_GEMS = 320;        // 倒すと中央にばらまかれる経験値の玉の数
 
   // プレイヤーが選べるモンスター（性能はだいたい同じ強さ。得意なことが違う）
   // atk: 自動で撃つ通常攻撃 / skill: 自動で発動するスキル / trait: プレイヤー同士のバトルで効く特性
@@ -111,7 +116,8 @@
 
   // 敵（番号は描画側と共通。4番はボス）
   const ENEMY_TYPES = ['slime', 'bat', 'wisp', 'brute', 'boss', 'shroom', 'beetle', 'gold', 'golem',
-    'kedama', 'kasa', 'chochin', 'nezumi', 'hitodama', 'daruma']; // 9〜14は弱い雑魚（群れで出る）
+    'kedama', 'kasa', 'chochin', 'nezumi', 'hitodama', 'daruma', // 9〜14は弱い雑魚（群れで出る）
+    'bigboss']; // 15は大妖（世界に1体だけ）
   const ENEMIES = {
     slime:  { hp: 14, spd: 72, dmg: 6, r: 17, xp: 1 },
     bat:    { hp: 8, spd: 135, dmg: 5, r: 14, xp: 1 },
@@ -129,6 +135,8 @@
     nezumi:   { hp: 4, spd: 150, dmg: 3, r: 12, xp: 1 },
     hitodama: { hp: 6, spd: 112, dmg: 4, r: 12, xp: 1 },
     daruma:   { hp: 12, spd: 58, dmg: 5, r: 15, xp: 1 },
+    // 大妖：とても大きくて、とてもゆっくり。倒すと経験値の玉が世界の中央にばらまかれる
+    bigboss:  { hp: BIG_HP, spd: 22, dmg: 30, r: 150, xp: 0 },
   };
 
   // 強化カード。{skill} {trait} はモンスターごとのスキル名・特性名に置き換わる
@@ -166,6 +174,7 @@
   // 敵の攻撃の強さ（レベルが上がるほど痛い）
   const dmgCurve = lv => 1 + (lv - 1) * 0.05 + (lv - 1) * (lv - 1) * 0.0015;
   // 高レベル向けに出た敵が低レベルの人に当たったときは、その人のレベル相当まで弱める
+  const isBoss = e => e.ty === 4 || e.ty === 15; // 押し返し・気絶が効かない
   const dmgFor = (e, p) => (e.lvd > 1 ? e.dmg * Math.min(1, dmgCurve(p.lv) / e.lvd) : e.dmg);
   const rand = (a, b) => a + Math.random() * (b - a);
   const randInt = (a, b) => Math.floor(rand(a, b + 1));
@@ -336,6 +345,8 @@
       this.paradeWarned = false;
       this.bounty = null;
       this.bountyT = 0;
+      this.big = null;
+      this.bigT = BIG_FIRST;
       this.slams = [];
       this.maxCP = 1;
       this.cells = new Array(GW * GH);
@@ -373,7 +384,7 @@
         atkCd: 0, scd: rand(1, 3), iframe: 2, choices: [], chSeq: p.chSeq || 0, chT: 0,
         tpT: 0, protT: PROTECT_TIME, revived: false, hyT: 0,
         shield: 0, shieldT: 0, hasteT: 0, deadT: 0, killedBy: null,
-        ai: { t: 0, dx: 0, dy: 0, wx: 0, wy: 0 },
+        ai: { t: 0, dx: 0, dy: 0, wx: 0, wy: 0 }, cards: {}, cardsV: (p.cardsV || 0) + 1,
       });
       p.tp = (p.tp || 0) + 1;
       if (p.bot) {
@@ -433,6 +444,21 @@
       }
       // Lv30以上で前のルールのまま進化していた人は、新しい進化の強さに合わせる
       if (p.evo && !o.evo2) { if (o.hp2) p.mhp *= 2.5 / 1.5; p.spd *= 1.15; p.regen += 3; }
+      // 持っているカードの記録がない古いセーブは、強さから枚数を見積もる
+      if (!o.cards || typeof o.cards !== 'object') {
+        const sp = SPECIES[p.sp], n = v => Math.max(0, Math.round(v));
+        const lg = (v, f) => (v > 0 ? Math.log(v) / Math.log(f) : 0);
+        const tl = Math.max(0, p.traitLv - 1), bot = p.bot ? 0.7 : 1;
+        p.cards = {
+          dmg: n((p.dmgMul - bot - 0.1 * tl) / 0.2), rate: n(lg(p.rateMul, 0.87)), extra: n(p.extra), pierce: n(p.pierce),
+          skillPow: n((p.skillPow - 1) / 0.45), skillCd: n(lg(p.skillCd, 0.78)), area: n(lg(p.areaMul, 1.3)), hp: n(p.hpCards || 0),
+          regen: n((p.regen - (p.evo ? 3 : 0)) / 1.5), magnet: n(lg(p.magnet / (150 * (p.evo ? 1.3 : 1)), 1.4)),
+          bump: n((p.bumpMul - bot - 0.1 * tl) / 0.25), trait: n(tl),
+        };
+        for (const k in p.cards) if (!p.cards[k]) delete p.cards[k];
+        if (!sp.skill.area) delete p.cards.area;
+      } else p.cards = Object.assign({}, o.cards);
+      p.cardsV = (p.cardsV || 0) + 1;
       p.hp = clamp(p.hp, p.mhp * 0.3, p.mhp); // 少なくとも3割は回復した状態で再開
       for (let i = 0; i < Math.min(6, o.pc | 0); i++) this.makeChoices(p); // 選び残したカード
     }
@@ -488,6 +514,9 @@
       if (!cur || cur.s !== seq) return;
       const key = cur.o[clamp(idx | 0, 0, cur.o.length - 1)];
       UPGRADES[key].apply(p);
+      if (!p.cards) p.cards = {};
+      p.cards[key] = (p.cards[key] || 0) + 1; // 持っているカードの枚数
+      p.cardsV = (p.cardsV || 0) + 1;
       p.choices.shift();
       p.chT = 0;
       this.ev({ e: 'up', p: p.id, k: key });
@@ -561,6 +590,7 @@
       this.spawnEnemies(dt);
       this.updateParade(dt);
       this.updateBounty(dt);
+      this.updateBig(dt);
       this.moveEnemies(dt);
       this.updateSlams();
       this.buildGrid();
@@ -726,7 +756,7 @@
         const d = Math.hypot(dx, dy) || 1;
         const range = FR + e.r;
         if (d < range) {
-          const w = (e.ty === 4 ? 3 : 1) * (1 - d / range) * 2.2 * (p.hp < p.mhp * 0.4 ? 1.6 : 1);
+          const w = (isBoss(e) ? 3 : 1) * (1 - d / range) * 2.2 * (p.hp < p.mhp * 0.4 ? 1.6 : 1);
           fx += dx / d * w; fy += dy / d * w;
         }
       }
@@ -912,6 +942,74 @@
       this.slams = keep;
     }
 
+    // ---------- 大妖（ビッグボス）：世界の中央をのそのそ歩く Lv200 の大妖怪。みんなで倒すと中央に経験値がばらまかれる ----------
+    updateBig(dt) {
+      if (this.big && this.big.dead) { this.big = null; this.bigT = BIG_RESPAWN; }
+      if (this.big) return;
+      this.bigT -= dt;
+      if (this.bigT > 0) return;
+      if (!this.players.some(p => p.alive)) { this.bigT = 10; return; }
+      const cx = WORLD.w / 2, cy = WORLD.h / 2;
+      const e = this.spawnEnemy(15, null, cx, cy);
+      const lvd = dmgCurve(BIG_LV);
+      e.mhp = e.hp = BIG_HP; e.dmg = ENEMIES.bigboss.dmg * lvd; e.lvd = lvd; e.spd = ENEMIES.bigboss.spd;
+      e.wx = cx; e.wy = cy; e.callT = 6; e.slamT = 3;
+      this.big = e;
+      this.ev({ e: 'bbs', g: 1, x: r1(cx), y: r1(cy) });
+    }
+    moveBig(e, dt) {
+      const cx = WORLD.w / 2, cy = WORLD.h / 2, LEASH = 1300;
+      const t = e.tgt && e.tgt.alive ? e.tgt : null;
+      // 近くの人をゆっくり追いかける。ただし中央からは離れすぎない
+      let gx = e.wx, gy = e.wy;
+      if (t && Math.hypot(t.x - cx, t.y - cy) < LEASH + 300) { gx = t.x; gy = t.y; }
+      else if (Math.hypot(e.x - e.wx, e.y - e.wy) < 60) { const a = rand(0, Math.PI * 2), d = rand(0, LEASH * 0.7); e.wx = cx + Math.cos(a) * d; e.wy = cy + Math.sin(a) * d; }
+      const dx = gx - e.x, dy = gy - e.y, d = Math.hypot(dx, dy) || 1;
+      let sp = e.spd;
+      if (e.slowT > 0) { e.slowT -= dt; sp *= 0.6; }
+      if (d > 40) { e.x += dx / d * sp * dt; e.y += dy / d * sp * dt; }
+      const ox = e.x - cx, oy = e.y - cy, od = Math.hypot(ox, oy);
+      if (od > LEASH) { e.x = cx + ox / od * LEASH; e.y = cy + oy / od * LEASH; }
+      if (!t) return;
+      const td = Math.hypot(t.x - e.x, t.y - e.y);
+      // 地面たたきつけ：大きな円で予告（Lv10以上の人だけ狙う）
+      e.slamT -= dt;
+      if (e.slamT <= 0 && td < 650 && t.lv >= 10) {
+        e.slamT = 3.2;
+        const r = 330, delay = 1.2;
+        this.slams.push({ x: t.x, y: t.y, r, at: this.time + delay, dmg: e.dmg * 3, lvd: e.lvd });
+        this.ev({ e: 'tg', x: r1(t.x), y: r1(t.y), r, d: delay });
+        // HPが半分を切ったら、まわりにも追加でたたきつける
+        if (e.hp < e.mhp * 0.5) {
+          for (let i = 0; i < 3; i++) {
+            const a = rand(0, Math.PI * 2), x = t.x + Math.cos(a) * 420, y = t.y + Math.sin(a) * 420;
+            this.slams.push({ x, y, r: 240, at: this.time + delay + 0.5, dmg: e.dmg * 2.2, lvd: e.lvd });
+            this.ev({ e: 'tg', x: r1(x), y: r1(y), r: 240, d: delay + 0.5 });
+          }
+        }
+      }
+      // ときどき雑魚を呼び寄せる
+      e.callT -= dt;
+      if (e.callT <= 0 && td < 1200) {
+        e.callT = 7;
+        const ty = [9, 12, 13][randInt(0, 2)];
+        for (let i = 0; i < 10; i++) {
+          const a = i / 10 * Math.PI * 2;
+          this.spawnEnemy(ty, t, e.x + Math.cos(a) * 200, e.y + Math.sin(a) * 200);
+        }
+      }
+    }
+    // 大妖を倒した：経験値の玉を世界の中央にばらまく
+    bigDefeated(e, owner) {
+      const cx = WORLD.w / 2, cy = WORLD.h / 2;
+      if (owner) { owner.bossKills += 5; owner.pkScore += 5000; if (owner.human) this.ev({ e: 'pt', p: owner.id, n: 50 }); }
+      for (let i = 0; i < BIG_GEMS; i++) {
+        const a = rand(0, Math.PI * 2), d = Math.sqrt(Math.random()) * 1300 + 60;
+        this.dropGem(cx + Math.cos(a) * d, cy + Math.sin(a) * d, rand(60, 180), e.x, e.y);
+      }
+      this.ev({ e: 'bbk', g: 1, n: owner ? owner.name : '', p: owner ? owner.id : 0, x: r1(e.x), y: r1(e.y) });
+    }
+
     pickEnemyType(lv, swarm) {
       // [番号, 重み]（レベルが上がるほど強い敵が混ざる）
       const w = [[0, 1], [9, 0.45], [12, lv > 1 ? 0.35 : 0], [10, lv > 3 ? 0.35 : 0], [13, lv > 5 ? 0.35 : 0],
@@ -962,8 +1060,9 @@
           }
           e.tgt = bt;
           // 誰も近くにいない敵は消える
-          if (!bt && e.ty !== 4) { e.dead = true; e.gone = true; continue; }
+          if (!bt && !isBoss(e)) { e.dead = true; e.gone = true; continue; }
         }
+        if (e.ty === 15) { this.moveBig(e, dt); continue; }
         if (!e.tgt) continue;
         if (e.stunT > 0) { e.stunT -= dt; continue; }
         if (e.ty === 7) {
@@ -992,7 +1091,7 @@
         if (e.slowT > 0) { e.slowT -= dt; sp *= 0.45; }
         e.x += dx / d * sp * dt;
         e.y += dy / d * sp * dt;
-        if (e.ty !== 4) resolve(this.map, e, e.r * 0.6);
+        if (!isBoss(e)) resolve(this.map, e, e.r * 0.6);
       }
     }
 
@@ -1047,7 +1146,7 @@
             const d2 = dx * dx + dy * dy;
             if (d2 < min * min && d2 > 0.01) {
               const d = Math.sqrt(d2), push = (min - d) * 0.25;
-              const w1 = e1.ty === 4 ? 0.1 : 1, w2 = e2.ty === 4 ? 0.1 : 1;
+              const w1 = isBoss(e1) ? (e1.ty === 15 ? 0 : 0.1) : 1, w2 = isBoss(e2) ? (e2.ty === 15 ? 0 : 0.1) : 1;
               e1.x -= dx / d * push * w1; e1.y -= dy / d * push * w1;
               e2.x += dx / d * push * w2; e2.y += dy / d * push * w2;
             }
@@ -1193,7 +1292,7 @@
           const r = (evo ? 220 : 175) * area;
           this.enemiesIn(fx, fy, r, e => {
             this.damage(e, 16 * pw, p);
-            if (e.ty !== 4) {
+            if (!isBoss(e)) {
               const dx = e.x - fx, dy = e.y - fy, d = Math.hypot(dx, dy) || 1;
               e.x += dx / d * 110; e.y += dy / d * 110;
             }
@@ -1239,7 +1338,7 @@
         case 'roar': {
           if (!anyNear(260)) return false;
           const r = (evo ? 330 : 265) * area;
-          this.enemiesIn(fx, fy, r, e => { this.damage(e, 24 * pw, p); if (e.ty !== 4) e.stunT = evo ? 2.2 : 1.5; });
+          this.enemiesIn(fx, fy, r, e => { this.damage(e, 24 * pw, p); if (!isBoss(e)) e.stunT = evo ? 2.2 : 1.5; });
           sk(r);
           return true;
         }
@@ -1271,8 +1370,9 @@
         e.dead = true;
         if (owner) owner.kills++;
         this.ev({ e: 'ed', i: e.id, ty: e.ty, el: e.el, x: r1(e.x), y: r1(e.y), by: owner ? owner.id : 0 });
-        if (e.el && e.ty !== 4) for (let i = 0; i < 5; i++) this.dropGem(e.x + rand(-50, 50), e.y + rand(-50, 50), e.xp / 5);
-        if (e.ty === 4) {
+        if (e.el && !isBoss(e)) for (let i = 0; i < 5; i++) this.dropGem(e.x + rand(-50, 50), e.y + rand(-50, 50), e.xp / 5);
+        if (e.ty === 15) this.bigDefeated(e, owner);
+        else if (e.ty === 4) {
           if (owner) owner.bossKills++;
           for (let i = 0; i < 24; i++) this.dropGem(e.x + rand(-90, 90), e.y + rand(-90, 90), 4 + Math.floor(e.xp));
         } else if (e.ty === 7) {
@@ -1313,7 +1413,7 @@
     }
 
     // ---------- 経験値ジェム ----------
-    dropGem(x, y, v) {
+    dropGem(x, y, v, fx, fy) {
       v = Math.max(1, Math.round(v * 10) / 10);
       // 多すぎるときは一番古い玉を消して、倒した場所には必ず落とす（遠くの玉にまとめると落ちないように見える）
       if (this.gems.length >= GEM_CAP) {
@@ -1321,7 +1421,9 @@
       }
       const g = { id: this.uid(), x: clamp(x, EDGE, WORLD.w - EDGE), y: clamp(y, EDGE, WORLD.h - EDGE), v, pull: null, age: 0 };
       this.gems.push(g);
-      this.ev({ e: 'gs', id: g.id, x: r1(g.x), y: r1(g.y), v });
+      const ev = { e: 'gs', id: g.id, x: r1(g.x), y: r1(g.y), v };
+      if (fx !== undefined) { ev.fx = r1(fx); ev.fy = r1(fy); } // 飛び出してくる元の場所
+      this.ev(ev);
     }
 
     updateGems(dt) {
@@ -1421,6 +1523,10 @@
           if (inR(x, y, R)) s.e.push(base.E[i], ty, x, y);
           else if ((bt === 4 || bt === 7) && inR(x, y, RADAR_R)) s.f.push(bt, Math.round(x), Math.round(y));
         }
+        // 大妖はどこにいても：位置とHP（千分率）。いないときは次に現れるまでの秒数
+        const B = this.big;
+        if (B && !B.dead) s.bb = [Math.round(B.x), Math.round(B.y), Math.ceil(B.hp / B.mhp * 1000)];
+        else s.bbt = Math.max(0, Math.ceil(this.bigT));
       }
       for (const ev of base.ev) {
         if (ev.p === id || ev.a === id || ev.b === id || ev.by === id) { s.ev.push(ev); continue; }
@@ -1440,6 +1546,7 @@
         scd: Math.round(clamp(me.scd / (SPECIES[me.sp].skill.cd * me.skillCd * (me.evo ? 0.6 : 1)), 0, 1) * 100) / 100,
         by: me.killedBy, dt: me.alive ? 0 : Math.round(me.deadT),
         hy: me.hyT ? Math.ceil(me.hyT) : 0, pt: Math.max(0, Math.ceil(this.paradeT)),
+        cd: me.cardsV !== me.cardsSent || this.tick % 40 === 0 ? (me.cardsSent = me.cardsV, me.cards) : undefined,
         st: { dmg: me.dmgMul, rate: me.rateMul, extra: me.extra, pierce: me.pierce, sp: me.skillPow, tl: me.traitLv, bump: Math.round(this.bumpPower(me)) },
       };
       if (this.tick % 10 === 0) {
@@ -1478,7 +1585,7 @@
 
   // セーブする項目（レベル・経験値・強化の状態など）
   const SAVE_KEYS = ['lv', 'xp', 'txp', 'evo', 'hp', 'mhp', 'kills', 'score', 'bossKills', 'pkills', 'pkScore', 'spd',
-    'hpCards', 'dmgMul', 'rateMul', 'extra', 'pierce', 'skillPow', 'skillCd', 'areaMul', 'magnet', 'regen', 'bumpMul', 'traitLv', 'revived'];
+    'hpCards', 'dmgMul', 'rateMul', 'extra', 'pierce', 'skillPow', 'skillCd', 'areaMul', 'magnet', 'regen', 'bumpMul', 'traitLv', 'revived', 'cards'];
 
   // モンスターの解放：累計で獲得した経験値で順に解放（強いモンスターほど後ろ）
   const UNLOCKS = [

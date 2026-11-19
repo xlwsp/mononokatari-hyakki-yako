@@ -5,9 +5,9 @@
   const lerp = (a, b, t) => a + (b - a) * t;
   const FX_DEPTH = 1000000;
   const ENEMY_KEYS = ['en_slime', 'en_bat', 'en_wisp', 'en_brute', 'en_boss', 'en_shroom', 'en_beetle', 'en_gold', 'en_golem',
-    'en_kedama', 'en_kasa', 'en_chochin', 'en_nezumi', 'en_hitodama', 'en_daruma'];
-  const ENEMY_SCALE = [0.8, 0.75, 0.78, 0.85, 0.9, 0.85, 0.75, 0.85, 1.0, 0.85, 0.85, 0.85, 0.85, 0.85, 0.85];
-  const ENEMY_BURST = [0xb48cff, 0x9a7ad0, 0x8fb8ff, 0xff9a7a, 0xff5a7e, 0xd8604a, 0x5a7ad0, 0xffd84f, 0x9a9288, 0xf0e2c4, 0xff6a7a, 0xffb050, 0xc0c0d0, 0x9ff0d8, 0xff4a3a];
+    'en_kedama', 'en_kasa', 'en_chochin', 'en_nezumi', 'en_hitodama', 'en_daruma', 'bigboss'];
+  const ENEMY_SCALE = [0.8, 0.75, 0.78, 0.85, 0.9, 0.85, 0.75, 0.85, 1.0, 0.85, 0.85, 0.85, 0.85, 0.85, 0.85, 0.95];
+  const ENEMY_BURST = [0xb48cff, 0x9a7ad0, 0x8fb8ff, 0xff9a7a, 0xff5a7e, 0xd8604a, 0x5a7ad0, 0xffd84f, 0x9a9288, 0xf0e2c4, 0xff6a7a, 0xffb050, 0xc0c0d0, 0x9ff0d8, 0xff4a3a, 0xb070ff];
   // オーラの色（レベルが上がるほど派手に）：Lv5 白 / 10 緑 / 15 水色 / 20 紫 / 30 金 / 40 虹
   const AURA = [0, 0xffffff, 0x7cff8a, 0x6fd8ff, 0xc58bff, 0xffd84f, 0xff7ad9];
   const CHUNK = 800;
@@ -44,7 +44,7 @@
       this.dmgActive = 0;
       this.snaps = [];
       this.esnaps = [];      // 敵は1秒10回なので別に持つ
-      this.lastQ = []; this.lastLb = []; this.lastRk = 0;
+      this.lastQ = []; this.lastLb = []; this.lastRk = 0; this.bb = null; this.bbt = 0; this.myCards = {};
       this.offset = null;
       this.delay = 0.12;     // 届く間隔のゆらぎに合わせて自動調整
       this.arrI = 0.05; this.arrJ = 0.01; this.lastArr = 0;
@@ -283,6 +283,8 @@
       if (s.e) { this.esnaps.push({ t: s.t, e: s.e }); if (this.esnaps.length > 20) this.esnaps.shift(); }
       if (s.q) this.lastQ = s.q;
       if (s.f) this.lastF = s.f;
+      if (s.e) { this.bb = s.bb || null; this.bbt = s.bbt || 0; } // 大妖の位置とHP
+      if (s.me && s.me.cd) this.myCards = s.me.cd; // 持っているカードの枚数
       if (s.lb) { this.lastLb = s.lb; this.lastRk = s.rk; }
       this.latest = s;
       const mine = s.p.find(p => p.id === this.myId);
@@ -617,7 +619,7 @@
       let bossNear = false;
       for (let i = 0; i < be.length; i += 4) {
         const id = be[i], raw = be[i + 1], ty = raw & 15, el = raw >= 16; // 強敵は種類+16
-        if (ty === 4) bossNear = true;
+        if (ty === 4 || ty === 15) bossNear = true;
         let o = this.eSprites.get(id);
         if (!o) {
           o = this.getEnemy(ty); this.eSprites.set(id, o);
@@ -635,13 +637,15 @@
         o.lx = x;
         const wob = Math.sin(this.time.now / 140 + id) * 0.06;
         const s = (ENEMY_SCALE[ty] || 0.8) * (o.el ? 1.4 : 1);
-        if (ty === 0 || ty === 7 || ty === 9 || ty === 12) o.img.setScale(s * (1 + wob), s * (1 - wob));
+        if (ty === 15) o.img.setScale(s * (1 + wob * 0.25), s * (1 - wob * 0.25)); // 大妖はゆっくり息をする
+        else if (ty === 0 || ty === 7 || ty === 9 || ty === 12) o.img.setScale(s * (1 + wob), s * (1 - wob));
         else if (ty === 14) o.img.setScale(s).setRotation(wob * 2.5); // だるまはゆらゆら
         else if (ty === 1) o.img.setScale(s, s * (1 + wob * 1.5));
         else o.img.setScale(s);
         const lift = ty === 1 || ty === 2 || ty === 13 ? 14 + wob * 40 : ty === 10 ? Math.abs(wob) * 140 : ty === 11 ? 6 + wob * 30 : 0; // 浮く・跳ねる
         o.img.setPosition(x, y - lift).setDepth(y);
         o.shadow.setPosition(x, y + 2).setDepth(y - 1);
+        if (ty === 15 && Math.random() < 0.3) this.burst(x + Phaser.Math.Between(-150, 150), y - Phaser.Math.Between(60, 300), 0x8a4aff, 1); // 妖気
         if (ty === 7 && Math.random() < 0.15) FX.twinkle(this, x + Phaser.Math.Between(-15, 15), y - 20, 1);
         if (o.el && Math.random() < 0.08) this.burst(x + Phaser.Math.Between(-20, 20), y - 30, 0xff3a3a, 1);
         if (o.flash > 0) { o.flash -= dt; if (o.flash <= 0) { if (o.el) o.img.setTint(0xff8a8a); else o.img.clearTint(); } }
@@ -651,11 +655,24 @@
     }
 
     // ---------- ジェム ----------
-    addGem(id, x, y, v) {
+    addGem(id, x, y, v, fx, fy) {
       if (this.gSprites.has(id)) return;
       const key = v <= 1.5 ? 'gem0' : v <= 5 ? 'gem1' : 'gem2';
       const img = this.add.image(x, y, key).setDepth(y - 5).setScale(v > 5 ? 1.25 : 0.95);
-      this.gSprites.set(id, { img, x, y, ph: Math.random() * 6 });
+      const g = { img, x, y, ph: Math.random() * 6 };
+      this.gSprites.set(id, g);
+      if (fx !== undefined) {
+        // 大妖から飛び出して、弧を描いて散らばる
+        g.taken = true; // 飛んでいるあいだは揺らさない
+        const sx = fx, sy = fy - 120, d = Math.hypot(x - sx, y - sy);
+        const o = { t: 0 };
+        img.setPosition(sx, sy).setScale(0.4);
+        this.tweens.add({
+          targets: o, t: 1, duration: 500 + d * 0.5, delay: Math.random() * 400, ease: 'Sine.out',
+          onUpdate: () => { if (!img.active || g.got) return; img.setPosition(sx + (x - sx) * o.t, sy + (y - sy) * o.t - Math.sin(o.t * Math.PI) * Math.min(500, 120 + d * 0.3)); },
+          onComplete: () => { if (!img.active || g.got) return; img.setPosition(x, y).setScale(v > 5 ? 1.25 : 0.95); if (this.gSprites.get(id) === g) g.taken = false; },
+        });
+      }
     }
     renderGems() {
       if (this.frame % 2) return;
@@ -777,7 +794,7 @@
             break;
           }
           case 'ed': {
-            this.burst(ev.x, ev.y - 10, ENEMY_BURST[ev.ty] || 0xffffff, ev.ty === 4 ? 60 : ev.ty === 7 ? 30 : 8);
+            this.burst(ev.x, ev.y - 10, ENEMY_BURST[ev.ty] || 0xffffff, ev.ty === 15 ? 140 : ev.ty === 4 ? 60 : ev.ty === 7 ? 30 : 8);
             this.freeEnemy(ev.i);
             if (ev.by === me) { this.ui.addCombo(); FX.twinkle(this, ev.x, ev.y - 20, 3); Sfx.pop(ev.ty, ev.el, this.ui.combo); } // 倒した！の音
             if (ev.ty === 7 && ev.by === me) { FX.confetti(this, ev.x, ev.y - 30, 60, 0xffd84f); this.ui.stampFx('GOLD!!', '#ffd84f'); Sfx.play('legend'); }
@@ -788,11 +805,11 @@
             }
             break;
           }
-          case 'gs': this.addGem(ev.id, ev.x, ev.y, ev.v); break;
+          case 'gs': this.addGem(ev.id, ev.x, ev.y, ev.v, ev.fx, ev.fy); break;
           case 'gc': {
             const g = this.gSprites.get(ev.id);
             if (!g) break;
-            g.taken = true;
+            g.taken = true; g.got = true;
             const pos = ev.p ? this.posOf(ev.p) : null;
             if (!pos) { this.tweens.add({ targets: g.img, alpha: 0, duration: 200, onComplete: () => { g.img.destroy(); this.gSprites.delete(ev.id); } }); break; }
             this.tweens.add({
@@ -858,6 +875,23 @@
             break;
           }
           case 'spawn': this.burst(ev.x, ev.y - 30, 0xffffff, 20); break;
+          // 大妖（ビッグボス）
+          case 'bbs':
+            Sfx.play('boss'); this.cameras.main.shake(900, 0.008);
+            this.ui.bigBossFx(true);
+            break;
+          case 'bbk': {
+            const near = this.local && Math.hypot(this.local.x - ev.x, this.local.y - ev.y) < 2500;
+            if (near) {
+              this.cameras.main.shake(900, 0.014);
+              FX.rays(this, ev.x, ev.y - 120, 0xc890ff, 900, 2400); FX.shockwave(this, ev.x, ev.y - 60, 0xd8b0ff, 420);
+              FX.confetti(this, ev.x, ev.y - 160, 160); FX.punch(this, 0.12);
+              this.burst(ev.x, ev.y - 100, 0xffe07a, 80);
+            }
+            this.ui.bigBossFx(false, ev.p === me ? '' : ev.n);
+            Sfx.play(ev.p === me ? 'legend' : 'lvlBig');
+            break;
+          }
           case 'boss':
             Sfx.play('boss'); this.cameras.main.shake(500, 0.006);
             this.ui.banner('⚠ ボス出現！', '#ff8a7a');

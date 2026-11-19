@@ -140,7 +140,7 @@
     },
     // スタンプ（WIN!! / GET! / 撃破！ など）
     stamp(ui, text, color, y, size) {
-      const t = ui.add.text(ui.scale.width / 2, y || ui.scale.height * 0.4, text, UI.TO(size || 64, color || '#ffe07a', '#3a2a20', 10))
+      const t = ui.add.text(ui.scale.width / 2, y || ui.scale.height * 0.4, text, Object.assign(UI.TB(size || 64, color || '#ffe07a', '#2a160a', 10), { shadow: undefined }))
         .setOrigin(0.5).setDepth(82).setScale(3).setAlpha(0).setAngle(-8);
       ui.tweens.add({ targets: t, scale: 1, alpha: 1, duration: 260, ease: 'Back.out' });
       ui.tweens.add({ targets: t, scale: 1.08, duration: 160, delay: 260, yoyo: true });

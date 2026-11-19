@@ -4,6 +4,8 @@
   const FONT = '"M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif';
   // 見出し・数字・ボタン用のゲームっぽい太いフォント
   const DISPLAY = '"Dela Gothic One", "M PLUS Rounded 1c", "Hiragino Sans", sans-serif';
+  // タイトル画面のロゴに合わせた筆文字（見出し・演出用）
+  const BRUSH = '"Yuji Syuku", "Hiragino Mincho ProN", "Yu Mincho", serif';
   const C = {
     cream: 0xfff8ea, creamDark: 0xe9dcc3, brown: 0x4a3a2e, brownCss: '#4a3a2e', soft: '#7a6656',
     green: 0x7cc46a, greenDark: 0x4f8a42, orange: 0xf5a25d, orangeDark: 0xc4733a,
@@ -20,6 +22,15 @@
     return {
       fontFamily: DISPLAY, fontSize: Math.round(size) + 'px', color: color || '#fff', fontStyle: 'normal',
       stroke: stroke || C.brownCss, strokeThickness: thick == null ? Math.max(3, size / 7) : thick,
+    };
+  }
+
+  // 筆文字の見出し：古い紙のような金色＋こげ茶のフチ＋ほのかな光
+  function TB(size, color, stroke, thick) {
+    return {
+      fontFamily: BRUSH, fontSize: Math.round(size) + 'px', color: color || '#fbeccb', fontStyle: 'normal',
+      stroke: stroke || '#2a160a', strokeThickness: thick == null ? Math.max(3, size / 8) : thick,
+      shadow: { offsetX: 0, offsetY: 0, color: 'rgba(255,190,90,0.75)', blur: Math.max(6, size / 4), stroke: true, fill: false },
     };
   }
 
@@ -42,7 +53,9 @@
     const c = scene.add.container(x, y);
     const g = scene.add.graphics();
     const col = opt.color || C.green, dark = opt.dark || C.greenDark;
-    const txt = scene.add.text(0, 0, label, TO(opt.size || Math.min(26, h * 0.42), '#fff', Tex.rgb(dark, -0.35), 4)).setOrigin(0.5);
+    const txt = scene.add.text(0, 0, label, opt.brush
+      ? Object.assign(TB(opt.size || Math.min(26, h * 0.42), '#fff', Tex.rgb(dark, -0.45), 4), { shadow: undefined })
+      : TO(opt.size || Math.min(26, h * 0.42), '#fff', Tex.rgb(dark, -0.35), 4)).setOrigin(0.5);
     let hover = false, down = false, disabled = false, focused = false;
     const draw = () => {
       g.clear();
@@ -156,5 +169,5 @@
     } catch (e) { /* noop */ }
   }
 
-  window.UI = { FONT, DISPLAY, C, T, TO, panel, button, keyNav, forestBackdrop, isMobile, mobileEnter };
+  window.UI = { FONT, DISPLAY, BRUSH, C, T, TO, TB, panel, button, keyNav, forestBackdrop, isMobile, mobileEnter };
 })();

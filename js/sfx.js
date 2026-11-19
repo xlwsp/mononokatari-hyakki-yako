@@ -78,7 +78,7 @@
       const c = this.ctx;
       if (!c || this.muted) return;
       const now = performance.now();
-      const big = ty === 4 || ty === 3 || ty === 8 || elite;
+      const big = ty === 4 || ty === 15 || ty === 3 || ty === 8 || elite;
       if (!big && now - (this.last.pop || 0) < 38) { this.popQ = (this.popQ || 0) + 1; return; } // 同時に倒したぶんはまとめる
       this.last.pop = now;
       const many = Math.min(this.popQ || 0, 6); this.popQ = 0;
