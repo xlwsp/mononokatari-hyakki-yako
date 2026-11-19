@@ -4,6 +4,7 @@
 //   以降  : {"join":[[id,name,sp,save]],"leave":[id],"respawn":[[id,sp]],"in":{"id":[x,y]},"ch":[[id,seq,idx]]}
 //   出力  : 毎ティック "id<TAB>json" を人数分、最後に "."
 //           セーブは "!S<TAB>id<TAB>json"（2秒ごと・抜けるとき。やられていたら null）
+//           ハイスコアは "!H<TAB>id<TAB>json"
 var window = this;
 load(arguments[0] + '/js/sim.js');
 
@@ -15,6 +16,12 @@ var errors = 0;
 function saveLine(id) {
   var p = sim.pmap.get(id);
   if (p) print('!S\t' + id + '\t' + JSON.stringify(sim.exportSave(p)));
+  scoreLine(p);
+}
+// ハイスコア用：今のスコア
+var wasAlive = {};
+function scoreLine(p) {
+  if (p && p.score > 0) print('!H\t' + p.id + '\t' + JSON.stringify({ sc: p.score, sp: p.sp, lv: p.lv, ev: p.evo }));
 }
 
 for (;;) {
@@ -30,6 +37,11 @@ for (;;) {
     if (cmd.ch) cmd.ch.forEach(function (c) { sim.choose(c[0], c[1], c[2]); });
     sim.step(GD.TICK);
     if (sim.tick % 40 === 0) humans.forEach(saveLine);
+    humans.forEach(function (id) { // やられた瞬間のスコアも記録
+      var p = sim.pmap.get(id);
+      if (p && wasAlive[id] && !p.alive) scoreLine(p);
+      wasAlive[id] = !!(p && p.alive);
+    });
   } catch (e) { if (errors++ < 20) print('#err ' + e + ' ' + (e.stack || '')); }
   if (true) { // 毎ティック（1秒に20回）送ってなめらかに
     var base = sim.snapshot();

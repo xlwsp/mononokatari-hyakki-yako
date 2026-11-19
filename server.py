@@ -75,6 +75,56 @@ class Saves:
 saves = Saves()
 
 
+# ---------------- ハイスコア（1人＝1端末につき自己ベストを1つ） ----------------
+HS_FILE = os.path.join(ROOT, 'tools', 'highscores.json')
+
+
+class HighScores:
+    def __init__(self):
+        self.data = {}
+        self.dirty = False
+        try:
+            with open(HS_FILE, encoding='utf-8') as f:
+                self.data = json.load(f)
+        except Exception:
+            self.data = {}
+
+    def put(self, tok, name, d):
+        if not tok:
+            return
+        try:
+            sc = int(d['sc'])
+        except Exception:
+            return
+        cur = self.data.get(tok)
+        if cur and cur['sc'] >= sc:
+            return
+        self.data[tok] = {'n': name, 'sc': sc, 'sp': str(d.get('sp', '')), 'lv': int(d.get('lv', 1)), 'ev': 1 if d.get('ev') else 0, 't': int(time.time())}
+        self.dirty = True
+
+    def top(self, tok, n=30):
+        rows = sorted(self.data.items(), key=lambda kv: -kv[1]['sc'])
+        out = [dict(r[1], me=1 if r[0] == tok else 0) for r in rows[:n]]
+        mine = None
+        for i, (k, v) in enumerate(rows):
+            if k == tok:
+                mine = dict(v, rank=i + 1)
+                break
+        return {'list': [{k: v for k, v in r.items() if k != 't'} for r in out], 'mine': mine, 'total': len(rows)}
+
+    def flush(self):
+        if not self.dirty:
+            return
+        self.dirty = False
+        tmp = HS_FILE + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(self.data, f, ensure_ascii=False, separators=(',', ':'))
+        os.replace(tmp, HS_FILE)
+
+
+highscores = HighScores()
+
+
 def valid_tok(t):
     return isinstance(t, str) and 16 <= len(t) <= 64 and all(ch in '0123456789abcdef' for ch in t)
 
@@ -162,6 +212,7 @@ class World:
         self.inputs = {}
         self.members = set()
         self.toks = {}  # プレイヤーid → セーブの合言葉
+        self.names = {}  # プレイヤーid → 名前（抜けた後に届くスコア用）
         self.last_flush = time.monotonic()
 
     async def start(self):
@@ -215,6 +266,15 @@ class World:
                 if line.startswith('#'):
                     log(line[:300])
                     continue
+                if line.startswith('!H\t'):
+                    _, pid, js = line.split('\t', 2)
+                    tok = world.toks.get(pid)
+                    c = clients.get(pid)
+                    try:
+                        highscores.put(tok, c.name if c else world.names.get(pid, 'Player'), json.loads(js))
+                    except Exception:
+                        pass
+                    continue
                 if line.startswith('!S\t'):
                     _, pid, js = line.split('\t', 2)
                     tok = world.toks.get(pid)
@@ -231,6 +291,7 @@ class World:
                 self.last_flush = time.monotonic()
                 try:
                     saves.flush()
+                    highscores.flush()
                 except Exception as e:
                     log('save error:', repr(e))
             nxt += TICK
@@ -280,6 +341,7 @@ def handle_msg(c: Client, text: str):
             else:
                 saves.put(tok, None)  # 初めから
             world.toks[c.id] = tok
+            world.names[c.id] = c.name
         c.joined = True
         world.members.add(c.id)
         world.joins.append([c.id, c.name, str(m.get('sp') or ''), state])
@@ -290,6 +352,10 @@ def handle_msg(c: Client, text: str):
             world.respawns.append([c.id, str(m.get('sp') or '')])
     elif t == 'leave':
         leave(c)
+    elif t == 'hs?':
+        # ハイスコアランキング
+        tok = m.get('tok')
+        c.send({'t': 'hs', 'd': highscores.top(tok if valid_tok(tok) else None)})
     elif t == 'save?':
         # タイトル画面用：続きからのデータがあるか
         tok = m.get('tok')
@@ -303,7 +369,8 @@ def leave(c: Client):
         c.joined = False
         world.members.discard(c.id)
         world.leaves.append(c.id)
-        asyncio.get_event_loop().call_later(3, world.toks.pop, c.id, None)  # 抜けたときのセーブを受け取ってから消す
+        asyncio.get_event_loop().call_later(3, world.toks.pop, c.id, None)
+        asyncio.get_event_loop().call_later(3, world.names.pop, c.id, None)  # 抜けたときのセーブを受け取ってから消す
         log(c.name, 'left', '(online %d)' % len(world.members))
 
 
@@ -417,6 +484,7 @@ async def main():
 
     def on_term():
         saves.flush()  # kill されたときもセーブを書き出してから終わる
+        highscores.flush()
         os._exit(0)
     asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, on_term)
     server = await asyncio.start_server(handle, '0.0.0.0', PORT)
@@ -441,3 +509,4 @@ if __name__ == '__main__':
         pass
     finally:
         saves.flush()  # 止めるときにセーブを書き出す
+        highscores.flush()

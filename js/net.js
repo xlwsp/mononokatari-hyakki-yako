@@ -100,17 +100,21 @@
     return getUrl().then(url => openSession(url, name, sp, cont)).catch(e => { urlCache = null; throw e; });
   }
 
-  // 続きからのデータがあるか聞く（{sp, lv, ev} か null）
-  function saveInfo() {
+  // サーバーに1回だけ質問して答えをもらう
+  function ask(q, a) {
     return getUrl().then(url => new Promise((resolve, reject) => {
       let relay;
       try { relay = new Relay(url); } catch (e) { reject(e); return; }
       const timer = setTimeout(() => { relay.close(); reject(new Error('timeout')); }, 8000);
-      relay.on('open', () => relay.send({ t: 'save?', tok: token() }));
-      relay.on('save', m => { clearTimeout(timer); relay.close(); resolve(m.d || null); });
+      relay.on('open', () => relay.send({ t: q, tok: token() }));
+      relay.on(a, m => { clearTimeout(timer); relay.close(); resolve(m.d || null); });
       relay.on('error', () => { clearTimeout(timer); reject(new Error('error')); });
     }));
   }
+  // 続きからのデータがあるか（{sp, lv, ev} か null）
+  const saveInfo = () => ask('save?', 'save');
+  // ハイスコアランキング（{list, mine, total}）
+  const highScores = () => ask('hs?', 'hs');
 
   function openSession(url, name, sp, cont) {
     return new Promise((resolve, reject) => {
@@ -130,5 +134,5 @@
     });
   }
 
-  window.Net = { Relay, Session, connect, saveInfo };
+  window.Net = { Relay, Session, connect, saveInfo, highScores };
 })();

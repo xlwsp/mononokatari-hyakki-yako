@@ -151,7 +151,7 @@
     init(data) {
       this.notice = data && data.msg;
       if (!(data && data.keep)) this.saveData = undefined; // 画面の向きが変わっただけのときは確認し直さない
-      this.confirmBox = null; this.nameAsk = null;
+      this.confirmBox = null; this.nameAsk = null; this.rankBox = null;
     }
     create() {
       this.sp = store.get('sp', 'gekomaru');
@@ -163,6 +163,7 @@
       this.onKey = e => {
         const ae = document.activeElement;
         if (ae && ae.tagName === 'INPUT') return;
+        if (this.rankBox || this.confirmBox || this.nameAsk) return;
         const keys = PICK_KEYS(), i = keys.indexOf(this.sp), cols = this.picker.cols;
         const move = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
         if (move) { this.pick(keys[(i + move + keys.length) % keys.length]); Sfx.init(); Sfx.play('click'); }
@@ -262,9 +263,70 @@
       }
       const best = parseInt(store.get('best', '0'), 10) || 0;
       this.add.text(w - 12, 10, `ベストスコア  ${best.toLocaleString()}`, TO(16, '#ffe7a8', '#4a3a2e', 4)).setOrigin(1, 0);
+      // ハイスコアランキング
+      button(this, 12 + (w < 500 ? 60 : 74), w < 500 ? 26 : 30, w < 500 ? 120 : 148, w < 500 ? 36 : 42, '🏆 ランキング', () => this.showRanking(), { color: 0xf0b030, dark: 0xb07a18, size: w < 500 ? 15 : 18 });
+    }
+
+    // ハイスコアランキング（全期間・人のプレイヤーだけ・1人1つの自己ベスト）
+    showRanking() {
+      if (this.rankBox || this.nameAsk || this.confirmBox || this.connecting) return;
+      const w = this.scale.width, h = this.scale.height;
+      const pw = Math.min(520, w - 20), ph = Math.min(h - 30, 660), x = w / 2 - pw / 2, y = h / 2 - ph / 2;
+      const objs = [];
+      const dim = this.add.rectangle(0, 0, w, h, 0x1d1020, 0.65).setOrigin(0).setInteractive().setDepth(60);
+      const box = this.add.container(0, 0).setDepth(61);
+      objs.push(dim, box);
+      box.add(panel(this, x, y, pw, ph, { alpha: 1 }));
+      box.add(this.add.text(w / 2, y + 32, '🏆 ハイスコアランキング', TO(w < 500 ? 22 : 28, '#ffe07a', '#4a3a2e', 6)).setOrigin(0.5));
+      const status = this.add.text(w / 2, y + ph / 2, '読み込み中…', T(16, C.soft)).setOrigin(0.5);
+      box.add(status);
+      this.hideInput(true);
+      const close = () => { objs.forEach(o => o.destroy()); this.rankBox = null; this.input.keyboard.off('keydown', onKey); this.hideInput(false); };
+      const onKey = e => { if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') close(); };
+      this.time.delayedCall(250, () => this.rankBox && this.input.keyboard.on('keydown', onKey));
+      const btn = button(this, w / 2, y + ph - 34, 160, 44, 'とじる', close, { color: C.gray, dark: C.grayDark, size: 18 }).setDepth(62);
+      objs.push(btn);
+      box.setScale(0.7).setAlpha(0);
+      this.tweens.add({ targets: box, scale: 1, alpha: 1, duration: 220, ease: 'Back.out' });
+      this.rankBox = { close };
+      const medal = ['#f7c948', '#c9d3dc', '#d99a5b'];
+      Net.highScores().then(d => {
+        if (!this.rankBox || !status.active) return;
+        const list = (d && d.list) || [];
+        if (!list.length) { status.setText('まだ記録がありません\nいちばん乗りをめざそう！').setAlign('center'); return; }
+        status.destroy();
+        const top = y + 64, bottom = y + ph - 100;
+        const rowH = Math.max(22, Math.min(30, Math.floor((bottom - top) / list.length)));
+        const n = Math.min(list.length, Math.floor((bottom - top) / rowH));
+        const fs = rowH >= 28 ? 16 : 14, isz = rowH - 4;
+        for (let i = 0; i < n; i++) {
+          const r = list[i], ry = top + i * rowH + rowH / 2;
+          if (r.me) box.add(this.add.rectangle(w / 2, ry, pw - 24, rowH - 2, 0xffe07a, 0.55));
+          else if (i % 2 === 0) box.add(this.add.rectangle(w / 2, ry, pw - 24, rowH - 2, 0x4a3a2e, 0.06));
+          const rc = i < 3 ? medal[i] : C.brownCss;
+          box.add(this.add.text(x + 34, ry, String(i + 1), i < 3 ? TO(fs + 2, rc, '#4a3a2e', 4) : T(fs, rc)).setOrigin(0.5));
+          if (GD.SPECIES[r.sp]) {
+            const key = 'ic_' + r.sp + (r.ev ? '_e' : '');
+            const ic = this.add.image(x + 66, ry, this.textures.exists(key) ? key : 'ic_' + r.sp);
+            ic.setScale(isz / ic.height);
+            box.add(ic);
+          }
+          const nm = this.add.text(x + 86, ry, r.n, T(fs, C.brownCss)).setOrigin(0, 0.5);
+          const room = pw - 150 - 86 - 8;
+          while (nm.width > room && nm.text.length > 1) nm.setText(nm.text.slice(0, -2) + '…');
+          box.add(nm);
+          box.add(this.add.text(x + pw - 150, ry, 'Lv' + r.lv, T(fs - 2, C.soft)).setOrigin(0, 0.5));
+          box.add(this.add.text(x + pw - 20, ry, Number(r.sc).toLocaleString(), T(fs, C.brownCss)).setOrigin(1, 0.5));
+        }
+        const m = d.mine;
+        const mine = m ? `あなたの自己ベスト：${m.rank}位 / ${d.total}人　${Number(m.sc).toLocaleString()}` : 'あなたの記録はまだありません';
+        box.add(this.add.text(w / 2, y + ph - 78, mine, T(14, C.brownCss)).setOrigin(0.5));
+      }).catch(() => { if (status.active) status.setText('サーバーにつながりません'); });
     }
 
     msg(s) { this.msgText.setText(s); }
+    // 名前の入力欄は画面のいちばん上に出てしまうので、ウィンドウを開いている間は隠す
+    hideInput(v) { if (this.input_ && this.input_.node) this.input_.node.style.visibility = v ? 'hidden' : 'visible'; }
 
     // 続きからのデータの表示
     setSave(d, checking, failed) {
@@ -291,10 +353,11 @@
       const sp = GD.SPECIES[this.saveData.sp];
       const dim = this.add.rectangle(0, 0, w, h, 0x1d1020, 0.6).setOrigin(0).setInteractive().setDepth(50);
       const box = this.add.container(0, 0).setDepth(51);
-      box.add(panel(this, x, y, pw, ph));
+      box.add(panel(this, x, y, pw, ph, { alpha: 1 }));
       box.add(this.add.text(w / 2, y + 34, '初めからにする？', TO(24, '#fff8ea', '#4a3a2e', 6)).setOrigin(0.5));
       box.add(this.add.text(w / 2, y + 72, `今のセーブ（${this.saveData.ev ? sp.evoName : sp.name} Lv${this.saveData.lv}）は消えます`, T(14, '#c0392b', { align: 'center', wordWrap: { width: pw - 30 } })).setOrigin(0.5));
-      const close = () => { [dim, box, b1, b2].forEach(o => o.destroy()); this.confirmBox = null; };
+      this.hideInput(true);
+      const close = () => { [dim, box, b1, b2].forEach(o => o.destroy()); this.confirmBox = null; this.hideInput(false); };
       const b1 = button(this, w / 2 - 80, y + ph - 44, 140, 48, '初めから', () => { close(); this.go(false); }, { color: C.blue, dark: C.blueDark, size: 20 }).setDepth(52);
       const b2 = button(this, w / 2 + 80, y + ph - 44, 140, 48, 'やめる', close, { color: C.gray, dark: C.grayDark, size: 20 }).setDepth(52);
       box.setScale(0.6).setAlpha(0);
@@ -335,12 +398,13 @@
       this.tweens.add({ targets: [btn, inp], alpha: 1, duration: 200, delay: 420, onComplete: () => inp.node.focus() });
       this.tweens.add({ targets: band, alpha: 0, duration: 300, delay: 500 });
       Sfx.play('card');
-      const close = () => { objs.forEach(o => o.destroy()); this.nameAsk = null; };
+      this.hideInput(true);
+      const close = () => { objs.forEach(o => o.destroy()); this.nameAsk = null; this.hideInput(false); };
       this.nameAsk = { close };
     }
 
     go(cont) {
-      if (this.connecting || this.nameAsk || this.confirmBox) return; // 連打で二重参加しないように
+      if (this.connecting || this.nameAsk || this.confirmBox || this.rankBox) return; // 連打で二重参加しないように
       if (cont === undefined) { if (this.saveData) cont = true; else { this.goNew(); return; } } // Enter キー
       this.goCont = cont;
       if (!this.nameAsked && !(this.input_ && this.input_.node.value.trim())) { this.askName(); return; }
