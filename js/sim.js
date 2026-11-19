@@ -10,7 +10,7 @@
   const BOT_TARGET = 24;       // 人が少ないときはBotでこの人数まで埋める
   const ENEMY_PER_PLAYER = 55; // プレイヤー1人あたりの敵の上限（密度）
   const ENEMY_CAP = 2600;
-  const GEM_CAP = 2500;
+  const GEM_CAP = 5000;
   const SWARM_EVERY = 28;      // 敵の群れが押し寄せる間隔（プレイヤーごと）
   const BOSS_EVERY = 100;      // どこかにボスが出る間隔
   const VIEW_R = 1250;         // 細かい情報を送る範囲
@@ -42,10 +42,10 @@
       trait: { id: 'underdog', name: '根性', desc: '格上が相手だと体当たりが強くなる' },
     },
     rangyo: {
-      name: 'ランギョ', evoName: 'らんちゅう大王', color: 0xff8a4a, hp: 110, spd: 210, role: '成長型',
-      atk: { pattern: 'spread', n: 3, spread: 0.25, dmg: 6, cd: 0.9, speed: 440, life: 0.8, r: 7 },
-      skill: { id: 'lucky', name: '招き金魚', cd: 11, desc: '経験値をばらまく', area: false },
-      trait: { id: 'luck', name: '強運', desc: 'ときどき会心の一撃（2倍ダメージ）' },
+      name: 'ランギョ', evoName: 'らんちゅう大王', color: 0xff8a4a, hp: 135, spd: 215, role: '成長型',
+      atk: { pattern: 'spread', n: 3, spread: 0.25, dmg: 8, cd: 0.75, speed: 480, life: 0.85, r: 8 },
+      skill: { id: 'lucky', name: '招き金魚', cd: 10, desc: '経験値をばらまく（いつでも経験値+15%）', area: false },
+      trait: { id: 'luck', name: '強運', desc: 'よく会心の一撃（2倍ダメージ）' },
     },
     kodama: {
       name: 'コダマ', evoName: '紅コダマ', color: 0xff6a5a, hp: 110, spd: 225, role: '近接型',
@@ -66,9 +66,9 @@
       trait: { id: 'steal', name: '横取り', desc: '倒した相手の経験値を多めに奪う' },
     },
     uroko: {
-      name: 'ウロコ', evoName: '大蛇ウロコ', color: 0xc89a5a, hp: 120, spd: 205, role: '妨害型',
-      atk: { pattern: 'single', dmg: 10, cd: 0.8, speed: 520, life: 0.9, r: 8, slow: 1.2 },
-      skill: { id: 'venom', name: '毒霧', cd: 7, desc: 'まわりの敵にダメージ＋スロー', area: true },
+      name: 'ウロコ', evoName: '大蛇ウロコ', color: 0xc89a5a, hp: 145, spd: 210, role: '妨害型',
+      atk: { pattern: 'single', dmg: 13, cd: 0.65, speed: 560, life: 0.95, r: 9, slow: 1.5 },
+      skill: { id: 'venom', name: '毒霧', cd: 5, desc: 'まわりの敵にダメージ＋スロー', area: true },
       trait: { id: 'poison', name: '毒牙', desc: '体当たりした相手を毒にする' },
     },
     komori: {
@@ -146,7 +146,8 @@
   const COLORS = [0x4fc3ff, 0xff6b6b, 0x7cff8a, 0xffd84f, 0xd38bff, 0xff9f43, 0x5ff5e0, 0xff7ad9, 0xb0c4ff, 0xc8ff6b,
     0xffb3b3, 0x9effff, 0xf0e68c, 0x87cefa, 0xffa07a, 0x98fb98, 0xdda0dd, 0xffdab9, 0x7fffd4, 0xe0b0ff];
 
-  const xpNeed = lv => Math.floor(4 + lv * 2.5 + lv * lv * 0.25);
+  // 必要経験値：低レベルは少なめ、高レベルでも上がり続けるようゆるやかに
+  const xpNeed = lv => Math.floor(3 + lv * 2 + lv * lv * 0.2);
   const rand = (a, b) => a + Math.random() * (b - a);
   const randInt = (a, b) => Math.floor(rand(a, b + 1));
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -344,7 +345,7 @@
         hp: def.hp, mhp: def.hp, lv: 1, xp: 0, xpn: xpNeed(1), txp: 0, evo: 0,
         alive: true, kills: 0, score: 0, bossKills: 0, pkills: 0, pkScore: 0,
         spd: def.spd, espd: def.spd, dmgMul: 1, rateMul: 1, extra: 0, pierce: 0, skillPow: 1, skillCd: 1, areaMul: 1,
-        magnet: 110, regen: 0, bumpMul: 1, traitLv: 1, poisonT: 0, poisonDps: 0, pslowT: 0, alarmCd: 0, lastBump: -99, hitCd: {},
+        magnet: 150, regen: 0, bumpMul: 1, traitLv: 1, poisonT: 0, poisonDps: 0, pslowT: 0, alarmCd: 0, lastBump: -99, hitCd: {},
         atkCd: 0, scd: rand(1, 3), iframe: 2, choices: [], chSeq: p.chSeq || 0, chT: 0,
         tpT: 0, protT: PROTECT_TIME, revived: false,
         shield: 0, shieldT: 0, hasteT: 0, deadT: 0, killedBy: null,
@@ -436,6 +437,8 @@
     addXp(p, v) {
       if (!p.alive) return;
       if (p.bot) v *= 0.7; // Botは成長がゆっくり
+      if (p.lv < 10) v *= 1 + 0.6 * (10 - p.lv) / 9; // 低レベルは経験値ボーナス（Lv1で+60%、Lv10で0）
+      if (p.sp === 'rangyo') v *= 1.15; // 成長型
       p.xp += v; p.txp += v;
       while (p.xp >= p.xpn) {
         p.xp -= p.xpn;
@@ -611,14 +614,14 @@
       let dmg = this.bumpPower(atk), note = '';
       if (ta === 'underdog' && def.lv > atk.lv) dmg *= 1 + Math.min(0.6 * wa, (def.lv - atk.lv) * 0.08 * wa);
       if (ta === 'first' && this.time - atk.lastBump > 3) { dmg *= 1 + wa; note = '先制！'; }
-      if (ta === 'luck' && chance(Math.min(0.5, 0.2 * wa))) { dmg *= 2; note = '会心！'; }
+      if (ta === 'luck' && chance(Math.min(0.6, 0.32 * wa))) { dmg *= 2; note = '会心！'; }
       atk.lastBump = this.time;
       if (td === 'hop' && chance(Math.min(0.5, 0.2 * wd))) return { dmg: 0, note: 'よけた！' };
       if (td === 'guard') dmg *= 1 - Math.min(0.6, 0.3 * wd);
       this.hurtPlayer(def, dmg);
       def.iframe = Math.max(def.iframe, 0.2);
       if (ta === 'gulp') atk.hp = Math.min(atk.mhp, atk.hp + dmg * 0.3 * wa);
-      if (ta === 'poison') { def.poisonT = 3; def.poisonDps = dmg * 0.15 * wa; def.poisonBy = atk; }
+      if (ta === 'poison') { def.poisonT = 4; def.poisonDps = dmg * 0.3 * wa; def.poisonBy = atk; }
       if (ta === 'awe') def.pslowT = 1.2 * wa;
       // 身代わりの鈴：HPが減ったら猛ダッシュ
       if (td === 'alarm' && def.hp > 0 && def.hp < def.mhp * 0.3 && def.alarmCd <= 0) {
@@ -949,7 +952,7 @@
           return true;
         case 'lucky': {
           const n = evo ? 6 : 4;
-          for (let i = 0; i < n; i++) this.dropGem(p.x + rand(-100, 100), p.y + rand(-100, 100), (1 + Math.floor(p.lv / 4)) * Math.min(3, p.skillPow));
+          for (let i = 0; i < n; i++) this.dropGem(p.x + rand(-100, 100), p.y + rand(-100, 100), (1 + Math.floor(p.lv / 5)) * Math.min(2, p.skillPow));
           sk(0);
           return true;
         }
@@ -982,9 +985,9 @@
           return true;
         }
         case 'venom': {
-          if (!anyNear(160)) return false;
-          const r = (evo ? 220 : 165) * area;
-          this.enemiesIn(fx, fy, r, e => this.damage(e, 12 * pw, p, 3));
+          if (!anyNear(190)) return false;
+          const r = (evo ? 250 : 195) * area;
+          this.enemiesIn(fx, fy, r, e => this.damage(e, 24 * pw, p, 3));
           sk(r);
           return true;
         }
@@ -1086,10 +1089,9 @@
     // ---------- 経験値ジェム ----------
     dropGem(x, y, v) {
       v = Math.max(1, Math.round(v * 10) / 10);
+      // 多すぎるときは一番古い玉を消して、倒した場所には必ず落とす（遠くの玉にまとめると落ちないように見える）
       if (this.gems.length >= GEM_CAP) {
-        const g = this.gems[randInt(0, this.gems.length - 1)];
-        g.v += v;
-        return;
+        for (const o of this.gems.splice(0, this.gems.length - GEM_CAP + 1)) this.ev({ e: 'gc', id: o.id, p: 0, x: r1(o.x), y: r1(o.y) });
       }
       const g = { id: this.uid(), x: clamp(x, EDGE, WORLD.w - EDGE), y: clamp(y, EDGE, WORLD.h - EDGE), v, pull: null, age: 0 };
       this.gems.push(g);
@@ -1119,7 +1121,7 @@
           }
           const s = Math.min(d, 600 * dt);
           g.x += dx / d * s; g.y += dy / d * s;
-        } else if (g.age > 90) {
+        } else if (g.age > 60) {
           this.ev({ e: 'gc', id: g.id, p: 0, x: r1(g.x), y: r1(g.y) }); // 古いジェムは消える
           continue;
         }
