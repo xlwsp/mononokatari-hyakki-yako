@@ -460,12 +460,15 @@
       this.tick++;
       if (this.tick % 10 === 0) this.manageBots();
 
-      // レベルが低いほど少し速くなる（強い人に一方的に追いかけられないように）
+      // 速さ：レベルが上がると速くなる（大きくなってカメラが引いても遅く感じないように）。Lv30で頭打ち。
+      // 格下は「いちばん強い人との差」の半分だけ底上げ + 最大15%速い（一方的に追いかけられないように）
       let mx = 1;
       for (const p of this.players) if (p.alive && p.lv > mx) mx = p.lv;
+      const lvSpd = lv => 1 + 0.015 * Math.min(lv - 1, 30);
       for (const p of this.players) {
         if (!p.alive) continue;
-        let mul = 1 + 0.15 * clamp(1 - p.lv / mx, 0, 1);
+        const ls = lvSpd(p.lv);
+        let mul = (ls + 0.5 * (lvSpd(mx) - ls)) * (1 + 0.15 * clamp(1 - p.lv / mx, 0, 1));
         if (p.hasteT > 0) { p.hasteT -= dt; mul *= 1.45; }
         if (p.pslowT > 0) { p.pslowT -= dt; mul *= 0.6; }
         if (p.alarmCd > 0) p.alarmCd -= dt;
@@ -533,10 +536,10 @@
       if (killer && killer.alive) {
         // 倒した側は相手の経験値を吸収
         const kt = SPECIES[killer.sp].trait.id;
-        const absorb = 0.4 + (kt === 'steal' ? 0.2 * this.traitPow(killer) : 0);
+        const absorb = 0.85 + (kt === 'steal' ? 0.25 * this.traitPow(killer) : 0);
         killer.pkills++;
         killer.pkScore += 200 + p.lv * 25;
-        this.addXp(killer, 10 + p.txp * absorb);
+        this.addXp(killer, 40 + p.lv * 20 + p.txp * absorb); // プレイヤーを倒すと経験値がたくさん
         // 道連れ：倒した相手に大ダメージ
         if (tr === 'curse') {
           killer.hp -= killer.mhp * Math.min(0.8, 0.35 * w);
@@ -564,10 +567,12 @@
     updateBumps(dt) {
       const al = this.players.filter(p => p.alive && !isProtected(p));
       al.sort((a, b) => a.x - b.x);
+      let maxR = 0;
+      for (const q of al) maxR = Math.max(maxR, this.radius(q));
       for (let i = 0; i < al.length; i++) {
         const a = al[i];
         const ra = this.radius(a);
-        for (let j = i + 1; j < al.length && al[j].x - a.x < ra + 140; j++) {
+        for (let j = i + 1; j < al.length && al[j].x - a.x < ra + maxR + 20; j++) {
           const b = al[j];
           if (!a.alive || !b.alive) continue;
           const rr = ra + this.radius(b) + 16; // 見た目どおり当たるよう少し広めに
@@ -877,11 +882,11 @@
       if (!p.alive) return;
       // 接触ダメージ
       if (p.iframe <= 0) {
+        // 当たり判定は見た目の大きさに比例（大きくなるほど当たりやすい）
         let hitBy = null;
-        this.near(p.x, p.y, e => {
-          if (e.dead || e.stunT > 0 || !e.dmg) return;
-          const rr = e.r + 18;
-          if ((e.x - p.x) ** 2 + (e.y - p.y) ** 2 < rr * rr) { hitBy = e; return false; }
+        const pr = this.radius(p) * 0.85;
+        this.enemiesIn(p.x, p.y, pr, e => {
+          if (!hitBy && e.stunT <= 0 && e.dmg) hitBy = e;
         });
         if (hitBy) {
           this.hurtPlayer(p, hitBy.dmg);
@@ -1100,13 +1105,14 @@
           for (const p of this.players) {
             if (!p.alive) continue;
             const dx = p.x - g.x, dy = p.y - g.y;
-            if (Math.abs(dx) > p.magnet || Math.abs(dy) > p.magnet) continue;
-            if (dx * dx + dy * dy < p.magnet * p.magnet) { g.pull = p; break; }
+            const mg = p.magnet + this.radius(p); // 体が大きいほど吸い寄せる範囲も広い
+            if (Math.abs(dx) > mg || Math.abs(dy) > mg) continue;
+            if (dx * dx + dy * dy < mg * mg) { g.pull = p; break; }
           }
         }
         if (g.pull) {
           const p = g.pull, dx = p.x - g.x, dy = p.y - g.y, d = Math.hypot(dx, dy) || 1;
-          if (d < 28) {
+          if (d < Math.max(28, this.radius(p) * 0.8)) {
             this.addXp(p, g.v);
             this.ev({ e: 'gc', id: g.id, p: p.id, x: r1(g.x), y: r1(g.y) });
             continue;
@@ -1180,7 +1186,14 @@
         if (p.id === id || inR(p.x, p.y, R + 200)) s.p.push(p);
         else if (half && p.a && inR(p.x, p.y, RADAR_R)) s.q.push([p.id, p.x, p.y, p.lv + (p.ev ? 3 : 0)]);
       }
-      if (half) for (let i = 0; i < base.E.length; i += 4) if (inR(base.E[i + 2], base.E[i + 3], R)) s.e.push(base.E[i], base.E[i + 1], base.E[i + 2], base.E[i + 3]);
+      if (half) {
+        s.f = []; // レーダー用：遠くのボスとゴールドスライム
+        for (let i = 0; i < base.E.length; i += 4) {
+          const ty = base.E[i + 1], x = base.E[i + 2], y = base.E[i + 3];
+          if (inR(x, y, R)) s.e.push(base.E[i], ty, x, y);
+          else if ((ty === 4 || ty === 7) && inR(x, y, RADAR_R)) s.f.push(ty, Math.round(x), Math.round(y));
+        }
+      }
       for (const ev of base.ev) {
         if (ev.p === id || ev.a === id || ev.b === id || ev.by === id) { s.ev.push(ev); continue; }
         if (ev.e === 'gone') { s.ev.push(ev); continue; }
@@ -1194,7 +1207,7 @@
       }
       // 自分だけの情報
       s.me = {
-        xp: Math.floor(me.xp), xpn: me.xpn, k: me.kills, pk: me.pkills, ch: me.choices[0] || null,
+        xp: Math.floor(me.xp), xpn: me.xpn, tx: Math.floor(me.txp), k: me.kills, pk: me.pkills, ch: me.choices[0] || null,
         cht: me.choices[0] ? Math.max(0, Math.ceil(15 - me.chT)) : 0,
         scd: Math.round(clamp(me.scd / (SPECIES[me.sp].skill.cd * me.skillCd * (me.evo ? 0.8 : 1)), 0, 1) * 100) / 100,
         by: me.killedBy, dt: me.alive ? 0 : Math.round(me.deadT),
@@ -1209,7 +1222,16 @@
     }
   }
 
+  // モンスターの解放：累計で獲得した経験値で順に解放（強いモンスターほど後ろ）
+  const UNLOCKS = [
+    ['gekomaru', 0], ['maimai', 0], ['suzune', 0],
+    ['kodama', 500], ['kohaku', 1200], ['rangyo', 2000], ['uroko', 3000], ['kuroro', 4500],
+    ['nejimaru', 6500], ['hakua', 9000], ['komori', 12000], ['toosibi', 16000], ['sinonome', 22000],
+  ];
+  const UNLOCK_AT = {}; UNLOCKS.forEach(([k, v]) => { UNLOCK_AT[k] = v; });
+
   global.GD = {
+    UNLOCKS, UNLOCK_AT,
     WORLD, TICK, EDGE, VIEW_R, RADAR_R, MAX_PLAYERS, EVOLVE_LV, PROTECT_TIME, NEWBIE_LV, generateMap, resolve, auraTier,
     SPECIES, SPECIES_KEYS, ENEMY_TYPES, ENEMIES, UPGRADES, COLORS, upgradeText,
     xpNeed, clamp,

@@ -23,6 +23,7 @@
     }
 
     create() {
+      Unlock.reset();
       const W = GD.WORLD.w, H = GD.WORLD.h;
       this.map = GD.generateMap(this.session.seed);
       this.cameras.main.setBackgroundColor('#3f6b37');
@@ -97,52 +98,102 @@
       const W = GD.WORLD.w, H = GD.WORLD.h, map = this.map;
       // 地面は画面に映る範囲だけ描き、カメラに合わせて動かす（巨大な画像を作らない）
       this.ground = this.add.tileSprite(0, 0, 64, 64, 'ground').setOrigin(0).setDepth(-1000);
-      // 土の小道と中央広場
-      const g = this.add.graphics().setDepth(-998);
-      const drawPaths = (width, color, alpha) => {
-        g.fillStyle(color, alpha);
-        for (const path of map.paths) {
-          for (let i = 0; i < path.length; i++) {
-            const a = path[i], b = path[Math.min(path.length - 1, i + 1)];
-            for (let k = 0; k < 3; k++) g.fillCircle(lerp(a.x, b.x, k / 3), lerp(a.y, b.y, k / 3), width);
-          }
-        }
-        g.fillCircle(W / 2, H / 2, width * 5.6);
-      };
-      drawPaths(46, 0xb8975f, 0.55);
-      drawPaths(38, 0xdcc08a, 1);
-      g.fillStyle(0xe8d3a3, 0.7);
-      g.fillCircle(W / 2, H / 2, 150);
       // 木や花は区画（チャンク）ごとに分けて、カメラの近くだけ作る（広いマップでも軽く）
       this.chunkData = new Map();
       const bucket = (x, y) => {
         const k = Math.floor(x / CHUNK) + ',' + Math.floor(y / CHUNK);
-        if (!this.chunkData.has(k)) this.chunkData.set(k, { props: [], patches: [] });
+        if (!this.chunkData.has(k)) this.chunkData.set(k, { props: [], patches: [], dots: [] });
         return this.chunkData.get(k);
       };
       for (const p of map.props) bucket(p.x, p.y).props.push(p);
       for (const p of map.patches) bucket(p.x, p.y).patches.push(p);
+      // 土の小道と中央広場：円の並びにして、かかる区画すべてに登録（区画の絵に焼き込む）
+      const dots = [];
+      for (const path of map.paths) {
+        for (let i = 0; i < path.length; i++) {
+          const a = path[i], b = path[Math.min(path.length - 1, i + 1)];
+          for (let k = 0; k < 3; k++) dots.push([lerp(a.x, b.x, k / 3), lerp(a.y, b.y, k / 3), 1]);
+        }
+      }
+      dots.push([W / 2, H / 2, 5.6]);
+      for (const d of dots) {
+        const r = 46 * d[2] + 2;
+        for (let cx = Math.floor((d[0] - r) / CHUNK); cx <= Math.floor((d[0] + r) / CHUNK); cx++) {
+          for (let cy = Math.floor((d[1] - r) / CHUNK); cy <= Math.floor((d[1] + r) / CHUNK); cy++) {
+            const k = cx + ',' + cy;
+            if (!this.chunkData.has(k)) this.chunkData.set(k, { props: [], patches: [], dots: [] });
+            this.chunkData.get(k).dots.push(d);
+          }
+        }
+      }
+      this.tmpG = this.make.graphics({ add: false });
+      this.tmpI = this.make.image({ key: 'shadow', add: false });
       this.chunks = new Map();
       this.trees = [];
     }
 
+    // 地面の飾り（草の模様・小道・影・花・小石）は区画ごとに1枚の絵に焼き込む（描く物の数を大きく減らしてカクつきを防ぐ）
     makeChunk(key) {
       const d = this.chunkData.get(key);
       const objs = [], trees = [];
       if (d) {
-        for (const p of d.patches) {
-          objs.push(this.add.image(p.x, p.y, 'patch').setDisplaySize(p.rx * 2, p.ry * 2).setTint(p.c).setAlpha(p.a).setDepth(-999));
+        const [cx, cy] = key.split(',').map(Number);
+        const ox = cx * CHUNK, oy = cy * CHUNK, PAD = 0; // 区画どうしは重ねない（重ねると影が二重になる）
+        const rt = this.add.renderTexture(ox - PAD, oy - PAD, CHUNK + PAD * 2, CHUNK + PAD * 2).setOrigin(0).setDepth(-999);
+        objs.push(rt);
+        const tx = ox - PAD, ty = oy - PAD;
+        const im = this.tmpI, g = this.tmpG;
+        const near = (x, y, m) => x > tx - m && x < tx + CHUNK + PAD * 2 + m && y > ty - m && y < ty + CHUNK + PAD * 2 + m;
+        // 隣の区画の飾りも、はみ出して見える分は描く（区画の境目で切れないように）
+        const around = [];
+        for (let ax = cx - 1; ax <= cx + 1; ax++) for (let ay = cy - 1; ay <= cy + 1; ay++) {
+          const n = this.chunkData.get(ax + ',' + ay);
+          if (n) around.push([n, ax === cx && ay === cy]);
         }
-        for (const p of d.props) {
+        rt.beginDraw();
+        // 草の模様
+        for (const [n] of around) for (const p of n.patches) {
+          if (!near(p.x, p.y, p.rx)) continue;
+          im.setTexture('patch').setOrigin(0.5).setFlip(false, false).setDisplaySize(p.rx * 2, p.ry * 2).setTint(p.c).setAlpha(p.a);
+          rt.batchDraw(im, p.x - tx, p.y - ty);
+        }
+        im.clearTint();
+        rt.endDraw();
+        // 小道
+        g.clear();
+        g.fillStyle(0xb8975f, 0.55);
+        for (const p of d.dots) g.fillCircle(p[0] - tx, p[1] - ty, 46 * (p[2] > 1 ? p[2] : 1));
+        rt.draw(g);
+        g.clear();
+        g.fillStyle(0xdcc08a, 1);
+        for (const p of d.dots) g.fillCircle(p[0] - tx, p[1] - ty, 38 * (p[2] > 1 ? p[2] : 1));
+        if (d.dots.some(p => p[2] > 1)) { g.fillStyle(0xe8d3a3, 0.7); g.fillCircle(GD.WORLD.w / 2 - tx, GD.WORLD.h / 2 - ty, 150); }
+        rt.draw(g);
+        rt.beginDraw();
+        // 影（木・茂み・石）と、地面に置くだけの花・小石
+        const flat = [];
+        for (const [n] of around) for (const p of n.props) if (near(p.x, p.y, 200)) flat.push(p);
+        flat.sort((a, b) => a.y - b.y);
+        for (const p of flat) {
+          if (p.k === 'flower1' || p.k === 'flower2') continue;
           const src = this.textures.get(p.k).getSourceImage();
-          const dw = src.width * p.s, dh = src.height * p.s;
-          if (p.k !== 'flower1' && p.k !== 'flower2') {
-            const sw = p.k.startsWith('tree') ? dw * 0.75 : dw * 0.95;
-            objs.push(this.add.image(p.x, p.y - 4, 'shadow').setDisplaySize(sw, sw * 0.32).setDepth(-997).setAlpha(0.85));
-          }
+          const sw = p.k.startsWith('tree') ? src.width * p.s * 0.75 : src.width * p.s * 0.95;
+          im.setTexture('shadow').setOrigin(0.5).setFlip(false, false).setDisplaySize(sw, sw * 0.32).setAlpha(0.85);
+          rt.batchDraw(im, p.x - tx, p.y - 4 - ty);
+        }
+        for (const p of flat) {
+          if (!(p.k === 'flower1' || p.k === 'flower2' || p.k === 'rock')) continue;
+          im.setTexture(p.k).setOrigin(0.5, 1).setScale(p.s).setFlip(p.f, false).setAlpha(1);
+          rt.batchDraw(im, p.x - tx, p.y - ty);
+        }
+        rt.endDraw();
+        // 茂みと木は、キャラとの前後関係があるので普通の画像のまま
+        for (const p of d.props) {
+          if (p.k === 'flower1' || p.k === 'flower2' || p.k === 'rock') continue;
+          const src = this.textures.get(p.k).getSourceImage();
           const img = this.add.image(p.x, p.y, p.k).setOrigin(0.5, 1).setScale(p.s).setFlipX(p.f).setDepth(p.y);
           objs.push(img);
-          if (p.k.startsWith('tree')) trees.push({ img, x: p.x, y: p.y, w: dw, h: dh, a: 1 });
+          if (p.k.startsWith('tree')) trees.push({ img, x: p.x, y: p.y, w: src.width * p.s, h: src.height * p.s, a: 1 });
         }
       }
       this.chunks.set(key, { objs, trees });
@@ -152,9 +203,9 @@
       const v = this.cameras.main.worldView;
       const x0 = Math.floor((v.x - 300) / CHUNK), x1 = Math.floor((v.right + 300) / CHUNK);
       const y0 = Math.floor((v.y - 300) / CHUNK), y1 = Math.floor((v.bottom + 500) / CHUNK);
-      // 一度にたくさん作るとカクつくので、1回に2区画まで
+      // 一度にたくさん作るとカクつくので、1回に1区画まで
       let made = 0;
-      for (let cy = y0; cy <= y1 && made < 2; cy++) for (let cx = x0; cx <= x1 && made < 2; cx++) {
+      for (let cy = y0; cy <= y1 && made < 1; cy++) for (let cx = x0; cx <= x1 && made < 1; cx++) {
         const k = cx + ',' + cy;
         if (!this.chunks.has(k)) { this.makeChunk(k); made++; }
       }
@@ -212,10 +263,15 @@
       if (this.snaps.length > 40) this.snaps.shift();
       if (s.e) { this.esnaps.push({ t: s.t, e: s.e }); if (this.esnaps.length > 20) this.esnaps.shift(); }
       if (s.q) this.lastQ = s.q;
+      if (s.f) this.lastF = s.f;
       if (s.lb) { this.lastLb = s.lb; this.lastRk = s.rk; }
       this.latest = s;
       const mine = s.p.find(p => p.id === this.myId);
       if (mine) this.me = Object.assign({}, mine, s.me);
+      if (s.me && typeof s.me.tx === 'number') {
+        const got = Unlock.track(s.me.tx);
+        if (got && this.ui) { this.ui.banner(`🔓 ${GD.SPECIES[got].name} 解放！`, '#ffe07a'); Sfx.play('milestone'); }
+      }
     }
 
     pmap(s) {
@@ -273,7 +329,7 @@
       }
       this.watchFps(dt);
       if (this.me) {
-        const want = Phaser.Math.Clamp(1.25 - (monsterH(this.me.lv, this.me.ev) - 40) / 420, 0.6, 1.25);
+        const want = Phaser.Math.Clamp(1.25 - (monsterH(this.me.lv, this.me.ev) - 40) / 420, 0.8, 1.25);
         this.zoomCur += (want - this.zoomCur) * Math.min(1, dt * 2);
         this.cameras.main.setZoom(this.baseZoom * this.zoomCur * this.punch);
       }

@@ -92,7 +92,7 @@
       const compact = w < 760;
       const L = this.L = { w, h, compact, portrait };
       if (portrait) {
-        L.mm = 104;
+        L.mm = 118;
         L.mmX = w - 10 - L.mm; L.mmY = 10;
         L.hud = { x: 10, y: 10, w: w - 30 - L.mm, h: 66 };
         L.cx = L.hud.x + L.hud.w / 2;
@@ -102,7 +102,7 @@
         this.protText.setPosition(L.cx, 124);
         this.exitBtn.setPosition(40, h - 30).setScale(0.85);
       } else {
-        L.mm = compact ? 130 : 170;
+        L.mm = compact ? 140 : 190;
         L.mmX = w - 12 - L.mm; L.mmY = h - 12 - L.mm;
         L.lb = { w: compact ? 150 : 210, rows: compact ? 3 : 5, alpha: 0.8 };
         L.hud = { x: 12, y: 12, w: compact ? Math.min(210, w - L.lb.w - 36) : 280, h: 70 };
@@ -275,7 +275,7 @@
     drawMinimap(s, me) {
       const L = this.L, g = this.mg, S = L.mm;
       const x0 = L.mmX, y0 = L.mmY;
-      const RANGE = 2600;
+      const RANGE = 6400; // 前より広く（まわり約3200まで）
       const k = S / RANGE;
       const meX = this.gs.local ? this.gs.local.x : me.x, meY = this.gs.local ? this.gs.local.y : me.y;
       const cx = x0 + S / 2, cy = y0 + S / 2;
@@ -307,6 +307,14 @@
         g.fillStyle(0x200000, 0.9); g.fillCircle(px, py, boss ? 7.5 : 3.4);
         g.fillStyle(boss ? 0xff2a5a : 0xff4a3a, boss ? blink : 1); g.fillCircle(px, py, boss ? 6 : 2.4);
       }
+      // 遠くのボス・ゴールドスライム
+      const fs = this.gs.lastF || [];
+      for (let i = 0; i < fs.length; i += 3) {
+        const [px, py] = toR(fs[i + 1], fs[i + 2]);
+        if (!inside(px, py, 4)) continue;
+        if (fs[i] === 7) { g.fillStyle(0xffd84f, 1); g.fillCircle(px, py, 3.5); }
+        else { g.fillStyle(0x200000, 0.9); g.fillCircle(px, py, 7.5); g.fillStyle(0xff2a5a, blink); g.fillCircle(px, py, 6); }
+      }
       // 他のプレイヤー（レベルで色分け：赤＝格上 / 黄＝同じくらい / 緑＝格下）。範囲外は端に矢印
       const myPow = me.lv + (me.ev ? 3 : 0);
       const others = [];
@@ -330,6 +338,14 @@
       }
       g.fillStyle(0xffffff, 1); g.fillCircle(cx, cy, 5);
       g.lineStyle(2, 0x2a6aff, 1); g.strokeCircle(cx, cy, 5);
+      // 右下に世界全体の中での自分の位置（小さな全体図）
+      const ws = Math.round(S * 0.3), wx = x0 + S - ws - 5, wy = y0 + S - ws - 5;
+      g.fillStyle(0x000000, 0.6); g.fillRect(wx, wy, ws, ws);
+      g.lineStyle(1, 0x7cff9a, 0.7); g.strokeRect(wx, wy, ws, ws);
+      const vw = RANGE / GD.WORLD.w * ws, vh = RANGE / GD.WORLD.h * ws;
+      const mx = wx + meX / GD.WORLD.w * ws, my = wy + meY / GD.WORLD.h * ws;
+      g.lineStyle(1, 0xffffff, 0.5); g.strokeRect(mx - vw / 2, my - vh / 2, vw, vh);
+      g.fillStyle(0xffffff, 1); g.fillCircle(mx, my, 2.5);
       g.lineStyle(3, 0xf0c35a, 1); g.strokeRoundedRect(x0, y0, S, S, 10);
     }
 

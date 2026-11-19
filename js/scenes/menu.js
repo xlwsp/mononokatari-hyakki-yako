@@ -8,11 +8,62 @@
     set(k, v) { try { localStorage.setItem('nakama_' + k, v); } catch (e) { /* noop */ } },
   };
   window.Store = store;
+
+  // 累計獲得EXPとモンスターの解放（この端末に保存）
+  const Unlock = {
+    total: parseInt(store.get('texp', '0'), 10) || 0,
+    lastTx: 0, saveAt: 0, dirty: false,
+    ok(k) { return this.total >= (GD.UNLOCK_AT[k] || 0); },
+    next() { return GD.UNLOCKS.find(([, v]) => v > this.total) || null; },
+    // サーバーから届く「今の命で稼いだEXP」を足していく。新しく解放されたモンスターを返す
+    track(tx) {
+      if (tx < this.lastTx) this.lastTx = 0; // 再出撃で0に戻った
+      const d = tx - this.lastTx;
+      this.lastTx = tx;
+      if (d <= 0) return null;
+      const before = this.total;
+      this.total += d; this.dirty = true;
+      const now = performance.now();
+      if (now - this.saveAt > 1000) { this.save(); this.saveAt = now; }
+      const got = GD.UNLOCKS.find(([, v]) => v > before && v <= this.total);
+      return got ? got[0] : null;
+    },
+    reset() { this.lastTx = 0; },
+    save() {
+      if (!this.dirty) return; // 増えていないときは書かない（他のタブの値を消さないように）
+      this.dirty = false;
+      const saved = parseInt(store.get('texp', '0'), 10) || 0;
+      store.set('texp', String(Math.floor(Math.max(saved, this.total))));
+    },
+  };
+  window.Unlock = Unlock;
+  window.addEventListener('beforeunload', () => Unlock.save());
+
+  // 解放状況の表示（累計EXPと、次のモンスターまで）
+  function unlockInfo(scene, cx, y, width) {
+    const nx = Unlock.next();
+    const tot = Math.floor(Unlock.total);
+    scene.add.text(cx, y, `累計獲得EXP  ${tot.toLocaleString()}`, TO(17, '#ffe07a', '#4a3a2e', 5)).setOrigin(0.5, 0);
+    const bw = Math.min(300, width - 40), bx = cx - bw / 2, by = y + 26;
+    const g = scene.add.graphics();
+    g.fillStyle(0x3a2a20, 0.85); g.fillRoundedRect(bx, by, bw, 12, 6);
+    if (nx) {
+      const prev = [...GD.UNLOCKS].reverse().find(([, v]) => v <= tot);
+      const p0 = prev ? prev[1] : 0, r = Phaser.Math.Clamp((tot - p0) / (nx[1] - p0), 0, 1);
+      if (r > 0) { g.fillStyle(0xffc94a, 1); g.fillRoundedRect(bx, by, Math.max(12, bw * r), 12, 6); }
+      scene.add.text(cx, by + 16, `あと ${(nx[1] - tot).toLocaleString()} EXP で「${GD.SPECIES[nx[0]].name}」解放（${nx[1].toLocaleString()} EXP）`, T(12, C.soft)).setOrigin(0.5, 0);
+    } else {
+      g.fillStyle(0xffc94a, 1); g.fillRoundedRect(bx, by, bw, 12, 6);
+      scene.add.text(cx, by + 16, '全モンスター解放済み！', T(12, C.soft)).setOrigin(0.5, 0);
+    }
+    return 50;
+  }
   const V = () => (window.GV && window.GV !== '__VERSION__' ? '?v=' + window.GV : '');
 
   // モンスター選びのグリッド（タイトルとやられた画面で共通）
+  const PICK_KEYS = () => GD.UNLOCKS.map(u => u[0]);
   function monsterPicker(scene, cx, top, width, sel, onPick) {
-    const keys = GD.SPECIES_KEYS;
+    const keys = PICK_KEYS();
     const cols = width < 420 ? 5 : 7;
     const size = Math.min(58, Math.floor((width - 10) / cols) - 8);
     const gap = Math.floor((width - cols * size) / (cols + 1));
@@ -30,6 +81,13 @@
       const zone = scene.add.zone(x, y, size + 6, size + 6).setInteractive({ useHandCursor: true });
       zone.on('pointerdown', () => { Sfx.init(); Sfx.play('click'); onPick(k); });
       objs.push(ring, bg, ic, zone);
+      if (!Unlock.ok(k)) { // まだ解放されていない：暗くしてカギ
+        ic.setTint(0x222222);
+        const dark = scene.add.circle(x, y, size / 2, 0x000000, 0.35);
+        const lock = scene.add.text(x, y - 4, '🔒', { fontSize: Math.round(size * 0.36) + 'px' }).setOrigin(0.5);
+        const need = scene.add.text(x, y + size * 0.3, (GD.UNLOCK_AT[k] / 1000) + 'k', TO(11, '#ffe07a', '#2a1f18', 3)).setOrigin(0.5);
+        objs.push(dark, lock, need);
+      }
       return { k, ring, ic, x, y };
     });
     const rows = Math.ceil(keys.length / cols);
@@ -52,6 +110,7 @@
 
   function speciesInfo(sp) {
     const d = GD.SPECIES[sp];
+    if (!Unlock.ok(sp)) return { title: `🔒 ${d.name}（${d.role}）`, line: `累計獲得EXP ${GD.UNLOCK_AT[sp].toLocaleString()} で解放\nスキル【${d.skill.name}】${d.skill.desc}` };
     return { title: `${d.name}（${d.role}）`, line: `スキル【${d.skill.name}】${d.skill.desc}\n特性【${d.trait.name}】${d.trait.desc}` };
   }
 
@@ -91,7 +150,7 @@
     init(data) { this.notice = data && data.msg; }
     create() {
       this.sp = store.get('sp', 'gekomaru');
-      if (!GD.SPECIES[this.sp]) this.sp = 'gekomaru';
+      if (!GD.SPECIES[this.sp] || !Unlock.ok(this.sp)) this.sp = 'gekomaru';
       this.connecting = false;
       this.build();
       this.onResize = () => { this.saveName(); this.scene.restart({ msg: this.msgText && this.msgText.text }); };
@@ -99,7 +158,7 @@
       this.onKey = e => {
         const ae = document.activeElement;
         if (ae && ae.tagName === 'INPUT') return;
-        const keys = GD.SPECIES_KEYS, i = keys.indexOf(this.sp), cols = this.picker.cols;
+        const keys = PICK_KEYS(), i = keys.indexOf(this.sp), cols = this.picker.cols;
         const move = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
         if (move) { this.pick(keys[(i + move + keys.length) % keys.length]); Sfx.init(); Sfx.play('click'); }
         else if (e.key === 'Enter' || e.key === ' ') this.go();
@@ -114,13 +173,13 @@
     }
     pick(k) {
       this.sp = k;
-      store.set('sp', k);
+      if (Unlock.ok(k)) store.set('sp', k);
       this.picker.set(k);
       const info = speciesInfo(k);
       this.infoTitle.setText(info.title);
       this.infoLine.setText(info.line);
       if (this.preview) {
-        this.preview.setTexture('cr_' + k);
+        this.preview.setTexture('cr_' + k).setTint(Unlock.ok(k) ? 0xffffff : 0x111111);
         const s = this.previewH / this.preview.height;
         this.preview.setScale(s * 0.6);
         this.tweens.add({ targets: this.preview, scale: s, duration: 260, ease: 'Back.out' });
@@ -156,7 +215,7 @@
       // 先にピッカーの高さを測るため仮配置
       const tmp = monsterPicker(this, cx, -9999, pw - 30, this.sp, () => {});
       const gridH = tmp.height; tmp.destroy();
-      const ph = 84 + gridH + 150;
+      const ph = 84 + gridH + 150 + 56;
       panel(this, cx - pw / 2, py, pw, ph);
       this.add.text(cx - pw / 2 + 22, py + 18, 'なまえ', T(17, C.soft));
       const inputW = pw - 120;
@@ -174,6 +233,8 @@
       const infoY = gridTop + gridH + 12;
       this.infoTitle = this.add.text(cx, infoY, '', T(17, C.brownCss)).setOrigin(0.5, 0);
       this.infoLine = this.add.text(cx, infoY + 24, '', T(12, C.soft, { align: 'center', wordWrap: { width: pw - 30, useAdvancedWrap: true } })).setOrigin(0.5, 0);
+      unlockInfo(this, cx, py + ph - 128, pw);
+      this.goBtn = null;
       const btn = button(this, cx, py + ph - 42, Math.min(360, pw - 40), 56, 'オンラインで遊ぶ', () => this.go(), { color: 0xef7a6a, dark: 0xb24a3e, size: 24 });
       this.tweens.add({ targets: btn, scale: 1.04, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       this.pick(this.sp);
@@ -191,8 +252,47 @@
 
     msg(s) { this.msgText.setText(s); }
 
+    // 名前が空のまま始めようとしたら、名前を入れてもらうカットイン（空のままOKなら「ゆうしゃ」で始める）
+    askName() {
+      if (this.nameAsk) return;
+      const w = this.scale.width, h = this.scale.height;
+      const pw = Math.min(440, w - 30), ph = 210, x = w / 2 - pw / 2, y = h / 2 - ph / 2;
+      const objs = [];
+      const dim = this.add.rectangle(0, 0, w, h, 0x1d1020, 0.6).setOrigin(0).setInteractive().setDepth(50);
+      const band = this.add.rectangle(w / 2, h / 2, w, ph + 40, 0xef7a6a, 0.95).setDepth(50).setScale(0, 1);
+      const box = this.add.container(0, 0).setDepth(51);
+      box.add(panel(this, x, y, pw, ph));
+      box.add(this.add.text(w / 2, y + 34, 'なまえを入力してね！', TO(26, '#fff8ea', '#4a3a2e', 6)).setOrigin(0.5));
+      box.add(this.add.text(w / 2, y + 66, 'ランキングに表示されます', T(13, C.soft)).setOrigin(0.5));
+      const inp = this.add.dom(w / 2, y + 108, 'input', [
+        `width:${pw - 60}px`, 'height:46px', 'box-sizing:border-box', 'border-radius:12px', 'border:3px solid #4a3a2e',
+        'background:#fff', 'padding:0 12px', `font-family:${UI.FONT}`, 'font-weight:800', 'font-size:20px', 'color:#4a3a2e', 'outline:none', 'text-align:center',
+      ].join(';')).setDepth(52);
+      inp.node.maxLength = 12; inp.node.placeholder = 'ゆうしゃ';
+      const ok = () => {
+        const v = inp.node.value.trim();
+        if (this.input_) this.input_.node.value = v || 'ゆうしゃ';
+        this.nameAsked = true;
+        close();
+        this.go();
+      };
+      inp.node.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') ok(); });
+      const btn = button(this, w / 2, y + ph - 36, 200, 48, 'OK', ok, { color: 0xef7a6a, dark: 0xb24a3e, size: 22 }).setDepth(52);
+      objs.push(dim, band, box, inp, btn);
+      box.setX(-w); btn.setAlpha(0); inp.setAlpha(0);
+      this.tweens.add({ targets: band, scaleX: 1, duration: 220, ease: 'Cubic.out' });
+      this.tweens.add({ targets: box, x: 0, duration: 380, delay: 120, ease: 'Back.out' });
+      this.tweens.add({ targets: [btn, inp], alpha: 1, duration: 200, delay: 420, onComplete: () => inp.node.focus() });
+      this.tweens.add({ targets: band, alpha: 0, duration: 300, delay: 500 });
+      Sfx.play('card');
+      const close = () => { objs.forEach(o => o.destroy()); this.nameAsk = null; };
+      this.nameAsk = { close };
+    }
+
     go() {
-      if (this.connecting) return; // 連打で二重参加しないように
+      if (this.connecting || this.nameAsk) return; // 連打で二重参加しないように
+      if (!this.nameAsked && !(this.input_ && this.input_.node.value.trim())) { this.askName(); return; }
+      if (!Unlock.ok(this.sp)) { this.msg(`🔒 ${GD.SPECIES[this.sp].name} は累計 ${GD.UNLOCK_AT[this.sp].toLocaleString()} EXP で解放されます`); Sfx.play('click'); return; }
       this.connecting = true;
       Sfx.init();
       UI.mobileEnter();
@@ -213,12 +313,14 @@
     init(data) { this.d = data; }
     create() {
       const d = this.d, w = this.scale.width, h = this.scale.height;
+      Unlock.save();
       this.sp = d.session.sp || store.get('sp', 'gekomaru');
+      if (!Unlock.ok(this.sp)) this.sp = 'gekomaru';
       this.add.rectangle(0, 0, w, h, 0x1d1020, 0.55).setOrigin(0);
       const pw = Math.min(520, w - 20);
       const tmp = monsterPicker(this, w / 2, -9999, pw - 30, this.sp, () => {});
       const gridH = tmp.height; tmp.destroy();
-      const ph = 200 + gridH + 110;
+      const ph = 200 + gridH + 110 + 56;
       const x = w / 2 - pw / 2, y = Math.max(10, h / 2 - ph / 2);
       panel(this, x, y, pw, ph);
       const title = this.add.text(w / 2, y + 38, 'やられた…', TO(40, '#c8d8ff', '#3a2a40', 8)).setOrigin(0.5).setScale(0.3);
@@ -234,7 +336,12 @@
         this.tweens.add({ targets: nb, scale: 1.08, duration: 500, yoyo: true, repeat: -1 });
       }
       this.add.text(w / 2, y + 172, '次のモンスターをえらんで再出撃！', T(14, C.soft)).setOrigin(0.5);
-      this.picker = monsterPicker(this, w / 2, y + 192, pw - 30, this.sp, k => { this.sp = k; store.set('sp', k); this.picker.set(k); });
+      this.lockMsg = this.add.text(w / 2, y + 192 + gridH + 10, '', T(12, '#c0392b')).setOrigin(0.5, 0);
+      this.picker = monsterPicker(this, w / 2, y + 192, pw - 30, this.sp, k => {
+        if (!Unlock.ok(k)) { this.lockMsg.setText(`🔒 ${GD.SPECIES[k].name} は累計 ${GD.UNLOCK_AT[k].toLocaleString()} EXP で解放`); return; }
+        this.lockMsg.setText(''); this.sp = k; store.set('sp', k); this.picker.set(k);
+      });
+      unlockInfo(this, w / 2, y + ph - 154, pw);
       const b1 = button(this, w / 2, y + ph - 70, Math.min(300, pw - 40), 50, '再出撃！', () => this.respawn(), { color: C.orange, dark: C.orangeDark, size: 22 });
       const b2 = button(this, w / 2, y + ph - 22, 140, 32, 'タイトルへ', () => this.toTitle(), { color: C.gray, dark: C.grayDark, size: 14 });
       keyNav(this, [b1, b2], { delay: 600 });
