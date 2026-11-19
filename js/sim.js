@@ -8,8 +8,8 @@
   const TICK = 0.05;           // 20Hz
   const MAX_PLAYERS = 50;      // 1つの世界に入れる人数（Bot含む）
   const BOT_TARGET = 24;       // 人が少ないときはBotでこの人数まで埋める
-  const ENEMY_PER_PLAYER = 55; // プレイヤー1人あたりの敵の上限（密度）
-  const ENEMY_CAP = 2600;
+  const ENEMY_PER_PLAYER = 75; // プレイヤー1人あたりの敵の上限（密度）
+  const ENEMY_CAP = 3200;
   const GEM_CAP = 5000;
   const SWARM_EVERY = 28;      // 敵の群れが押し寄せる間隔（プレイヤーごと）
   const BOSS_EVERY = 100;      // どこかにボスが出る間隔
@@ -110,7 +110,8 @@
   const SPECIES_KEYS = Object.keys(SPECIES);
 
   // 敵（番号は描画側と共通。4番はボス）
-  const ENEMY_TYPES = ['slime', 'bat', 'wisp', 'brute', 'boss', 'shroom', 'beetle', 'gold', 'golem'];
+  const ENEMY_TYPES = ['slime', 'bat', 'wisp', 'brute', 'boss', 'shroom', 'beetle', 'gold', 'golem',
+    'kedama', 'kasa', 'chochin', 'nezumi', 'hitodama', 'daruma']; // 9〜14は弱い雑魚（群れで出る）
   const ENEMIES = {
     slime:  { hp: 14, spd: 72, dmg: 6, r: 17, xp: 1 },
     bat:    { hp: 8, spd: 135, dmg: 5, r: 14, xp: 1 },
@@ -121,6 +122,13 @@
     beetle: { hp: 18, spd: 165, dmg: 7, r: 15, xp: 2 },
     gold:   { hp: 70, spd: 150, dmg: 0, r: 18, xp: 30 },  // 逃げ回るボーナス敵
     golem:  { hp: 240, spd: 45, dmg: 18, r: 32, xp: 12 },
+    // 弱い雑魚たち：もろくて数が多い。まとめて倒すと気持ちいい
+    kedama:   { hp: 5, spd: 92, dmg: 3, r: 13, xp: 1 },
+    kasa:     { hp: 9, spd: 88, dmg: 4, r: 15, xp: 1 },
+    chochin:  { hp: 8, spd: 66, dmg: 4, r: 15, xp: 1 },
+    nezumi:   { hp: 4, spd: 150, dmg: 3, r: 12, xp: 1 },
+    hitodama: { hp: 6, spd: 112, dmg: 4, r: 12, xp: 1 },
+    daruma:   { hp: 12, spd: 58, dmg: 5, r: 15, xp: 1 },
   };
 
   // 強化カード。{skill} {trait} はモンスターごとのスキル名・特性名に置き換わる
@@ -786,7 +794,15 @@
         p.spawnAcc = (p.spawnAcc || 0) + (3.2 + Math.min(p.lv, 40) * 0.12) * dt;
         while (p.spawnAcc >= 1) {
           p.spawnAcc -= 1;
-          if (this.enemies.length < cap) this.spawnEnemy(this.pickEnemyType(p.lv), p, undefined, undefined, p.lv >= ELITE_LV && chance(Math.min(0.25, (p.lv - ELITE_LV + 1) * 0.012)));
+          if (this.enemies.length >= cap) continue;
+          const ty = this.pickEnemyType(p.lv);
+          if (ty >= 9) {
+            // 弱い雑魚は小さな群れでまとめて出る
+            const a = rand(0, Math.PI * 2), d = rand(680, 860);
+            const cx = p.x + Math.cos(a) * d, cy = p.y + Math.sin(a) * d;
+            const n = randInt(3, 6);
+            for (let k = 0; k < n; k++) this.spawnEnemy(ty, p, cx + rand(-60, 60), cy + rand(-60, 60));
+          } else this.spawnEnemy(ty, p, undefined, undefined, p.lv >= ELITE_LV && chance(Math.min(0.25, (p.lv - ELITE_LV + 1) * 0.012)));
         }
         // 群れ：一定時間ごとにまわりから敵がわらわら
         p.swarmT = (p.swarmT === undefined ? rand(5, SWARM_EVERY) : p.swarmT) - dt;
@@ -842,7 +858,8 @@
         if (p.hyW <= 0) {
           p.hyW = 8;
           const n = p.evo ? 12 + Math.min(10, Math.floor(p.lv / 6)) : 7; // 進化前は少なめ
-          const ty = this.pickEnemyType(p.lv + 8, true);
+          let ty = this.pickEnemyType(p.lv + 8, true);
+          while (ty >= 9) ty = this.pickEnemyType(p.lv + 8, true); // 百鬼夜行は強い敵だけ
           for (let i = 0; i < n; i++) {
             const a = (i / n) * Math.PI * 2;
             this.spawnEnemy(i % 3 === 0 ? 3 : ty, p, p.x + Math.cos(a) * 640, p.y + Math.sin(a) * 640, true);
@@ -897,7 +914,8 @@
 
     pickEnemyType(lv, swarm) {
       // [番号, 重み]（レベルが上がるほど強い敵が混ざる）
-      const w = [[0, 1], [1, lv > 2 ? 0.7 : 0], [5, lv > 4 ? 0.6 : 0], [2, lv > 7 ? 0.5 : 0], [6, lv > 10 ? 0.5 : 0],
+      const w = [[0, 1], [9, 0.45], [12, lv > 1 ? 0.35 : 0], [10, lv > 3 ? 0.35 : 0], [13, lv > 5 ? 0.35 : 0],
+        [11, lv > 8 ? 0.3 : 0], [14, lv > 12 ? 0.3 : 0], [1, lv > 2 ? 0.7 : 0], [5, lv > 4 ? 0.6 : 0], [2, lv > 7 ? 0.5 : 0], [6, lv > 10 ? 0.5 : 0],
         [3, lv > 14 ? 0.35 : 0], [8, lv > 20 ? 0.25 : 0], [7, swarm ? 0 : 0.015]];
       const total = w.reduce((a, b) => a + b[1], 0);
       let x = Math.random() * total;

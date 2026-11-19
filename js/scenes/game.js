@@ -4,9 +4,10 @@
   const { TO } = UI;
   const lerp = (a, b, t) => a + (b - a) * t;
   const FX_DEPTH = 1000000;
-  const ENEMY_KEYS = ['en_slime', 'en_bat', 'en_wisp', 'en_brute', 'en_boss', 'en_shroom', 'en_beetle', 'en_gold', 'en_golem'];
-  const ENEMY_SCALE = [0.8, 0.75, 0.78, 0.85, 0.9, 0.85, 0.75, 0.85, 1.0];
-  const ENEMY_BURST = [0xb48cff, 0x9a7ad0, 0x8fb8ff, 0xff9a7a, 0xff5a7e, 0xd8604a, 0x5a7ad0, 0xffd84f, 0x9a9288];
+  const ENEMY_KEYS = ['en_slime', 'en_bat', 'en_wisp', 'en_brute', 'en_boss', 'en_shroom', 'en_beetle', 'en_gold', 'en_golem',
+    'en_kedama', 'en_kasa', 'en_chochin', 'en_nezumi', 'en_hitodama', 'en_daruma'];
+  const ENEMY_SCALE = [0.8, 0.75, 0.78, 0.85, 0.9, 0.85, 0.75, 0.85, 1.0, 0.85, 0.85, 0.85, 0.85, 0.85, 0.85];
+  const ENEMY_BURST = [0xb48cff, 0x9a7ad0, 0x8fb8ff, 0xff9a7a, 0xff5a7e, 0xd8604a, 0x5a7ad0, 0xffd84f, 0x9a9288, 0xf0e2c4, 0xff6a7a, 0xffb050, 0xc0c0d0, 0x9ff0d8, 0xff4a3a];
   // オーラの色（レベルが上がるほど派手に）：Lv5 白 / 10 緑 / 15 水色 / 20 紫 / 30 金 / 40 虹
   const AURA = [0, 0xffffff, 0x7cff8a, 0x6fd8ff, 0xc58bff, 0xffd84f, 0xff7ad9];
   const CHUNK = 800;
@@ -634,10 +635,12 @@
         o.lx = x;
         const wob = Math.sin(this.time.now / 140 + id) * 0.06;
         const s = (ENEMY_SCALE[ty] || 0.8) * (o.el ? 1.4 : 1);
-        if (ty === 0 || ty === 7) o.img.setScale(s * (1 + wob), s * (1 - wob));
+        if (ty === 0 || ty === 7 || ty === 9 || ty === 12) o.img.setScale(s * (1 + wob), s * (1 - wob));
+        else if (ty === 14) o.img.setScale(s).setRotation(wob * 2.5); // だるまはゆらゆら
         else if (ty === 1) o.img.setScale(s, s * (1 + wob * 1.5));
         else o.img.setScale(s);
-        o.img.setPosition(x, y - (ty === 1 || ty === 2 ? 14 + wob * 40 : 0)).setDepth(y);
+        const lift = ty === 1 || ty === 2 || ty === 13 ? 14 + wob * 40 : ty === 10 ? Math.abs(wob) * 140 : ty === 11 ? 6 + wob * 30 : 0; // 浮く・跳ねる
+        o.img.setPosition(x, y - lift).setDepth(y);
         o.shadow.setPosition(x, y + 2).setDepth(y - 1);
         if (ty === 7 && Math.random() < 0.15) FX.twinkle(this, x + Phaser.Math.Between(-15, 15), y - 20, 1);
         if (o.el && Math.random() < 0.08) this.burst(x + Phaser.Math.Between(-20, 20), y - 30, 0xff3a3a, 1);
@@ -776,7 +779,7 @@
           case 'ed': {
             this.burst(ev.x, ev.y - 10, ENEMY_BURST[ev.ty] || 0xffffff, ev.ty === 4 ? 60 : ev.ty === 7 ? 30 : 8);
             this.freeEnemy(ev.i);
-            if (ev.by === me) { this.ui.addCombo(); FX.twinkle(this, ev.x, ev.y - 20, 3); }
+            if (ev.by === me) { this.ui.addCombo(); FX.twinkle(this, ev.x, ev.y - 20, 3); Sfx.pop(ev.ty, ev.el, this.ui.combo); } // 倒した！の音
             if (ev.ty === 7 && ev.by === me) { FX.confetti(this, ev.x, ev.y - 30, 60, 0xffd84f); this.ui.stampFx('GOLD!!', '#ffd84f'); Sfx.play('legend'); }
             if (ev.ty === 4) {
               this.cameras.main.shake(400, 0.01);

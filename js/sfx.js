@@ -73,6 +73,59 @@
       const f = 300 * Math.pow(2, Math.min(n, 48) / 24);
       this.tone(f, 0.07, 'triangle', 0.035, f * 0.5);
     },
+    // 敵を倒した音：ポンッ・パチュッと弾ける。コンボが続くほど音が高くなり、大きい敵は「ドパンッ」
+    pop(ty, elite, combo) {
+      const c = this.ctx;
+      if (!c || this.muted) return;
+      const now = performance.now();
+      const big = ty === 4 || ty === 3 || ty === 8 || elite;
+      if (!big && now - (this.last.pop || 0) < 38) { this.popQ = (this.popQ || 0) + 1; return; } // 同時に倒したぶんはまとめる
+      this.last.pop = now;
+      const many = Math.min(this.popQ || 0, 6); this.popQ = 0;
+      const t = c.currentTime;
+      if (!this.popBuf) {
+        this.popBuf = c.createBuffer(1, Math.floor(c.sampleRate * 0.25), c.sampleRate);
+        const d = this.popBuf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      }
+      const out = c.destination;
+      const osc = (type, f0, f1, dur, vol, at) => {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = type;
+        o.frequency.setValueAtTime(f0, at); o.frequency.exponentialRampToValueAtTime(Math.max(30, f1), at + dur * 0.8);
+        g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(vol, at + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+        o.connect(g); g.connect(out); o.start(at); o.stop(at + dur + 0.02);
+      };
+      const hiss = (freq, q, dur, vol, at, type) => {
+        const s = c.createBufferSource(); s.buffer = this.popBuf;
+        const f = c.createBiquadFilter(); f.type = type || 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+        const g = c.createGain(); g.gain.setValueAtTime(vol, at); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+        s.connect(f); f.connect(g); g.connect(out); s.start(at, Math.random() * 0.1); s.stop(at + dur + 0.02);
+      };
+      // コンボで上がる音階（ド レ ミ ソ ラ …）
+      const SC = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
+      const step = SC[Math.min(Math.floor((combo || 0) / 3), SC.length - 1)];
+      const up = Math.pow(2, step / 12) * (0.95 + Math.random() * 0.1);
+      if (big) {
+        // ドパンッ：低いドン＋破裂音＋キラッ
+        osc('sine', 160, 45, 0.28, 0.16, t);
+        hiss(900, 0.7, 0.22, 0.12, t);
+        hiss(5000, 1.2, 0.08, 0.06, t + 0.01, 'highpass');
+        osc('triangle', 880 * up, 1320 * up, 0.12, 0.04, t + 0.04);
+        return;
+      }
+      // ポンッ（上から下に落ちる玉の音）＋パチッ（はじける音）
+      const base = (ty === 9 || ty === 12 || ty === 13 ? 760 : ty === 0 || ty === 7 ? 620 : 540) * up;
+      osc('sine', base * 1.6, base * 0.55, 0.09, 0.075, t);
+      osc('triangle', base * 2.4, base * 1.2, 0.05, 0.025, t);
+      hiss(3500, 1.5, 0.045, 0.05, t);
+      // 一度にたくさん倒したら「パパパッ」と重ねる
+      for (let i = 0; i < Math.min(many, 3); i++) {
+        const at = t + 0.03 + i * 0.028, f = base * (1.2 + i * 0.25);
+        osc('sine', f * 1.6, f * 0.6, 0.07, 0.05, at);
+        hiss(4200, 1.5, 0.035, 0.035, at);
+      }
+    },
     // 自分の攻撃を放つ音（モンスターごとに音色を変える）
     shoot(k) {
       const now = performance.now();

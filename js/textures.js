@@ -159,6 +159,69 @@
       ctx.beginPath(); ctx.moveTo(30, 50); ctx.lineTo(44, 58); ctx.lineTo(40, 70); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(64, 46); ctx.lineTo(56, 60); ctx.stroke();
     }],
+    // ---- 弱い雑魚たち ----
+    // 毛玉（ふわふわ）
+    kedama: [50, 46, ctx => {
+      ctx.fillStyle = '#e8d8b8';
+      for (let i = 0; i < 18; i++) {
+        const a = i / 18 * Math.PI * 2;
+        ctx.beginPath(); ctx.arc(25 + Math.cos(a) * 17, 26 + Math.sin(a) * 15, 6, 0, Math.PI * 2); ctx.fill();
+      }
+      ball(ctx, 25, 26, 18, 16, 0xf0e2c4);
+      eyes(ctx, 25, 25, 6, 3, { color: '#3a2a24' });
+    }],
+    // からかさ（一本足の傘）
+    kasa: [52, 60, ctx => {
+      ctx.strokeStyle = '#6a4a2a'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(26, 30); ctx.lineTo(26, 56); ctx.stroke();
+      fillPath(ctx, 0xd84a5a, [[26, 2], [50, 34], [2, 34]], 0.35);
+      ctx.strokeStyle = 'rgba(80,20,30,0.6)'; ctx.lineWidth = 1.5;
+      for (const x of [14, 26, 38]) { ctx.beginPath(); ctx.moveTo(26, 3); ctx.lineTo(x, 34); ctx.stroke(); }
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(26, 22, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#2a1018'; ctx.beginPath(); ctx.arc(26, 22, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ff7a8a'; ctx.beginPath(); ctx.ellipse(26, 30, 4, 3, 0, 0, Math.PI); ctx.fill();
+    }],
+    // ちょうちん
+    chochin: [48, 60, ctx => {
+      ctx.fillStyle = '#3a2a24'; ctx.fillRect(16, 4, 16, 6); ctx.fillRect(16, 52, 16, 5);
+      const g = ctx.createRadialGradient(20, 24, 2, 24, 31, 22);
+      g.addColorStop(0, '#fff2c0'); g.addColorStop(0.5, '#ffb050'); g.addColorStop(1, '#d0602a');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(24, 31, 19, 22, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(120,40,10,0.45)'; ctx.lineWidth = 1.5;
+      for (const y of [18, 26, 34, 42]) { ctx.beginPath(); ctx.moveTo(7, y); ctx.lineTo(41, y); ctx.stroke(); }
+      eyes(ctx, 24, 28, 6, 3, { angry: true, color: '#3a1408' });
+      ctx.fillStyle = '#c0203a'; ctx.beginPath(); ctx.ellipse(24, 40, 5, 4, 0, 0, Math.PI); ctx.fill();
+    }],
+    // ねずみ（ちっちゃくて速い）
+    nezumi: [50, 40, ctx => {
+      ctx.strokeStyle = '#c89aa0'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(40, 30); ctx.quadraticCurveTo(50, 24, 46, 14); ctx.stroke();
+      ball(ctx, 24, 26, 17, 12, 0x9a9aa8);
+      ball(ctx, 14, 12, 7, 7, 0xb0b0bc); ball(ctx, 32, 12, 7, 7, 0xb0b0bc);
+      ctx.fillStyle = '#f0b0c0'; ctx.beginPath(); ctx.arc(14, 12, 3.5, 0, Math.PI * 2); ctx.arc(32, 12, 3.5, 0, Math.PI * 2); ctx.fill();
+      eyes(ctx, 23, 24, 5, 2.4, { color: '#1a1a24' });
+      ctx.fillStyle = '#ff8aa0'; ctx.beginPath(); ctx.arc(23, 30, 2.2, 0, Math.PI * 2); ctx.fill();
+    }],
+    // ひとだま（青白い小さな火）
+    hitodama: [44, 54, ctx => {
+      const g = ctx.createRadialGradient(20, 34, 2, 22, 34, 22);
+      g.addColorStop(0, '#ffffff'); g.addColorStop(0.4, '#9ff0d8'); g.addColorStop(1, 'rgba(40,160,140,0.85)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(30, 2);
+      ctx.quadraticCurveTo(24, 16, 38, 26); ctx.quadraticCurveTo(46, 50, 22, 52);
+      ctx.quadraticCurveTo(0, 50, 6, 32); ctx.quadraticCurveTo(12, 20, 30, 2);
+      ctx.fill();
+      eyes(ctx, 22, 36, 5, 2.6, { color: '#0a3a30' });
+    }],
+    // だるま
+    daruma: [52, 54, ctx => {
+      ball(ctx, 26, 30, 22, 22, 0xd0302a);
+      ctx.fillStyle = '#fff1dc'; ctx.beginPath(); ctx.ellipse(26, 26, 13, 11, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#2a1410'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(16, 19); ctx.lineTo(22, 22); ctx.moveTo(36, 19); ctx.lineTo(30, 22); ctx.stroke();
+      ctx.fillStyle = '#2a1410'; ctx.beginPath(); ctx.arc(20, 26, 2.6, 0, Math.PI * 2); ctx.arc(32, 26, 2.6, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#ffd84f'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(26, 44, 7, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+    }],
   };
 
   // 弾：モンスターごとの色（サイズは攻撃の当たり判定から）
