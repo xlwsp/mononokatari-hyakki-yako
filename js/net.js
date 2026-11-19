@@ -70,8 +70,8 @@
     }
     const owner = location.hostname.split('.')[0];
     const repo = location.pathname.split('/').filter(Boolean)[0] || (owner + '.github.io');
-    // GitHub の API から読む（ページのキャッシュに左右されず、いつも最新）
-    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/server.json?t=${Date.now()}`, { cache: 'no-store' });
+    // GitHub の API から読む（ページのキャッシュに左右されず、いつも最新）。server ブランチに置いてある
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/server.json?ref=server&t=${Date.now()}`, { cache: 'no-store' });
     if (!res.ok) throw new Error('サーバーの場所がわかりませんでした');
     const j = await res.json();
     const info = JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\s/g, '')))));
