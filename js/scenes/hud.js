@@ -28,7 +28,7 @@
       this.protText = this.add.text(0, 0, '', TO(13, '#fff6a0', '#1a1020', 4)).setOrigin(0.5, 0).setDepth(3);
       this.lbTitle = this.add.text(0, 0, 'ランキング', T(12, '#ffd76a')).setDepth(3);
       this.lbRows = [];
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < 8; i++) {
         this.lbRows.push({
           name: this.add.text(0, 0, '', T(13, '#ffffff')).setDepth(3),
           sc: this.add.text(0, 0, '', T(13, '#ffe9a8')).setOrigin(1, 0).setDepth(3),
@@ -43,6 +43,8 @@
       this.skZone.on('pointerover', () => this.showInfo());
 
       this.exitBtn = button(this, 0, 0, 74, 30, '退出', () => this.exit(), { color: C.gray, dark: C.grayDark, size: 14 });
+      const bgmLabel = v => (v >= 1 ? '♪ 大' : v > 0 ? '♪ 小' : '♪ OFF');
+      this.bgmBtn = button(this, 0, 0, 74, 30, bgmLabel(Bgm.vol), () => this.bgmBtn.setLabel(bgmLabel(Bgm.toggle())), { color: C.blue, dark: C.blueDark, size: 14 });
 
       // レベルアップカード
       this.cards = null; this.cardSeq = -1; this.chosen = -1;
@@ -101,6 +103,7 @@
         this.subText.setPosition(L.cx, 106);
         this.protText.setPosition(L.cx, 124);
         this.exitBtn.setPosition(40, h - 30).setScale(0.85);
+        this.bgmBtn.setPosition(40, h - 62).setScale(0.85);
       } else {
         L.mm = compact ? 140 : 190;
         L.mmX = w - 12 - L.mm; L.mmY = h - 12 - L.mm;
@@ -112,6 +115,7 @@
         this.subText.setPosition(w / 2, (compact ? 90 : 12) + 30);
         this.protText.setPosition(w / 2, (compact ? 90 : 12) + 48);
         this.exitBtn.setPosition(L.hud.x + 37, L.hud.y + L.hud.h + 24).setScale(1);
+        this.bgmBtn.setPosition(L.hud.x + 37 + 82, L.hud.y + L.hud.h + 24).setScale(1);
       }
       this.hurt.setSize(w, h);
       if (!this.mmLabel) this.mmLabel = this.add.text(0, 0, 'レーダー', TO(10, '#9fffb0', '#0f2418', 3)).setDepth(3);
@@ -154,8 +158,11 @@
       // 上中央：スコア・撃破数・オンライン人数
       this.cpText.setText(`SCORE ${me.sc.toLocaleString()}`);
       this.subText.setText(`撃破 ${me.k}　倒したプレイヤー ${me.pk || 0}　オンライン ${s.on}人`);
-      if (me.pr) this.protText.setVisible(true).setText('🛡 出撃直後は体当たりされない');
+      if (me.hy) this.protText.setVisible(true).setText(`👹 百鬼夜行！ 生き延びろ　残り ${me.hy}秒`).setColor('#e0a8ff');
+      else if (me.a && me.lv >= 12 && me.pt > 0 && me.pt <= 15) this.protText.setVisible(true).setText(`👹 百鬼夜行まで ${me.pt}秒`).setColor('#e0a8ff');
+      else if (me.pr) this.protText.setVisible(true).setText('🛡 出撃直後は体当たりされない').setColor('#fff6a0');
       else this.protText.setVisible(false);
+      if (window.Bgm) Bgm.intense(!!me.hy || !!this.gs.bossNear);
 
       this.drawRanking(s, me);
       this.drawSkill(me);
@@ -181,9 +188,13 @@
     drawRanking(s, me) {
       const L = this.L, LB = L.lb, g = this.g;
       const lb = this.gs.lastLb || [], rk = this.gs.lastRk;
-      const rows = lb.slice(0, LB.rows).map((r, i) => ({ r, rank: i + 1 }));
-      const inTop = rows.some(x => x.r[0] === me.id);
-      if (!inTop && rk) rows.push({ r: [me.id, me.n, me.sc, me.lv, 0], rank: rk });
+      // 上から順に（Botは1位と最下位だけ届く）。最下位のBotと自分はいつも表示
+      const all = lb.map((r, i) => ({ r, rank: r[5] || i + 1 }));
+      const total = all.length ? all[all.length - 1].rank : 0;
+      const lastBot = all.length && all[all.length - 1].r[4] && all[all.length - 1].rank === total ? all[all.length - 1] : null;
+      const rows = all.filter(x => x !== lastBot).slice(0, LB.rows);
+      if (!rows.some(x => x.r[0] === me.id) && rk) rows.push({ r: [me.id, me.n, me.sc, me.lv, 0], rank: rk });
+      if (lastBot && !rows.includes(lastBot)) rows.push(lastBot);
       const ph = 24 + rows.length * 20;
       g.fillStyle(0x161c30, LB.alpha * 0.85); g.fillRoundedRect(LB.x, LB.y, LB.w, ph, 10);
       g.lineStyle(2, 0xf0c35a, LB.alpha); g.strokeRoundedRect(LB.x, LB.y, LB.w, ph, 10);
@@ -195,10 +206,10 @@
         const y = LB.y + 22 + i * 20;
         const mine = it.r[0] === me.id;
         if (mine) { g.fillStyle(0xffd76a, 0.3); g.fillRoundedRect(LB.x + 4, y - 1, LB.w - 8, 19, 6); }
-        const maxLen = L.compact ? 5 : 8;
+        const maxLen = L.compact ? 4 : 8;
         const nm = it.r[1].length > maxLen ? it.r[1].slice(0, maxLen) + '…' : it.r[1];
-        row.name.setPosition(LB.x + 8, y).setText(`${it.rank}. ${nm}`).setAlpha(Math.min(1, LB.alpha + 0.3));
-        row.sc.setPosition(LB.x + LB.w - 8, y).setText(it.r[2].toLocaleString()).setAlpha(Math.min(1, LB.alpha + 0.3));
+        row.name.setPosition(LB.x + 8, y).setText(`${it.rank}. ${nm}${it.r[4] ? ' 🤖' : ''}`).setAlpha(Math.min(1, LB.alpha + 0.3)).setColor(it.r[4] ? '#b8c4dc' : '#ffffff');
+        row.sc.setPosition(LB.x + LB.w - 8, y).setText(L.compact && it.r[2] >= 10000 ? Math.round(it.r[2] / 1000) + 'k' : it.r[2].toLocaleString()).setAlpha(Math.min(1, LB.alpha + 0.3));
       });
     }
 
@@ -301,11 +312,11 @@
       for (let i = 0; i < es.length; i += 4) {
         const [px, py] = toR(es[i + 2], es[i + 3]);
         if (!inside(px, py, 3)) continue;
-        const ty = es[i + 1];
+        const ty = es[i + 1] & 15, el = es[i + 1] >= 16;
         if (ty === 7) { g.fillStyle(0xffd84f, 1); g.fillCircle(px, py, 3.5); continue; }
-        const boss = ty === 4;
-        g.fillStyle(0x200000, 0.9); g.fillCircle(px, py, boss ? 7.5 : 3.4);
-        g.fillStyle(boss ? 0xff2a5a : 0xff4a3a, boss ? blink : 1); g.fillCircle(px, py, boss ? 6 : 2.4);
+        const boss = ty === 4, big = boss || el;
+        g.fillStyle(0x200000, 0.9); g.fillCircle(px, py, boss ? 7.5 : el ? 5 : 3.4);
+        g.fillStyle(boss ? 0xff2a5a : el ? 0xc040ff : 0xff4a3a, big ? blink : 1); g.fillCircle(px, py, boss ? 6 : el ? 3.8 : 2.4);
       }
       // 遠くのボス・ゴールドスライム
       const fs = this.gs.lastF || [];
@@ -318,15 +329,18 @@
       // 他のプレイヤー（レベルで色分け：赤＝格上 / 黄＝同じくらい / 緑＝格下）。範囲外は端に矢印
       const myPow = me.lv + (me.ev ? 3 : 0);
       const others = [];
-      for (const p of s.p) if (p.id !== me.id && p.a) others.push([p.x, p.y, p.lv + (p.ev ? 3 : 0)]);
+      for (const p of s.p) if (p.id !== me.id && p.a) others.push([p.x, p.y, p.lv + (p.ev ? 3 : 0), p.bn]);
       const nearIds = new Set(s.p.map(p => p.id));
-      for (const q of this.gs.lastQ || []) if (!nearIds.has(q[0])) others.push([q[1], q[2], q[3]]);
-      for (const [ox, oy, opow] of others) {
+      for (const q of this.gs.lastQ || []) if (!nearIds.has(q[0])) others.push([q[1], q[2], q[3], q[4]]);
+      let bountyPos = null;
+      for (const [ox, oy, opow, bn] of others) {
+        if (bn) bountyPos = [ox, oy];
         const col = opow > myPow + 1 ? 0xff3a3a : opow < myPow - 1 ? 0x5aff7a : 0xffd84f;
         let [px, py] = toR(ox, oy);
         if (inside(px, py, 5)) {
           g.fillStyle(0xffffff, 1); g.fillCircle(px, py, 6);
           g.fillStyle(col, 1); g.fillCircle(px, py, 4.6);
+          if (bn) { g.lineStyle(2, 0xffd84f, blink); g.strokeCircle(px, py, 9); } // 賞金首
         } else {
           const dx = ox - meX, dy = oy - meY;
           const t = (S / 2 - 7) / Math.max(Math.abs(dx), Math.abs(dy));
@@ -346,6 +360,7 @@
       const mx = wx + meX / GD.WORLD.w * ws, my = wy + meY / GD.WORLD.h * ws;
       g.lineStyle(1, 0xffffff, 0.5); g.strokeRect(mx - vw / 2, my - vh / 2, vw, vh);
       g.fillStyle(0xffffff, 1); g.fillCircle(mx, my, 2.5);
+      if (bountyPos) { g.fillStyle(0xffd84f, blink); g.fillCircle(wx + bountyPos[0] / GD.WORLD.w * ws, wy + bountyPos[1] / GD.WORLD.h * ws, 2.5); }
       g.lineStyle(3, 0xf0c35a, 1); g.strokeRoundedRect(x0, y0, S, S, 10);
     }
 
@@ -354,12 +369,12 @@
       this.hideCards();
       this.cardSeq = ch.s;
       const L = this.L, n = ch.o.length;
-      const cw = Math.min(200, (L.w - 24) / n - 8), chh = L.compact ? 140 : 152;
-      const gap = L.compact ? 8 : 22;
+      const cw = Math.min(220, (L.w - 20) / n - 6), chh = L.compact ? 176 : 200;
+      const gap = L.compact ? 6 : 22;
       const total = n * cw + (n - 1) * gap;
       const cy = L.h * 0.5 + (L.compact ? 20 : 10);
       const objs = [];
-      const dim = this.add.rectangle(0, 0, L.w, L.h, 0x0d1020, 0.3).setOrigin(0).setDepth(39);
+      const dim = this.add.rectangle(0, 0, L.w, L.h, 0x0d1020, 0.5).setOrigin(0).setDepth(39);
       const title = this.add.text(L.w / 2, cy - chh / 2 - 56, 'レベルアップ！ 能力をのばそう', TO(L.compact ? 19 : 26, '#ffe07a', '#3a2a20', 6)).setOrigin(0.5).setDepth(41);
       const hint = this.add.text(L.w / 2, cy + chh / 2 + 30, L.compact ? 'タップで決定' : '← → でえらぶ　Enter で決定　（1・2・3 キーでもOK）', TO(L.compact ? 13 : 15, '#fff', '#3a2a20', 4)).setOrigin(0.5).setDepth(41);
       const timer = this.add.text(L.w / 2, cy + chh / 2 + 54, '', TO(12, '#ffe7c0', '#3a2a20', 3)).setOrigin(0.5).setDepth(41);
@@ -374,11 +389,15 @@
         const g = this.add.graphics();
         const col = UP_COLOR[key] || 0x3a8ae8;
         const dark = Phaser.Display.Color.ValueToColor(col).darken(30).color;
-        const fsz = L.compact ? 0.85 : 1;
-        const tag = this.add.text(0, -chh / 2 + 13, UP_TAG[key] || '', TO(9 * fsz + 1, '#fff', Tex.rgb(dark, -0.3), 3)).setOrigin(0.5);
-        const icon = this.add.text(0, -chh * 0.2, UP_ICON[key] || '★', T(26 * fsz)).setOrigin(0.5);
-        const nm = this.add.text(0, chh * 0.06, up.name, TO(14 * fsz + 1, '#ffffff', '#1a1020', 4)).setOrigin(0.5);
-        const ds = this.add.text(0, chh * 0.3, up.desc, T(11 * fsz, '#e8ecff', { align: 'center', wordWrap: { width: cw - 18, useAdvancedWrap: true } })).setOrigin(0.5);
+        const fsz = L.compact ? 0.88 : 1;
+        // 文字は大きく、説明はクリーム色の地に濃い茶色で読みやすく
+        const iconY = -chh * 0.27, nameY = -chh * 0.03, descTop = nameY + 17 * fsz;
+        const tag = this.add.text(0, -chh / 2 + 14, UP_TAG[key] || '', TO(11 * fsz, '#fff', Tex.rgb(dark, -0.3), 3)).setOrigin(0.5);
+        const icon = this.add.text(0, iconY, UP_ICON[key] || '★', T(28 * fsz)).setOrigin(0.5);
+        const nm = this.add.text(0, nameY, up.name, TO(17 * fsz, '#ffffff', '#1a1020', 5)).setOrigin(0.5);
+        if (nm.width > cw - 14) nm.setScale((cw - 14) / nm.width);
+        const ds = this.add.text(0, (descTop + chh / 2 - 8) / 2, up.desc, T(14 * fsz, '#3a2414', { align: 'center', lineSpacing: 2, wordWrap: { width: cw - 26, useAdvancedWrap: true } })).setOrigin(0.5);
+        if (ds.height > chh / 2 - descTop - 12) ds.setScale((chh / 2 - descTop - 12) / ds.height);
         const kh = this.add.text(cw / 2 - 9, chh / 2 - 6, String(i + 1), TO(12, '#ffd76a', '#1a1020', 3)).setOrigin(1, 1);
         const zone = this.add.zone(0, 0, cw, chh).setInteractive({ useHandCursor: true });
         c.add([g, tag, icon, nm, ds, kh, zone]);
@@ -397,11 +416,12 @@
           g.fillStyle(col, 1); g.fillRoundedRect(-hw + 5, -hh + 5, cw - 10, chh * 0.55, { tl: R - 4, tr: R - 4, bl: 0, br: 0 });
           g.fillStyle(0xffffff, 0.16);
           g.fillTriangle(-hw + 5, -hh + 5, -hw + cw * 0.55, -hh + 5, -hw + 5, -hh + chh * 0.45);
-          g.fillStyle(0x000000, 0.35); g.fillRect(-hw + 5, chh * 0.06 - 13 * fsz, cw - 10, 26 * fsz);
-          g.fillStyle(0x10142a, 0.75); g.fillRoundedRect(-hw + 9, chh * 0.06 + 15 * fsz, cw - 18, hh - chh * 0.06 - 15 * fsz - 8, 8);
-          g.fillStyle(0x7a5010, 1); g.fillCircle(0, -chh * 0.2, 25 * fsz);
-          g.fillStyle(0xfff6dc, 1); g.fillCircle(0, -chh * 0.2, 22 * fsz);
-          g.fillStyle(0xffffff, 0.8); g.fillEllipse(-6 * fsz, -chh * 0.2 - 10 * fsz, 20 * fsz, 8 * fsz);
+          const iconY = -chh * 0.27, nameY = -chh * 0.03, descTop = nameY + 17 * fsz;
+          g.fillStyle(0x000000, 0.45); g.fillRect(-hw + 5, nameY - 15 * fsz, cw - 10, 30 * fsz);
+          g.fillStyle(0xfff6dc, 1); g.fillRoundedRect(-hw + 9, descTop + 2, cw - 18, hh - descTop - 10, 8);
+          g.fillStyle(0x7a5010, 1); g.fillCircle(0, iconY, 26 * fsz);
+          g.fillStyle(0xfff6dc, 1); g.fillCircle(0, iconY, 23 * fsz);
+          g.fillStyle(0xffffff, 0.8); g.fillEllipse(-6 * fsz, iconY - 10 * fsz, 20 * fsz, 8 * fsz);
           if (sel) { g.lineStyle(3, 0xfff6c0, 1); g.strokeRoundedRect(-hw, -hh, cw, chh, R); }
         };
         zone.on('pointerover', () => this.select(i));
@@ -425,7 +445,7 @@
         cd.draw(on);
         cd.c.setDepth(on ? 41 : 40);
         this.tweens.killTweensOf(cd.c);
-        this.tweens.add({ targets: cd.c, scale: on ? (this.L.compact ? 1.04 : 1.1) : (this.L.compact ? 0.96 : 0.93), alpha: on ? 1 : 0.75, y: on && !this.L.compact ? cd.y - 12 : cd.y, duration: 140, ease: 'Quad.out' });
+        this.tweens.add({ targets: cd.c, scale: on ? (this.L.compact ? 1.04 : 1.1) : (this.L.compact ? 0.96 : 0.93), alpha: on ? 1 : 0.92, y: on && !this.L.compact ? cd.y - 12 : cd.y, duration: 140, ease: 'Quad.out' });
       });
       const sc = cs.cards[i];
       cs.arrow.setPosition(sc.x, sc.y - sc.chh / 2 - 32);
@@ -471,7 +491,6 @@
       if (!this.ready) return;
       this.combo++;
       this.comboT = 2.4;
-      Sfx.combo(this.combo);
       const n = this.combo;
       if (n < 3) return;
       const L = this.L;

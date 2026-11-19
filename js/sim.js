@@ -19,6 +19,11 @@
   const PROTECT_TIME = 10;     // 出撃直後は体当たりされない
   const NEWBIE_LV = 1;         // （レベルによる保護はなし）
   const BUMP_CD = 0.55;        // 同じ相手への体当たりの間隔（秒）
+  const ELITE_LV = 12;         // このレベルから「強敵」が混ざる
+  const PARADE_EVERY = 240;    // 百鬼夜行（高レベルの人のもとへ強敵の大群が押し寄せる）の間隔
+  const PARADE_LV = 12;        // 百鬼夜行に巻き込まれるレベル
+  const PARADE_TIME = 45;      // 百鬼夜行を生き延びる時間
+  const BOUNTY_LV = 15;        // 賞金首になるレベル
 
   // プレイヤーが選べるモンスター（性能はだいたい同じ強さ。得意なことが違う）
   // atk: 自動で撃つ通常攻撃 / skill: 自動で発動するスキル / trait: プレイヤー同士のバトルで効く特性
@@ -124,14 +129,14 @@
     rate:     { name: '連射 UP', desc: '通常攻撃の間隔 -13%', ok: p => p.rateMul > 0.35, apply: p => { p.rateMul *= 0.87; } },
     extra:    { name: '弾数 +1', desc: '通常攻撃の弾が1つ増える', ok: p => p.extra < 4, apply: p => { p.extra++; } },
     pierce:   { name: '貫通弾', desc: '弾が敵を貫通 +1', ok: p => p.pierce < 3, apply: p => { p.pierce++; } },
-    skillPow: { name: '{skill} 強化', desc: '{skill}の威力 +30%', ok: () => true, apply: p => { p.skillPow *= 1.3; } },
-    skillCd:  { name: '{skill} 連発', desc: '{skill}のクールタイム -15%', ok: p => p.skillCd > 0.4, apply: p => { p.skillCd *= 0.85; } },
-    area:     { name: '{skill} 拡大', desc: '{skill}の範囲 +20%', ok: p => SPECIES[p.sp].skill.area && p.areaMul < 2, apply: p => { p.areaMul *= 1.2; } },
+    skillPow: { name: '{skill} 強化', desc: '{skill}の威力 +45%', ok: () => true, apply: p => { p.skillPow *= 1.45; } },
+    skillCd:  { name: '{skill} 連発', desc: '{skill}のクールタイム -22%', ok: p => p.skillCd > 0.3, apply: p => { p.skillCd *= 0.78; } },
+    area:     { name: '{skill} 拡大', desc: '{skill}の範囲 +30%', ok: p => SPECIES[p.sp].skill.area && p.areaMul < 2.6, apply: p => { p.areaMul *= 1.3; } },
     hp:       { name: 'タフネス', desc: '最大HP +25% & 全回復', ok: () => true, apply: p => { p.mhp *= 1.25; p.hp = p.mhp; } },
     regen:    { name: '自然回復', desc: '毎秒HPが回復 +1.5', ok: p => p.regen < 9, apply: p => { p.regen += 1.5; } },
     magnet:   { name: 'マグネット', desc: '経験値の吸引範囲 +40%', ok: p => p.magnet < 450, apply: p => { p.magnet *= 1.4; } },
     bump:     { name: '体当たり強化', desc: 'ぶつかったときのダメージ +25%', ok: p => p.bumpMul < 3, apply: p => { p.bumpMul *= 1.25; } },
-    trait:    { name: '{trait} 覚醒', desc: '特性【{trait}】の効果アップ', ok: p => p.traitLv < 3, apply: p => { p.traitLv++; } },
+    trait:    { name: '{trait} 覚醒', desc: '【{trait}】の効果 大アップ＋攻撃と体当たり +10%', ok: p => p.traitLv < 5, apply: p => { p.traitLv++; p.dmgMul *= 1.1; p.bumpMul *= 1.1; } },
   };
   const UPGRADE_KEYS = Object.keys(UPGRADES);
   function upgradeText(key, sp) {
@@ -148,6 +153,10 @@
 
   // 必要経験値：低レベルは少なめ、高レベルでも上がり続けるようゆるやかに
   const xpNeed = lv => Math.floor(3 + lv * 2 + lv * lv * 0.2);
+  // 敵の攻撃の強さ（レベルが上がるほど痛い）
+  const dmgCurve = lv => 1 + (lv - 1) * 0.05 + (lv - 1) * (lv - 1) * 0.0015;
+  // 高レベル向けに出た敵が低レベルの人に当たったときは、その人のレベル相当まで弱める
+  const dmgFor = (e, p) => (e.lvd > 1 ? e.dmg * Math.min(1, dmgCurve(p.lv) / e.lvd) : e.dmg);
   const rand = (a, b) => a + Math.random() * (b - a);
   const randInt = (a, b) => Math.floor(rand(a, b + 1));
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -313,6 +322,11 @@
       this.events = [];
       this.hitEv = 0;
       this.bossT = BOSS_EVERY * 0.6;
+      this.paradeT = PARADE_EVERY * 0.75;
+      this.paradeWarned = false;
+      this.bounty = null;
+      this.bountyT = 0;
+      this.slams = [];
       this.maxCP = 1;
       this.cells = new Array(GW * GH);
       for (let i = 0; i < this.cells.length; i++) this.cells[i] = [];
@@ -347,7 +361,7 @@
         spd: def.spd, espd: def.spd, dmgMul: 1, rateMul: 1, extra: 0, pierce: 0, skillPow: 1, skillCd: 1, areaMul: 1,
         magnet: 150, regen: 0, bumpMul: 1, traitLv: 1, poisonT: 0, poisonDps: 0, pslowT: 0, alarmCd: 0, lastBump: -99, hitCd: {},
         atkCd: 0, scd: rand(1, 3), iframe: 2, choices: [], chSeq: p.chSeq || 0, chT: 0,
-        tpT: 0, protT: PROTECT_TIME, revived: false,
+        tpT: 0, protT: PROTECT_TIME, revived: false, hyT: 0,
         shield: 0, shieldT: 0, hasteT: 0, deadT: 0, killedBy: null,
         ai: { t: 0, dx: 0, dy: 0, wx: 0, wy: 0 },
       });
@@ -506,7 +520,10 @@
       for (const p of this.players) this.movePlayer(p, dt);
       this.updateBumps(dt);
       this.spawnEnemies(dt);
+      this.updateParade(dt);
+      this.updateBounty(dt);
       this.moveEnemies(dt);
+      this.updateSlams();
       this.buildGrid();
       this.separateEnemies();
       for (const p of this.players) this.playerCombat(p, dt);
@@ -560,6 +577,13 @@
         const absorb = 0.85 + (kt === 'steal' ? 0.25 * this.traitPow(killer) : 0);
         killer.pkills++;
         killer.pkScore += 200 + p.lv * 25;
+        if (this.bounty === p) {
+          // 賞金首を倒した！
+          killer.pkScore += 1500 + p.lv * 50;
+          this.addXp(killer, p.txp * 0.5);
+          this.ev({ e: 'btk', g: 1, n: killer.name, v: p.name, k: killer.id });
+          this.bounty = null; this.bountyT = 3;
+        }
         this.addXp(killer, 40 + p.lv * 20 + p.txp * absorb); // プレイヤーを倒すと経験値がたくさん
         // 道連れ：倒した相手に大ダメージ
         if (tr === 'curse') {
@@ -582,7 +606,7 @@
       this.ev({ e: 'dd', p: p.id, by: killer ? killer.id : 0, x: r1(p.x), y: r1(p.y), lv: p.lv, sc: p.score, sp: p.sp });
     }
 
-    traitPow(p) { return 1 + 0.5 * (p.traitLv - 1) + (p.evo ? 0.3 : 0); }
+    traitPow(p) { return 1 + 0.7 * (p.traitLv - 1) + (p.evo ? 0.3 : 0); }
 
     // ---------- プレイヤー同士の体当たり（ぶつかるとお互いにダメージ） ----------
     updateBumps(dt) {
@@ -728,7 +752,7 @@
         p.spawnAcc = (p.spawnAcc || 0) + (3.2 + Math.min(p.lv, 40) * 0.12) * dt;
         while (p.spawnAcc >= 1) {
           p.spawnAcc -= 1;
-          if (this.enemies.length < cap) this.spawnEnemy(this.pickEnemyType(p.lv), p);
+          if (this.enemies.length < cap) this.spawnEnemy(this.pickEnemyType(p.lv), p, undefined, undefined, p.lv >= ELITE_LV && chance(Math.min(0.25, (p.lv - ELITE_LV + 1) * 0.012)));
         }
         // 群れ：一定時間ごとにまわりから敵がわらわら
         p.swarmT = (p.swarmT === undefined ? rand(5, SWARM_EVERY) : p.swarmT) - dt;
@@ -752,6 +776,91 @@
       }
     }
 
+    // ---------- 百鬼夜行：一定時間ごとに、高レベルの人のもとへ強敵の大群が押し寄せる。生き延びればごほうび ----------
+    updateParade(dt) {
+      this.paradeT -= dt;
+      if (!this.paradeWarned && this.paradeT <= 15) {
+        this.paradeWarned = true;
+        this.ev({ e: 'hyw', g: 1, s: 15, lv: PARADE_LV });
+      }
+      if (this.paradeT <= 0) {
+        this.paradeT = PARADE_EVERY; this.paradeWarned = false;
+        let n = 0;
+        for (const p of this.players) {
+          if (!p.alive || p.lv < PARADE_LV) continue;
+          p.hyT = PARADE_TIME; p.hyW = 0; p.hyBoss = false; n++;
+        }
+        this.ev({ e: 'hy', g: 1, n });
+      }
+      for (const p of this.players) {
+        if (!p.hyT) continue;
+        if (!p.alive) { p.hyT = 0; continue; }
+        p.hyT -= dt; p.hyW -= dt;
+        if (p.hyT <= 0) {
+          // 生き延びた！ ごほうび
+          p.hyT = 0;
+          for (let i = 0; i < 12; i++) this.dropGem(p.x + rand(-140, 140), p.y + rand(-140, 140), 8 + p.lv * 2.5);
+          p.pkScore += 600 + p.lv * 40;
+          p.hp = p.mhp;
+          this.ev({ e: 'hyc', p: p.id, x: r1(p.x), y: r1(p.y) });
+          continue;
+        }
+        if (p.hyW <= 0) {
+          p.hyW = 8;
+          const n = 10 + Math.min(10, Math.floor(p.lv / 6));
+          const ty = this.pickEnemyType(p.lv + 8, true);
+          for (let i = 0; i < n; i++) {
+            const a = (i / n) * Math.PI * 2;
+            this.spawnEnemy(i % 3 === 0 ? 3 : ty, p, p.x + Math.cos(a) * 640, p.y + Math.sin(a) * 640, true);
+          }
+          // 途中で大妖怪（ボス）も
+          if (!p.hyBoss && p.hyT < PARADE_TIME - 15) {
+            p.hyBoss = true;
+            const e = this.spawnEnemy(4, p);
+            e.mhp = e.hp = ENEMIES.boss.hp * (1 + p.lv * 0.3);
+            e.dmg *= 1.3;
+            this.ev({ e: 'boss', x: r1(e.x), y: r1(e.y) });
+          }
+        }
+      }
+    }
+
+    // ---------- 賞金首：いちばんスコアの高い人（Lv15以上）。倒すと大量のスコアと経験値 ----------
+    updateBounty(dt) {
+      this.bountyT -= dt;
+      if (this.bountyT > 0) return;
+      this.bountyT = 5;
+      if (this.bounty && !this.bounty.alive) this.bounty = null;
+      let best = null;
+      for (const p of this.players) if (p.alive && p.lv >= BOUNTY_LV && (!best || p.score > best.score)) best = p;
+      // いまの賞金首より大きく上回ったら交代
+      if (best && best !== this.bounty && (!this.bounty || best.score > this.bounty.score * 1.15)) {
+        this.bounty = best;
+        this.ev({ e: 'bty', g: 1, n: best.name, p: best.id });
+      }
+    }
+
+    // 予告していた範囲攻撃を当てる
+    updateSlams() {
+      if (!this.slams.length) return;
+      const keep = [];
+      for (const s of this.slams) {
+        if (s.at > this.time) { keep.push(s); continue; }
+        for (const p of this.players) {
+          if (!p.alive || p.iframe > 0) continue;
+          const rr = s.r + this.radius(p) * 0.6;
+          if ((p.x - s.x) ** 2 + (p.y - s.y) ** 2 > rr * rr) continue;
+          const dmg = Math.min(dmgFor(s, p), p.mhp * 0.4); // 1発で最大HPの4割まで
+          this.hurtPlayer(p, dmg);
+          p.iframe = Math.max(p.iframe, 0.4);
+          this.ev({ e: 'sl', p: p.id, d: Math.round(dmg), x: r1(p.x), y: r1(p.y) });
+          if (p.hp <= 0) this.kill(p, null);
+        }
+        this.ev({ e: 'slx', x: r1(s.x), y: r1(s.y), r: s.r });
+      }
+      this.slams = keep;
+    }
+
     pickEnemyType(lv, swarm) {
       // [番号, 重み]（レベルが上がるほど強い敵が混ざる）
       const w = [[0, 1], [1, lv > 2 ? 0.7 : 0], [5, lv > 4 ? 0.6 : 0], [2, lv > 7 ? 0.5 : 0], [6, lv > 10 ? 0.5 : 0],
@@ -762,7 +871,7 @@
       return 0;
     }
 
-    spawnEnemy(ty, near, x, y) {
+    spawnEnemy(ty, near, x, y, elite) {
       if (x === undefined) {
         const a = rand(0, Math.PI * 2), d = rand(680, 860);
         x = near.x + Math.cos(a) * d; y = near.y + Math.sin(a) * d;
@@ -772,9 +881,15 @@
       const hpMul = 1 + (lv - 1) * 0.13;
       const e = {
         id: this.uid(), ty, x: clamp(x, EDGE, WORLD.w - EDGE), y: clamp(y, EDGE, WORLD.h - EDGE),
-        hp: def.hp * hpMul, mhp: def.hp * hpMul, spd: def.spd * rand(0.9, 1.1), dmg: def.dmg * (1 + (lv - 1) * 0.04), r: def.r,
+        // 高レベルほど敵の攻撃も痛い（油断するとやられる）
+        hp: def.hp * hpMul, mhp: def.hp * hpMul, spd: def.spd * rand(0.9, 1.1), dmg: def.dmg * dmgCurve(lv), lvd: dmgCurve(lv), r: def.r,
         xp: def.xp * (1 + (lv - 1) * 0.06), slowT: 0, stunT: 0, tgt: near, retT: 0, dead: false, life: ty === 7 ? 18 : 0,
+        el: 0, slamT: rand(2, 4),
       };
+      // 強敵：大きくて硬くて痛い。そのぶん経験値もたくさん
+      if (elite && ty !== 7) {
+        e.el = 1; e.hp *= 5; e.mhp = e.hp; e.dmg *= 2; e.r *= 1.35; e.xp *= 6; e.spd *= 1.1;
+      }
       resolve(this.map, e, e.r * 0.6);
       this.enemies.push(e);
       return e;
@@ -810,6 +925,17 @@
           continue;
         }
         const dx = e.tgt.x - e.x, dy = e.tgt.y - e.y, d = Math.hypot(dx, dy) || 1;
+        // ボスと大きな強敵は、予告のあとに地面をたたきつける範囲攻撃
+        if (e.ty === 4 || (e.el && (e.ty === 3 || e.ty === 8))) {
+          e.slamT -= dt;
+          if (e.slamT <= 0 && d < 420 && e.tgt.lv >= 10) { // 低レベルの人には使わない
+            const boss = e.ty === 4;
+            e.slamT = boss ? 4.5 : 6;
+            const r = boss ? 300 : 210, delay = boss ? 1.0 : 0.9;
+            this.slams.push({ x: e.tgt.x, y: e.tgt.y, r, at: this.time + delay, dmg: e.dmg * (boss ? 3 : 2.2), lvd: e.lvd });
+            this.ev({ e: 'tg', x: r1(e.tgt.x), y: r1(e.tgt.y), r, d: delay });
+          }
+        }
         let sp = e.spd;
         if (e.slowT > 0) { e.slowT -= dt; sp *= 0.45; }
         e.x += dx / d * sp * dt;
@@ -910,7 +1036,7 @@
           if (!hitBy && e.stunT <= 0 && e.dmg) hitBy = e;
         });
         if (hitBy) {
-          this.hurtPlayer(p, hitBy.dmg);
+          this.hurtPlayer(p, dmgFor(hitBy, p));
           p.iframe = 0.5;
           this.ev({ e: 'hu', p: p.id, x: r1(p.x), y: r1(p.y) });
           if (p.hp <= 0) { this.kill(p, null); return; }
@@ -1052,7 +1178,7 @@
       const vx = Math.cos(ang) * speed, vy = Math.sin(ang) * speed;
       const pr = { id: this.uid(), o: owner, x, y, vx, vy, dmg, r, life, pierce, k: kind, aoe: aoe || 0, slow: slow || 0, hit: null };
       this.projs.push(pr);
-      this.ev({ e: 'sh', id: pr.id, x: r1(x), y: r1(y), vx: r1(vx), vy: r1(vy), l: life, k: kind });
+      this.ev({ e: 'sh', id: pr.id, x: r1(x), y: r1(y), vx: r1(vx), vy: r1(vy), l: life, k: kind, o: owner.id });
     }
 
     damage(e, dmg, owner, slow) {
@@ -1063,13 +1189,14 @@
       if (e.hp <= 0) {
         e.dead = true;
         if (owner) owner.kills++;
-        this.ev({ e: 'ed', i: e.id, ty: e.ty, x: r1(e.x), y: r1(e.y), by: owner ? owner.id : 0 });
+        this.ev({ e: 'ed', i: e.id, ty: e.ty, el: e.el, x: r1(e.x), y: r1(e.y), by: owner ? owner.id : 0 });
+        if (e.el && e.ty !== 4) for (let i = 0; i < 5; i++) this.dropGem(e.x + rand(-50, 50), e.y + rand(-50, 50), e.xp / 5);
         if (e.ty === 4) {
           if (owner) owner.bossKills++;
           for (let i = 0; i < 24; i++) this.dropGem(e.x + rand(-90, 90), e.y + rand(-90, 90), 4 + Math.floor(e.xp));
         } else if (e.ty === 7) {
           for (let i = 0; i < 10; i++) this.dropGem(e.x + rand(-60, 60), e.y + rand(-60, 60), e.xp / 8);
-        } else this.dropGem(e.x, e.y, e.xp);
+        } else if (!e.el) this.dropGem(e.x, e.y, e.xp);
       }
     }
 
@@ -1169,7 +1296,7 @@
         hp: Math.ceil(Math.max(0, p.hp)), mhp: Math.round(p.mhp), lv: p.lv, a: p.alive ? 1 : 0,
         sc: p.score, cl: p.color, au: auraTier(p.lv), spd: Math.round(p.espd || p.spd), ps: p.poisonT > 0 ? 1 : 0,
         sh: p.shield > 0 ? 1 : 0, hs: p.hasteT > 0 ? 1 : 0, pr: isProtected(p) ? 1 : 0,
-        bt: p.tpT > 0 ? 1 : 0, tp: p.tp, iv: p.iframe > 0 ? 1 : 0,
+        bt: p.tpT > 0 ? 1 : 0, tp: p.tp, iv: p.iframe > 0 ? 1 : 0, bn: this.bounty === p ? 1 : 0,
       };
     }
 
@@ -1182,11 +1309,10 @@
         E: [],
         ev: this.events,
       };
-      for (const en of this.enemies) base.E.push(en.id, en.ty, r1(en.x), r1(en.y));
+      for (const en of this.enemies) base.E.push(en.id, en.ty + (en.el ? 16 : 0), r1(en.x), r1(en.y)); // 強敵は種類+16
       if (this.tick % 40 < 2) base.G = this.gems;
-      // ランキング（スコア順）
-      // ランキングは人（プレイヤー）だけ。Botは出さない
-      base.LB = this.players.filter(p => p.alive && p.human).sort((a, b) => b.score - a.score);
+      // ランキング（スコア順・Botも含めた順位）
+      base.LB = this.players.filter(p => p.alive).sort((a, b) => b.score - a.score);
       this.events = [];
       this.hitEv = 0;
       return base;
@@ -1204,19 +1330,19 @@
       if (half) { s.q = []; s.e = []; }
       for (const p of base.P) {
         if (p.id === id || inR(p.x, p.y, R + 200)) s.p.push(p);
-        else if (half && p.a && inR(p.x, p.y, RADAR_R)) s.q.push([p.id, p.x, p.y, p.lv + (p.ev ? 3 : 0)]);
+        else if (half && p.a && (inR(p.x, p.y, RADAR_R) || p.bn)) s.q.push([p.id, p.x, p.y, p.lv + (p.ev ? 3 : 0), p.bn ? 1 : 0]); // 賞金首はどこにいても映る
       }
       if (half) {
         s.f = []; // レーダー用：遠くのボスとゴールドスライム
         for (let i = 0; i < base.E.length; i += 4) {
-          const ty = base.E[i + 1], x = base.E[i + 2], y = base.E[i + 3];
+          const ty = base.E[i + 1], x = base.E[i + 2], y = base.E[i + 3], bt = ty & 15;
           if (inR(x, y, R)) s.e.push(base.E[i], ty, x, y);
-          else if ((ty === 4 || ty === 7) && inR(x, y, RADAR_R)) s.f.push(ty, Math.round(x), Math.round(y));
+          else if ((bt === 4 || bt === 7) && inR(x, y, RADAR_R)) s.f.push(bt, Math.round(x), Math.round(y));
         }
       }
       for (const ev of base.ev) {
         if (ev.p === id || ev.a === id || ev.b === id || ev.by === id) { s.ev.push(ev); continue; }
-        if (ev.e === 'gone') { s.ev.push(ev); continue; }
+        if (ev.e === 'gone' || ev.g) { s.ev.push(ev); continue; } // 全員に知らせる出来事
         if (ev.x === undefined) continue;
         if (ev.e === 'h') { if (ev.o === id) s.ev.push(ev); continue; } // ダメージ数字は自分の攻撃だけ
         if (inR(ev.x, ev.y, ev.e === 'sh' ? 800 : R)) s.ev.push(ev);
@@ -1231,11 +1357,20 @@
         cht: me.choices[0] ? Math.max(0, Math.ceil(15 - me.chT)) : 0,
         scd: Math.round(clamp(me.scd / (SPECIES[me.sp].skill.cd * me.skillCd * (me.evo ? 0.8 : 1)), 0, 1) * 100) / 100,
         by: me.killedBy, dt: me.alive ? 0 : Math.round(me.deadT),
+        hy: me.hyT ? Math.ceil(me.hyT) : 0, pt: Math.max(0, Math.ceil(this.paradeT)),
         st: { dmg: me.dmgMul, rate: me.rateMul, extra: me.extra, pierce: me.pierce, sp: me.skillPow, tl: me.traitLv, bump: Math.round(this.bumpPower(me)) },
       };
       if (this.tick % 10 === 0) {
         const rank = base.LB.indexOf(me);
-        s.lb = base.LB.slice(0, 10).map(p => [p.id, p.name, p.score, p.lv, p.bot ? 1 : 0]);
+        // 人は全員ぶん、Botは1位と最下位だけ載せる（順位はBotも含めた本当の順位）
+        const L = base.LB, out = [];
+        for (let i = 0; i < L.length && out.length < 12; i++) {
+          const p = L[i];
+          if (p.human || i === 0 || i === L.length - 1) out.push([p.id, p.name, p.score, p.lv, p.bot ? 1 : 0, i + 1]);
+        }
+        const last = L[L.length - 1];
+        if (last && last.bot && !out.some(r => r[0] === last.id)) out.push([last.id, last.name, last.score, last.lv, 1, L.length]);
+        s.lb = out;
         s.rk = rank >= 0 ? rank + 1 : 0;
       }
       return s;

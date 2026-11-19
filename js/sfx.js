@@ -1,6 +1,24 @@
 // 効果音（WebAudio で合成。音声ファイル不要）
 (function () {
   'use strict';
+  // [周波数, 長さ, 波形, 音量, 音程の変化, ノイズ音量, ノイズ周波数]
+  const SHOOT = {
+    default: [880, 0.07, 'triangle', 0.03, -500, 0.015, 5000],
+    gekomaru: [520, 0.08, 'sine', 0.04, -260, 0.012, 1500],
+    tongue: [300, 0.12, 'sawtooth', 0.025, 500, 0.02, 1200],
+    suzune: [1600, 0.06, 'sine', 0.025, 400],
+    maimai: [240, 0.12, 'sine', 0.05, -120, 0.02, 600],
+    rangyo: [990, 0.06, 'triangle', 0.03, -400, 0.012, 3000],
+    kodama: [700, 0.05, 'square', 0.018, -400, 0.02, 6000],
+    kohaku: [1200, 0.07, 'triangle', 0.03, -700, 0.012, 5000],
+    kuroro: [1400, 0.05, 'sawtooth', 0.016, -900, 0.02, 7000],
+    uroko: [420, 0.1, 'sawtooth', 0.02, -200, 0.025, 2500],
+    komori: [200, 0.12, 'sine', 0.06, -80, 0.02, 400],
+    toosibi: [600, 0.1, 'triangle', 0.03, 300, 0.03, 2000],
+    nejimaru: [1000, 0.04, 'square', 0.018, -600, 0.015, 8000],
+    hakua: [660, 0.1, 'sawtooth', 0.02, -300, 0.025, 3500],
+    sinonome: [1318, 0.12, 'sine', 0.03, 0],
+  };
   const Sfx = {
     ctx: null,
     muted: false,
@@ -55,6 +73,16 @@
       const f = 300 * Math.pow(2, Math.min(n, 48) / 24);
       this.tone(f, 0.07, 'triangle', 0.035, f * 0.5);
     },
+    // 自分の攻撃を放つ音（モンスターごとに音色を変える）
+    shoot(k) {
+      const now = performance.now();
+      if (now - (this.last.shoot || 0) < 85) return; // 弾が多くてもうるさくならないように
+      this.last.shoot = now;
+      const v = SHOOT[k] || SHOOT.default;
+      const f = v[0] * (0.96 + Math.random() * 0.08);
+      this.tone(f, v[1], v[2], v[3], v[4]);
+      if (v[5]) this.noise(0.06, v[5], v[6] || 4000);
+    },
     play(name) {
       if (!this.ctx || this.muted) return;
       const now = performance.now();
@@ -96,6 +124,8 @@
           this.noise(0.3, 0.06, 2000);
           [659, 880, 1175].forEach((f, i) => this.tone(f, 0.18, 'square', 0.035, 0, i * 0.07));
           break;
+        case 'skill': this.noise(0.22, 0.06, 1800); this.tone(520, 0.18, 'triangle', 0.05, 380); break;
+        case 'slam': this.noise(0.35, 0.12, 220); this.tone(70, 0.35, 'sine', 0.14, -30); break;
         case 'stamp': this.noise(0.25, 0.1, 400); this.tone(110, 0.25, 'sine', 0.12, -40); break;
         case 'lose': [392, 349, 311, 262].forEach((f, i) => this.tone(f, 0.35, 'triangle', 0.06, 0, i * 0.2)); break;
       }

@@ -66,7 +66,9 @@
       this.applyZoom();
       this.onResize = () => this.applyZoom();
       this.scale.on('resize', this.onResize);
+      Bgm.start();
       this.events.once('shutdown', () => {
+        Bgm.stop();
         this.scale.off('resize', this.onResize);
         this.session.onSnapshot = null;
         this.session.onLost = null;
@@ -507,7 +509,7 @@
         const ny = cy - D / 2 - 12;
         const pow = pb.lv + (pb.ev ? 3 : 0);
         const ncol = isMe ? '#fff8a8' : pow > myPow + 1 ? '#ff9a8a' : pow < myPow - 1 ? '#a8ff9a' : '#ffffff';
-        o.name.setPosition(x, ny - 6).setText(`${pb.n}${pb.b ? ' 🤖' : ''}${pb.pr ? ' 🛡' : ''}`).setColor(ncol);
+        o.name.setPosition(x, ny - 6).setText(`${pb.bn ? '💰' : ''}${pb.n}${pb.b ? ' 🤖' : ''}${pb.pr ? ' 🛡' : ''}`).setColor(pb.bn ? '#ffd84f' : ncol);
         o.name.setVisible(alive);
         // HPバー
         if (alive) {
@@ -549,10 +551,16 @@
       const am = this.emap(a), ae = a.e, be = b.e;
       const stamp = this.frame;
       const v = this.cameras.main.worldView;
+      let bossNear = false;
       for (let i = 0; i < be.length; i += 4) {
-        const id = be[i], ty = be[i + 1];
+        const id = be[i], raw = be[i + 1], ty = raw & 15, el = raw >= 16; // 強敵は種類+16
+        if (ty === 4) bossNear = true;
         let o = this.eSprites.get(id);
-        if (!o) { o = this.getEnemy(ty); this.eSprites.set(id, o); }
+        if (!o) {
+          o = this.getEnemy(ty); this.eSprites.set(id, o);
+          o.el = el;
+          if (el) { o.img.setTint(0xff8a8a); o.shadow.setTint(0xff0000); } else o.shadow.clearTint();
+        }
         o.stamp = stamp;
         const j = am.get(id);
         const x = j !== undefined ? lerp(ae[j + 2], be[i + 2], al) : be[i + 2];
@@ -563,15 +571,18 @@
         if (o.lx != null && Math.abs(x - o.lx) > 0.2) o.img.setFlipX(x > o.lx);
         o.lx = x;
         const wob = Math.sin(this.time.now / 140 + id) * 0.06;
-        const s = ENEMY_SCALE[ty] || 0.8;
+        const s = (ENEMY_SCALE[ty] || 0.8) * (o.el ? 1.4 : 1);
         if (ty === 0 || ty === 7) o.img.setScale(s * (1 + wob), s * (1 - wob));
         else if (ty === 1) o.img.setScale(s, s * (1 + wob * 1.5));
+        else o.img.setScale(s);
         o.img.setPosition(x, y - (ty === 1 || ty === 2 ? 14 + wob * 40 : 0)).setDepth(y);
         o.shadow.setPosition(x, y + 2).setDepth(y - 1);
         if (ty === 7 && Math.random() < 0.15) FX.twinkle(this, x + Phaser.Math.Between(-15, 15), y - 20, 1);
-        if (o.flash > 0) { o.flash -= dt; if (o.flash <= 0) o.img.clearTint(); }
+        if (o.el && Math.random() < 0.08) this.burst(x + Phaser.Math.Between(-20, 20), y - 30, 0xff3a3a, 1);
+        if (o.flash > 0) { o.flash -= dt; if (o.flash <= 0) { if (o.el) o.img.setTint(0xff8a8a); else o.img.clearTint(); } }
       }
       for (const [id, o] of this.eSprites) if (o.stamp !== stamp) this.freeEnemy(id);
+      this.bossNear = bossNear; // ボスが近いとBGMが激しくなる
     }
 
     // ---------- ジェム ----------
@@ -687,7 +698,7 @@
       const me = this.myId;
       for (const ev of s.ev) {
         switch (ev.e) {
-          case 'sh': this.spawnProj(ev, age); break;
+          case 'sh': this.spawnProj(ev, age); if (ev.o === me) Sfx.shoot(ev.k); break; // 自分の攻撃を放つ音
           case 'pd': this.freeProj(ev.id); break;
           case 'h': {
             const o = this.eSprites.get(ev.i);
@@ -763,7 +774,7 @@
             } else this.floatText(pos.x, pos.y - 120, `進化！ ${def.evoName}`, '#ffe07a', 17);
             break;
           }
-          case 'sk': this.skillFx(ev); break;
+          case 'sk': this.skillFx(ev); if (ev.p === me) Sfx.play('skill'); break;
           case 'hu':
             if (ev.p === me) { Sfx.play('hurt'); this.cameras.main.shake(90, 0.004); this.ui.hurtFlash(); }
             break;
@@ -815,6 +826,44 @@
             break;
           }
           case 'gone': this.destroyPlayer(ev.p); break;
+          // 予告：赤い円が広がり、時間がたつと地面がたたきつけられる
+          case 'tg': {
+            const ring = this.add.circle(ev.x, ev.y, ev.r, 0xff2020, 0.12).setStrokeStyle(4, 0xff3030, 0.9).setDepth(-5);
+            const fill = this.add.circle(ev.x, ev.y, ev.r, 0xff2020, 0.3).setDepth(-4).setScale(0);
+            this.tweens.add({ targets: fill, scale: 1, duration: ev.d * 1000, ease: 'Linear' });
+            this.tweens.add({ targets: ring, alpha: 0.5, duration: 160, yoyo: true, repeat: -1 });
+            this.time.delayedCall(ev.d * 1000 + 40, () => { ring.destroy(); fill.destroy(); });
+            break;
+          }
+          case 'slx': {
+            const c = this.add.circle(ev.x, ev.y, ev.r, 0xffb070, 0.55).setDepth(FX_DEPTH - 6).setBlendMode('ADD').setScale(0.4);
+            this.tweens.add({ targets: c, scale: 1.1, alpha: 0, duration: 380, onComplete: () => c.destroy() });
+            this.burst(ev.x, ev.y, 0xffa060, this.lowFx ? 6 : 16);
+            const d = this.local ? Math.hypot(ev.x - this.local.x, ev.y - this.local.y) : 9999;
+            if (d < 900) { this.cameras.main.shake(220, 0.006); Sfx.play('slam'); }
+            break;
+          }
+          case 'sl':
+            if (ev.p === me) { this.ui.hurtFlash(); this.floatText(ev.x, ev.y - 80, '-' + ev.d, '#ff5a5a', 26); }
+            break;
+          // 百鬼夜行
+          case 'hyw':
+            if (this.me && this.me.lv >= ev.lv) { this.ui.banner('⚠ 百鬼夜行が近づいている…', '#d08aff'); Sfx.play('boss'); }
+            break;
+          case 'hy':
+            if (this.me && this.me.hy) { this.ui.stampFx('百鬼夜行！', '#d08aff'); this.cameras.main.shake(600, 0.008); Sfx.play('boss'); Bgm.intense(true); }
+            break;
+          case 'hyc':
+            if (ev.p === me) { this.ui.stampFx('生還！', '#ffe07a'); FX.confetti(this, ev.x, ev.y - 40, 120); FX.rays(this, ev.x, ev.y - 30, 0xffd060, 600, 1600); Sfx.play('lvlBig'); }
+            break;
+          // 賞金首
+          case 'bty':
+            this.ui.banner(ev.p === me ? '💰 あなたが賞金首になった！' : `💰 賞金首：${ev.n}`, '#ffd84f');
+            break;
+          case 'btk':
+            this.ui.banner(ev.k === me ? '💰 賞金首を討ち取った！' : `💰 ${ev.n} が賞金首 ${ev.v} を討ち取った`, '#ffd84f');
+            if (ev.k === me) Sfx.play('legend');
+            break;
         }
       }
     }
