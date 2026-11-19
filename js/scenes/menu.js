@@ -258,8 +258,8 @@
       const narrow = w < 500;
       if (py + ph + 70 < h && !(narrow && py + ph + 120 > h)) {
         const help = pw < 480
-          ? 'ドラッグで移動・攻撃とスキルは自動！\nレベルアップ → Lv10で進化！\n他のプレイヤーには体当たりで攻撃'
-          : '移動: WASD / 矢印 / ドラッグ　攻撃とスキルは自動！\n敵を倒してレベルアップ → Lv10で進化！ 他のプレイヤーには体当たりで攻撃';
+          ? 'ドラッグで移動・攻撃とスキルは自動！\nレベルアップ → Lv30で進化！\n他のプレイヤーには体当たりで攻撃'
+          : '移動: WASD / 矢印 / ドラッグ　攻撃とスキルは自動！\n敵を倒してレベルアップ → Lv30で進化！ 他のプレイヤーには体当たりで攻撃';
         this.add.text(cx, py + ph + (narrow ? 34 : 44), help, T(12, '#fff8ea', { align: 'center', stroke: '#2a1f18', strokeThickness: 3 })).setOrigin(0.5, 0);
       }
       const best = parseInt(store.get('best', '0'), 10) || 0;

@@ -15,13 +15,13 @@
   const BOSS_EVERY = 100;      // どこかにボスが出る間隔
   const VIEW_R = 1250;         // 細かい情報を送る範囲
   const RADAR_R = 4500;        // レーダー用にざっくり送る範囲
-  const EVOLVE_LV = 10;        // このレベルで進化
+  const EVOLVE_LV = 30;        // このレベルで進化（進化するとものすごく強くなる）
   const PROTECT_TIME = 10;     // 出撃直後は体当たりされない
   const NEWBIE_LV = 1;         // （レベルによる保護はなし）
   const BUMP_CD = 0.55;        // 同じ相手への体当たりの間隔（秒）
   const ELITE_LV = 12;         // このレベルから「強敵」が混ざる
   const PARADE_EVERY = 240;    // 百鬼夜行（高レベルの人のもとへ強敵の大群が押し寄せる）の間隔
-  const PARADE_LV = 12;        // 百鬼夜行に巻き込まれるレベル
+  const PARADE_LV = 20;        // 百鬼夜行に巻き込まれるレベル
   const PARADE_TIME = 45;      // 百鬼夜行を生き延びる時間
   const BOUNTY_LV = 15;        // 賞金首になるレベル
 
@@ -392,7 +392,7 @@
     // ---------- セーブ（続きから遊べるように） ----------
     exportSave(p) {
       if (!p || !p.alive) return null;
-      const o = { sp: p.sp, pc: p.choices.length };
+      const o = { sp: p.sp, pc: p.choices.length, evo2: 1 };
       for (const k of SAVE_KEYS) o[k] = typeof p[k] === 'number' ? Math.round(p[k] * 1000) / 1000 : p[k];
       return o;
     }
@@ -401,6 +401,10 @@
       for (const k of SAVE_KEYS) if (typeof o[k] === typeof p[k]) p[k] = o[k];
       p.lv = clamp(p.lv | 0, 1, 999);
       p.xpn = xpNeed(p.lv);
+      // 進化レベルが10→30に変わる前のセーブ：Lv30未満なら進化前に戻す（Lv30で改めて進化）
+      if (p.evo && p.lv < EVOLVE_LV) { p.evo = 0; p.mhp /= 1.5; }
+      // Lv30以上で前のルールのまま進化していた人は、新しい進化の強さに合わせる
+      if (p.evo && !o.evo2) { p.mhp *= 2.5 / 1.5; p.spd *= 1.15; p.regen += 3; }
       p.hp = clamp(p.hp, p.mhp * 0.3, p.mhp); // 少なくとも3割は回復した状態で再開
       for (let i = 0; i < Math.min(6, o.pc | 0); i++) this.makeChoices(p); // 選び残したカード
     }
@@ -437,7 +441,7 @@
     // 体の大きさ（レベルと進化で大きくなる。見た目と当たり判定の両方に使う）
     // 最初は敵より小さく、強くなるほど大きくなる
     radius(p) { return GameSim.size(p.lv, p.evo) / 2; }
-    static size(lv, evo) { return (40 + 4 * Math.min(lv, 50)) * (evo ? 1.15 : 1); }
+    static size(lv, evo) { return (40 + 4 * Math.min(lv, 50)) * (evo ? 1.3 : 1); }
     // 体当たりのダメージ（レベル・進化・攻撃力・体当たり強化で上がる）
     bumpPower(p) { return 24 * this.lvMul(p) * p.bumpMul; }
 
@@ -478,7 +482,7 @@
         p.xp -= p.xpn;
         p.lv++;
         p.xpn = xpNeed(p.lv);
-        const gain = SPECIES[p.sp].hp * 0.08 * (p.evo ? 1.5 : 1); // レベルが上がるとHPも増える
+        const gain = SPECIES[p.sp].hp * 0.08 * (p.evo ? 2.5 : 1); // レベルが上がるとHPも増える
         p.mhp += gain; p.hp += gain;
         p.hp = Math.min(p.mhp, p.hp + p.mhp * 0.2);
         this.makeChoices(p);
@@ -486,7 +490,8 @@
         if (p.human && p.lv % 5 === 0) this.ev({ e: 'pt', p: p.id, n: 10 }); // 5レベルごとにガチャポイント
         if (!p.evo && p.lv >= EVOLVE_LV) {
           p.evo = 1;
-          p.mhp *= 1.5; p.hp = p.mhp;
+          p.mhp *= 2.5; p.hp = p.mhp; // HP2.5倍＆全回復
+          p.spd *= 1.15; p.magnet *= 1.3; p.regen += 3; // 足が速く、吸い寄せ範囲も広く、自然回復も
           this.ev({ e: 'evo', p: p.id, sp: p.sp, x: r1(p.x), y: r1(p.y) });
         }
       }
@@ -609,7 +614,7 @@
       this.ev({ e: 'dd', p: p.id, by: killer ? killer.id : 0, x: r1(p.x), y: r1(p.y), lv: p.lv, sc: p.score, sp: p.sp });
     }
 
-    traitPow(p) { return 1 + 0.7 * (p.traitLv - 1) + (p.evo ? 0.3 : 0); }
+    traitPow(p) { return 1 + 0.7 * (p.traitLv - 1) + (p.evo ? 0.6 : 0); }
 
     // ---------- プレイヤー同士の体当たり（ぶつかるとお互いにダメージ） ----------
     updateBumps(dt) {
@@ -696,13 +701,13 @@
       }
       let target = null, tw = 0, best = Infinity;
       // 同じくらいか少し弱い相手に体当たりしにいく。ずっと格下（6レベル以上下）は狙わない。強い相手・HPが少ないときは逃げる
-      const my = p.lv + (p.evo ? 3 : 0), healthy = p.hp > p.mhp * 0.45;
+      const my = p.lv + (p.evo ? 10 : 0), healthy = p.hp > p.mhp * 0.45;
       for (const q of this.players) {
         if (q === p || !q.alive) continue;
         const dx = q.x - p.x, dy = q.y - p.y;
         if (Math.abs(dx) > 900 || Math.abs(dy) > 900) continue;
         const d = Math.hypot(dx, dy) || 1;
-        const their = q.lv + (q.evo ? 3 : 0);
+        const their = q.lv + (q.evo ? 10 : 0);
         if (healthy && !isProtected(p) && !isProtected(q) && their <= my + 2 && their >= my - 8 && d < 800 && d < best) { best = d; target = q; tw = 2.3; }
         else if ((their > my + 3 || p.hp < p.mhp * 0.35) && !isProtected(q) && !isProtected(p) && d < 450) {
           const w = (1 - d / 520) * 3;
@@ -813,7 +818,7 @@
         }
         if (p.hyW <= 0) {
           p.hyW = 8;
-          const n = 10 + Math.min(10, Math.floor(p.lv / 6));
+          const n = p.evo ? 12 + Math.min(10, Math.floor(p.lv / 6)) : 7; // 進化前は少なめ
           const ty = this.pickEnemyType(p.lv + 8, true);
           for (let i = 0; i < n; i++) {
             const a = (i / n) * Math.PI * 2;
@@ -1029,7 +1034,7 @@
       p.hp -= dmg;
     }
 
-    lvMul(p) { return (1 + 0.06 * (p.lv - 1)) * (p.evo ? 2 : 1); } // 進化すると2倍
+    lvMul(p) { return (1 + 0.06 * (p.lv - 1)) * (p.evo ? 3 : 1); } // 進化すると攻撃・体当たり3倍
 
     // 装備アイテム（体のまわりをくるくる回って、触れた敵にダメージ）
     setItem(p, item) {
@@ -1079,7 +1084,7 @@
       // スキル
       p.scd -= dt;
       if (p.scd <= 0) {
-        if (this.useSkill(p, def)) p.scd = def.skill.cd * p.skillCd * (p.evo ? 0.8 : 1);
+        if (this.useSkill(p, def)) p.scd = def.skill.cd * p.skillCd * (p.evo ? 0.6 : 1);
         else p.scd = 0.3;
       }
       // 通常攻撃（モンスターごとに違う）
@@ -1364,7 +1369,7 @@
       if (half) { s.q = []; s.e = []; }
       for (const p of base.P) {
         if (p.id === id || inR(p.x, p.y, R + 200)) s.p.push(p);
-        else if (half && p.a && (inR(p.x, p.y, RADAR_R) || p.bn)) s.q.push([p.id, p.x, p.y, p.lv + (p.ev ? 3 : 0), p.bn ? 1 : 0]); // 賞金首はどこにいても映る
+        else if (half && p.a && (inR(p.x, p.y, RADAR_R) || p.bn)) s.q.push([p.id, p.x, p.y, p.lv + (p.ev ? 10 : 0), p.bn ? 1 : 0]); // 賞金首はどこにいても映る
       }
       if (half) {
         s.f = []; // レーダー用：遠くのボスとゴールドスライム
@@ -1389,7 +1394,7 @@
       s.me = {
         xp: Math.floor(me.xp), xpn: me.xpn, tx: Math.floor(me.txp), k: me.kills, pk: me.pkills, ch: me.choices[0] || null,
         cht: me.choices[0] ? Math.max(0, Math.ceil(15 - me.chT)) : 0,
-        scd: Math.round(clamp(me.scd / (SPECIES[me.sp].skill.cd * me.skillCd * (me.evo ? 0.8 : 1)), 0, 1) * 100) / 100,
+        scd: Math.round(clamp(me.scd / (SPECIES[me.sp].skill.cd * me.skillCd * (me.evo ? 0.6 : 1)), 0, 1) * 100) / 100,
         by: me.killedBy, dt: me.alive ? 0 : Math.round(me.deadT),
         hy: me.hyT ? Math.ceil(me.hyT) : 0, pt: Math.max(0, Math.ceil(this.paradeT)),
         st: { dmg: me.dmgMul, rate: me.rateMul, extra: me.extra, pierce: me.pierce, sp: me.skillPow, tl: me.traitLv, bump: Math.round(this.bumpPower(me)) },
@@ -1420,11 +1425,11 @@
   ];
   // n=まわりに出る数, pow=威力
   const RARITIES = [
-    { name: 'コモン', color: 0xd0d0d0, css: '#d0d0d0', n: 2, pow: 1.0, rate: 50 },
-    { name: 'アンコモン', color: 0x5ad06a, css: '#5ad06a', n: 3, pow: 1.25, rate: 28 },
-    { name: 'レア', color: 0x4aa0ff, css: '#4aa0ff', n: 4, pow: 1.55, rate: 15 },
-    { name: 'エピック', color: 0xb060ff, css: '#c080ff', n: 5, pow: 1.9, rate: 6 },
-    { name: 'レジェンド', color: 0xffc030, css: '#ffc840', n: 6, pow: 2.4, rate: 1 },
+    { name: 'コモン', color: 0xd0d0d0, css: '#d0d0d0', n: 8, pow: 0.55, rate: 50 },
+    { name: 'アンコモン', color: 0x5ad06a, css: '#5ad06a', n: 8, pow: 0.75, rate: 28 },
+    { name: 'レア', color: 0x4aa0ff, css: '#4aa0ff', n: 8, pow: 1.0, rate: 15 },
+    { name: 'エピック', color: 0xb060ff, css: '#c080ff', n: 8, pow: 1.35, rate: 6 },
+    { name: 'レジェンド', color: 0xffc030, css: '#ffc840', n: 8, pow: 1.8, rate: 1 },
   ];
   const ORBIT_SPEED = 3.2; // 回る速さ（ラジアン/秒）
 

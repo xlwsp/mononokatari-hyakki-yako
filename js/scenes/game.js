@@ -436,7 +436,7 @@
     renderPlayers(a, b, al, dt, time) {
       const am = this.pmap(a);
       const seen = new Set();
-      const myPow = this.me ? this.me.lv + (this.me.ev ? 3 : 0) : 0;
+      const myPow = this.me ? this.me.lv + (this.me.ev ? 10 : 0) : 0;
       for (const pb of b.p) {
         seen.add(pb.id);
         const pa = am.get(pb.id) || pb;
@@ -508,7 +508,7 @@
         if (pb.hs && alive && fxOk && Math.random() < 0.4) FX.twinkle(this, x - (o.flip ? 20 : -20), y - 10, 1);
         // 名前（自分より強い相手は赤、弱い相手は緑）
         const ny = cy - D / 2 - 12;
-        const pow = pb.lv + (pb.ev ? 3 : 0);
+        const pow = pb.lv + (pb.ev ? 10 : 0);
         const ncol = isMe ? '#fff8a8' : pow > myPow + 1 ? '#ff9a8a' : pow < myPow - 1 ? '#a8ff9a' : '#ffffff';
         o.name.setPosition(x, ny - 6).setText(`${pb.bn ? '💰' : ''}${pb.n}${pb.b ? ' 🤖' : ''}${pb.pr ? ' 🛡' : ''}`).setColor(pb.bn ? '#ffd84f' : ncol);
         o.name.setVisible(alive);

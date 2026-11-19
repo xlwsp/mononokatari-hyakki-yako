@@ -159,7 +159,7 @@
       this.cpText.setText(`SCORE ${me.sc.toLocaleString()}`);
       this.subText.setText(`撃破 ${me.k}　倒したプレイヤー ${me.pk || 0}　オンライン ${s.on}人`);
       if (me.hy) this.protText.setVisible(true).setText(`👹 百鬼夜行！ 生き延びろ　残り ${me.hy}秒`).setColor('#e0a8ff');
-      else if (me.a && me.lv >= 12 && me.pt > 0 && me.pt <= 15) this.protText.setVisible(true).setText(`👹 百鬼夜行まで ${me.pt}秒`).setColor('#e0a8ff');
+      else if (me.a && me.lv >= 20 && me.pt > 0 && me.pt <= 15) this.protText.setVisible(true).setText(`👹 百鬼夜行まで ${me.pt}秒`).setColor('#e0a8ff');
       else if (me.pr) this.protText.setVisible(true).setText('🛡 出撃直後は体当たりされない').setColor('#fff6a0');
       else this.protText.setVisible(false);
       if (window.Bgm) Bgm.intense(!!me.hy || !!this.gs.bossNear);
@@ -327,9 +327,9 @@
         else { g.fillStyle(0x200000, 0.9); g.fillCircle(px, py, 7.5); g.fillStyle(0xff2a5a, blink); g.fillCircle(px, py, 6); }
       }
       // 他のプレイヤー（レベルで色分け：赤＝格上 / 黄＝同じくらい / 緑＝格下）。範囲外は端に矢印
-      const myPow = me.lv + (me.ev ? 3 : 0);
+      const myPow = me.lv + (me.ev ? 10 : 0);
       const others = [];
-      for (const p of s.p) if (p.id !== me.id && p.a) others.push([p.x, p.y, p.lv + (p.ev ? 3 : 0), p.bn]);
+      for (const p of s.p) if (p.id !== me.id && p.a) others.push([p.x, p.y, p.lv + (p.ev ? 10 : 0), p.bn]);
       const nearIds = new Set(s.p.map(p => p.id));
       for (const q of this.gs.lastQ || []) if (!nearIds.has(q[0])) others.push([q[1], q[2], q[3], q[4]]);
       let bountyPos = null;

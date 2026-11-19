@@ -99,7 +99,7 @@
             itemIcon(scene, cx, cy - 18, g.t, g.r, Math.min(110, stageH * 0.5)).forEach(o => { o.setDepth(63); shown.push(o); });
             const ra = GD.RARITIES[g.r];
             shown.push(scene.add.text(cx, cy + stageH * 0.3, itemLabel(g.t, g.r), TO(24, ra.css, '#1a1020', 6)).setOrigin(0.5).setDepth(64));
-            shown.push(scene.add.text(cx, cy + stageH * 0.3 + 28, `${GD.ITEMS[g.t].desc}・まわりに${ra.n}個`, T(13, '#fff8ea')).setOrigin(0.5).setDepth(64));
+            shown.push(scene.add.text(cx, cy + stageH * 0.3 + 28, `${GD.ITEMS[g.t].desc}・まわり8方向`, T(13, '#fff8ea')).setOrigin(0.5).setDepth(64));
           } else {
             const cols = 5, cw = (pw - 50) / cols, rh = Math.min(cw, stageH / 2 - 6);
             got.forEach((g, i) => {
