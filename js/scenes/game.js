@@ -429,6 +429,7 @@
       const o = this.pSprites.get(id);
       if (!o || id === this.myId) return;
       ['glow', 'rays', 'shadow', 'ring', 'body', 'bubble', 'name'].forEach(k => o[k].destroy());
+      this.clearOrbit(o);
       this.pSprites.delete(id);
     }
 
@@ -518,8 +519,53 @@
           this.overlay.fillStyle(isMe ? 0x7cdc6a : 0xe8615a, 1); this.overlay.fillRoundedRect(bx, by, bw * Phaser.Math.Clamp(pb.hp / pb.mhp, 0, 1), 5, 2);
         }
         o.lyTop = cy;
+        this.renderOrbit(o, pb.it, alive, x, cy, D, y);
       }
       for (const id of Array.from(this.pSprites.keys())) if (!seen.has(id)) this.destroyPlayer(id);
+    }
+
+    // ---------- 装備アイテム：体のまわりをくるくる回る（レアリティの色のオーラつき） ----------
+    clearOrbit(o) {
+      if (o.orb) { o.orb.forEach(e => { e.img.destroy(); e.aura.destroy(); }); o.orb = null; }
+      o.orbCode = -1;
+    }
+    renderOrbit(o, code, alive, x, cy, D, y) {
+      if (code === undefined) code = -1;
+      if (o.orbCode !== code) {
+        this.clearOrbit(o);
+        o.orbCode = code;
+        if (code >= 0) {
+          const t = code >> 3, r = code & 7, it = GD.ITEMS[t], ra = GD.RARITIES[r];
+          if (it && ra) {
+            o.orb = [];
+            for (let i = 0; i < ra.n; i++) {
+              o.orb.push({
+                aura: this.add.image(0, 0, 'aura').setBlendMode(Phaser.BlendModes.ADD).setTint(ra.color),
+                img: this.add.image(0, 0, 'it_' + it.key),
+              });
+            }
+            o.orbR = r; o.orbSpin = it.key === 'sword';
+          }
+        }
+      }
+      if (!o.orb) return;
+      const vis = alive && (!this.lowFx || o === this.pSprites.get(this.myId) || o.orb.length <= 3);
+      const n = o.orb.length, R = D / 2 + 46;
+      const base = (this.rt || 0) * GD.ORBIT_SPEED, now = this.time.now;
+      const leg = o.orbR === 4;
+      o.orb.forEach((e, i) => {
+        e.img.setVisible(alive); e.aura.setVisible(vis);
+        if (!alive) return;
+        const a = base + (i / n) * Math.PI * 2;
+        const ox = x + Math.cos(a) * R, oy = cy + 24 + Math.sin(a) * R - 20;
+        const front = Math.sin(a) > 0;
+        e.img.setPosition(ox, oy).setDepth(front ? y + 3 : y - 4).setScale(0.62 + o.orbR * 0.04).setRotation(o.orbSpin ? a + Math.PI / 2 : Math.sin(now / 300 + i) * 0.15); // 剣だけ回転、炎や勾玉は立てたまま
+        if (vis) {
+          const pulse = 0.75 + Math.sin(now / 200 + i) * 0.15;
+          e.aura.setPosition(ox, oy).setDepth(front ? y + 2 : y - 5).setScale(0.75 + o.orbR * 0.12).setAlpha(pulse);
+          if (leg) e.aura.setTint(Phaser.Display.Color.HSVToRGB((now / 1500 + i / n) % 1, 0.5, 1).color);
+        }
+      });
     }
 
     // ---------- 敵 ----------
@@ -826,6 +872,9 @@
             break;
           }
           case 'gone': this.destroyPlayer(ev.p); break;
+          case 'pt':
+            if (ev.p === me && this.local) { this.floatText(this.local.x, this.local.y - 140, `+${ev.n} ガチャポイント`, '#7ae8ff', 20); Sfx.play('milestone'); }
+            break;
           // 予告：赤い円が広がり、時間がたつと地面がたたきつけられる
           case 'tg': {
             const ring = this.add.circle(ev.x, ev.y, ev.r, 0xff2020, 0.12).setStrokeStyle(4, 0xff3030, 0.9).setDepth(-5);

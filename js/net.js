@@ -43,6 +43,7 @@
       this.unsubs = [
         relay.on('st', m => { if (this._onSnap) this._onSnap(m.s); else { this.pending.push(m.s); if (this.pending.length > 20) this.pending.shift(); } }),
         relay.on('reset', () => this.onLost && this.onLost('サーバーの世界が作り直されました')),
+        relay.on('maint', () => this.onLost && this.onLost('🔧 メンテナンス中です')),
         relay.on('close', () => this.onLost && this.onLost('サーバーとの接続が切れました')),
       ];
     }
@@ -101,12 +102,12 @@
   }
 
   // サーバーに1回だけ質問して答えをもらう
-  function ask(q, a) {
+  function ask(q, a, extra) {
     return getUrl().then(url => new Promise((resolve, reject) => {
       let relay;
       try { relay = new Relay(url); } catch (e) { reject(e); return; }
       const timer = setTimeout(() => { relay.close(); reject(new Error('timeout')); }, 8000);
-      relay.on('open', () => relay.send({ t: q, tok: token() }));
+      relay.on('open', () => relay.send(Object.assign({ t: q, tok: token() }, extra || {})));
       relay.on(a, m => { clearTimeout(timer); relay.close(); resolve(m.d || null); });
       relay.on('error', () => { clearTimeout(timer); reject(new Error('error')); });
     }));
@@ -115,6 +116,12 @@
   const saveInfo = () => ask('save?', 'save');
   // ハイスコアランキング（{list, mine, total}）
   const highScores = () => ask('hs?', 'hs');
+  // ガチャポイント・持ち物・装備（{pts, inv, eq, cost, got}）
+  const profile = () => ask('prof?', 'prof');
+  const gacha = n => ask('gacha', 'prof', { n: n || 1 });
+  const equip = (sp, key) => ask('equip', 'prof', { sp, key });
+  // サーバーの様子（{maint: true/false}）
+  const ping = () => ask('ping', 'pong');
 
   function openSession(url, name, sp, cont) {
     return new Promise((resolve, reject) => {
@@ -129,10 +136,11 @@
         clearTimeout(timer); done();
         const ss = new Session({ myId: m.id, seed: m.seed, relay, sp, name }); ss.cont = !!m.cont; if (m.sp) ss.sp = m.sp; resolve(ss);
       }));
+      offs.push(relay.on('maint', () => { clearTimeout(timer); done(); relay.close(); const e = new Error('メンテナンス中です'); e.maint = true; reject(e); }));
       offs.push(relay.on('full', () => { clearTimeout(timer); done(); relay.close(); reject(new Error('満員です（最大50人）。少し待ってね')); }));
       offs.push(relay.on('error', () => { clearTimeout(timer); done(); reject(new Error('サーバーに接続できませんでした（今はサーバーが止まっているかも）')); }));
     });
   }
 
-  window.Net = { Relay, Session, connect, saveInfo, highScores };
+  window.Net = { Relay, Session, connect, saveInfo, highScores, profile, gacha, equip, ping };
 })();

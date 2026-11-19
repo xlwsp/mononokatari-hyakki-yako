@@ -244,6 +244,57 @@
         ctx.beginPath(); ctx.moveTo(9, 3); ctx.lineTo(13, 11); ctx.lineTo(9, 10); ctx.closePath(); ctx.fill();
       });
     });
+    // 装備アイテム（64×64）：小剣・勾玉・赤ファイア・青ファイア
+    canvasTex(scene, 'it_sword', 64, 64, ctx => {
+      ctx.translate(32, 32); ctx.rotate(-Math.PI / 4);
+      ctx.lineJoin = 'round';
+      // 刃
+      const g = ctx.createLinearGradient(-6, 0, 6, 0);
+      g.addColorStop(0, '#dfe8f4'); g.addColorStop(0.5, '#ffffff'); g.addColorStop(1, '#9fb0c8');
+      ctx.fillStyle = g; ctx.strokeStyle = '#3a4058'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(0, -28); ctx.lineTo(7, -18); ctx.lineTo(7, 10); ctx.lineTo(-7, 10); ctx.lineTo(-7, -18); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = 'rgba(120,140,170,0.8)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, -22); ctx.lineTo(0, 8); ctx.stroke();
+      // つば・柄
+      ctx.fillStyle = '#e0a83a'; ctx.strokeStyle = '#5a3a14'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.roundRect(-14, 9, 28, 7, 3); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#7a3a2a'; ctx.beginPath(); ctx.roundRect(-4, 16, 8, 13, 3); ctx.fill(); ctx.stroke();
+    });
+    canvasTex(scene, 'it_magatama', 64, 64, ctx => {
+      ctx.lineWidth = 3; ctx.strokeStyle = '#1e3a2a';
+      const g = ctx.createRadialGradient(26, 24, 2, 32, 32, 28);
+      g.addColorStop(0, '#b8ffd0'); g.addColorStop(0.5, '#3ccf7a'); g.addColorStop(1, '#1a7a44');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(28, 26, 16, Math.PI * 0.5, Math.PI * 2.2, false);
+      ctx.quadraticCurveTo(46, 50, 30, 58);
+      ctx.quadraticCurveTo(36, 46, 28, 42);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(28, 25, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.beginPath(); ctx.ellipse(20, 18, 5, 3, -0.6, 0, Math.PI * 2); ctx.fill();
+    });
+    const flame = (key, outer, mid, inner) => canvasTex(scene, key, 64, 64, ctx => {
+      const layer = (col, sx, sy) => {
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.moveTo(32, 32 - 28 * sy);
+        ctx.bezierCurveTo(32 + 10 * sx, 32 - 12 * sy, 32 + 22 * sx, 32 + 0 * sy, 32 + 18 * sx, 32 + 14 * sy);
+        ctx.bezierCurveTo(32 + 14 * sx, 32 + 28 * sy, 32 - 14 * sx, 32 + 28 * sy, 32 - 18 * sx, 32 + 14 * sy);
+        ctx.bezierCurveTo(32 - 22 * sx, 32 + 0 * sy, 32 - 6 * sx, 32 - 10 * sy, 32, 32 - 28 * sy);
+        ctx.fill();
+      };
+      ctx.shadowColor = outer; ctx.shadowBlur = 8;
+      layer(outer, 1, 1); ctx.shadowBlur = 0;
+      ctx.translate(0, 6); layer(mid, 0.68, 0.72);
+      ctx.translate(0, 6); layer(inner, 0.38, 0.45);
+    });
+    flame('it_redfire', '#ff4a1a', '#ffa020', '#fff2a0');
+    flame('it_bluefire', '#2a6aff', '#40c8ff', '#e8fbff');
+    // レアリティのオーラ（白いもや。色は表示するときに付ける）
+    canvasTex(scene, 'aura', 96, 96, ctx => {
+      const g = ctx.createRadialGradient(48, 48, 6, 48, 48, 46);
+      g.addColorStop(0, 'rgba(255,255,255,0.9)'); g.addColorStop(0.45, 'rgba(255,255,255,0.45)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, 96, 96);
+    });
     // プレイヤー画像が読み込めなかった場合の代わり
     for (const k of ['player_front', 'player_side', 'player_back']) {
       if (!scene.textures.exists(k) || scene.textures.get(k).key === '__MISSING') {

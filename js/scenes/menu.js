@@ -151,7 +151,7 @@
     init(data) {
       this.notice = data && data.msg;
       if (!(data && data.keep)) this.saveData = undefined; // 画面の向きが変わっただけのときは確認し直さない
-      this.confirmBox = null; this.nameAsk = null; this.rankBox = null;
+      this.confirmBox = null; this.nameAsk = null; this.rankBox = null; this.shopBox = null; this.maintBox = null;
     }
     create() {
       this.sp = store.get('sp', 'gekomaru');
@@ -163,7 +163,7 @@
       this.onKey = e => {
         const ae = document.activeElement;
         if (ae && ae.tagName === 'INPUT') return;
-        if (this.rankBox || this.confirmBox || this.nameAsk) return;
+        if (this.rankBox || this.confirmBox || this.nameAsk || this.shopBox || this.maintBox) return;
         const keys = PICK_KEYS(), i = keys.indexOf(this.sp), cols = this.picker.cols;
         const move = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
         if (move) { this.pick(keys[(i + move + keys.length) % keys.length]); Sfx.init(); Sfx.play('click'); }
@@ -250,21 +250,39 @@
       this.setSave(this.saveData === undefined ? null : this.saveData, this.saveData === undefined);
       if (this.saveData === undefined) {
         Net.saveInfo().then(d => { this.saveData = d; if (this.sys.isActive()) this.setSave(d); })
-          .catch(() => { this.saveData = null; if (this.sys.isActive()) this.setSave(null, false, true); });
+          .catch(() => { this.saveData = null; if (this.sys.isActive()) { this.setSave(null, false, true); this.showMaint(); } });
       }
       this.pick(this.sp);
 
       this.msgText = this.add.text(cx, py + ph + 20, this.notice || '', TO(15, '#fff', '#4a3a2e', 4)).setOrigin(0.5);
-      if (py + ph + 70 < h) {
+      const narrow = w < 500;
+      if (py + ph + 70 < h && !(narrow && py + ph + 120 > h)) {
         const help = pw < 480
           ? 'ドラッグで移動・攻撃とスキルは自動！\nレベルアップ → Lv10で進化！\n他のプレイヤーには体当たりで攻撃'
           : '移動: WASD / 矢印 / ドラッグ　攻撃とスキルは自動！\n敵を倒してレベルアップ → Lv10で進化！ 他のプレイヤーには体当たりで攻撃';
-        this.add.text(cx, py + ph + 44, help, T(12, '#fff8ea', { align: 'center', stroke: '#2a1f18', strokeThickness: 3 })).setOrigin(0.5, 0);
+        this.add.text(cx, py + ph + (narrow ? 34 : 44), help, T(12, '#fff8ea', { align: 'center', stroke: '#2a1f18', strokeThickness: 3 })).setOrigin(0.5, 0);
       }
       const best = parseInt(store.get('best', '0'), 10) || 0;
       this.add.text(w - 12, 10, `ベストスコア  ${best.toLocaleString()}`, TO(16, '#ffe7a8', '#4a3a2e', 4)).setOrigin(1, 0);
-      // ハイスコアランキング
-      button(this, 12 + (w < 500 ? 60 : 74), w < 500 ? 26 : 30, w < 500 ? 120 : 148, w < 500 ? 36 : 42, '🏆 ランキング', () => this.showRanking(), { color: 0xf0b030, dark: 0xb07a18, size: w < 500 ? 15 : 18 });
+      // ガチャポイント
+      this.ptsText = this.add.text(w - 12, 34, '', TO(15, '#7ae8ff', '#1a2a40', 4)).setOrigin(1, 0);
+      this.refreshPts();
+      // ランキング・ガチャ・装備（スマホは画面の下に横並び、PCは左上に縦並び）
+      const menu = [
+        ['🏆 ランキング', () => this.showRanking(), 0xf0b030, 0xb07a18],
+        ['🎲 ガチャ', () => this.openShop('gacha'), 0xef7a6a, 0xb24a3e],
+        ['🛡 装備', () => this.openShop('equip'), 0x6fb6e8, 0x3f7fae],
+      ];
+      menu.forEach(([label, fn, col, dark], i) => {
+        if (narrow) {
+          const bw = (w - 24) / 3 - 6;
+          button(this, 12 + bw / 2 + i * (bw + 9), h - 30, bw, 38, label, fn, { color: col, dark, size: 15 });
+        } else {
+          button(this, 86, 30 + i * 52, 148, 42, label, fn, { color: col, dark, size: 18 });
+        }
+      });
+      if (this.notice && /メンテナンス/.test(this.notice)) this.showMaint();
+      else Net.ping().then(r => { if (r && r.maint && this.sys.isActive()) this.showMaint(); }).catch(() => {});
     }
 
     // ハイスコアランキング（全期間・人のプレイヤーだけ・1人1つの自己ベスト）
@@ -325,12 +343,48 @@
     }
 
     msg(s) { this.msgText.setText(s); }
+
+    refreshPts() {
+      Net.profile().then(p => { if (this.ptsText && this.ptsText.active) this.ptsText.setText(`ガチャポイント  ${p.pts}P`); }).catch(() => {});
+    }
+    openShop(kind) {
+      if (this.rankBox || this.confirmBox || this.nameAsk || this.connecting || this.shopBox || this.maintBox) return;
+      if (kind === 'gacha') Shop.openGacha(this); else Shop.openEquip(this);
+    }
+
+    // メンテナンス中：遊べないようにして、終わったら自動で最新版を読み込み直す
+    showMaint() {
+      if (this.maintBox) return;
+      const w = this.scale.width, h = this.scale.height;
+      const objs = [];
+      objs.push(this.add.rectangle(0, 0, w, h, 0x10081a, 0.82).setOrigin(0).setInteractive().setDepth(90));
+      const pw = Math.min(460, w - 30), ph = 220;
+      objs.push(panel(this, w / 2 - pw / 2, h / 2 - ph / 2, pw, ph, { alpha: 1 }).setDepth(91));
+      objs.push(this.add.text(w / 2, h / 2 - 62, '🔧 メンテナンス中', TO(30, '#ffe07a', '#4a3a2e', 7)).setOrigin(0.5).setDepth(92));
+      objs.push(this.add.text(w / 2, h / 2 - 6, 'ゲームを更新しています。\n終わると自動で始められるようになります。\n（セーブは消えません）', T(15, C.brownCss, { align: 'center', lineSpacing: 4 })).setOrigin(0.5).setDepth(92));
+      const dots = this.add.text(w / 2, h / 2 + 66, '', T(16, C.soft)).setOrigin(0.5).setDepth(92);
+      objs.push(dots);
+      this.hideInput(true);
+      let n = 0;
+      const anim = this.time.addEvent({ delay: 400, loop: true, callback: () => dots.setText('待っています' + '.'.repeat(++n % 4)) });
+      // 数秒ごとにサーバーをのぞいて、メンテナンスが終わったら最新版を読み込み直す
+      const check = () => {
+        Net.ping().then(r => {
+          if (!this.maintBox) return;
+          if (r && !r.maint) { dots.setText('メンテナンス終了！ 読み込み中…'); setTimeout(() => location.reload(), 600); return; }
+          this.maintTimer = setTimeout(check, 4000);
+        }).catch(() => { if (this.maintBox) this.maintTimer = setTimeout(check, 4000); });
+      };
+      this.maintTimer = setTimeout(check, 3000);
+      this.maintBox = { objs, anim };
+      this.events.once('shutdown', () => { clearTimeout(this.maintTimer); this.maintBox = null; });
+    }
     // 名前の入力欄は画面のいちばん上に出てしまうので、ウィンドウを開いている間は隠す
     hideInput(v) { if (this.input_ && this.input_.node) this.input_.node.style.visibility = v ? 'hidden' : 'visible'; }
 
     // 続きからのデータの表示
     setSave(d, checking, failed) {
-      if (!this.contBtn) return;
+      if (!this.contBtn || !this.contBtn.active || !this.contInfo.active) return; // 画面が作り直された後に届いたとき
       this.contBtn.setDisabled(!d);
       if (checking) { this.contInfo.setText('セーブを確認中…'); this.contBtn.setDisabled(true); return; }
       if (d) {
@@ -404,7 +458,7 @@
     }
 
     go(cont) {
-      if (this.connecting || this.nameAsk || this.confirmBox || this.rankBox) return; // 連打で二重参加しないように
+      if (this.connecting || this.nameAsk || this.confirmBox || this.rankBox || this.shopBox || this.maintBox) return; // 連打で二重参加しないように
       if (cont === undefined) { if (this.saveData) cont = true; else { this.goNew(); return; } } // Enter キー
       this.goCont = cont;
       if (!this.nameAsked && !(this.input_ && this.input_.node.value.trim())) { this.askName(); return; }
@@ -419,6 +473,7 @@
         this.scene.start('Game', { session });
       }).catch(e => {
         this.connecting = false;
+        if (e.maint) { this.showMaint(); return; }
         this.msg(e.message || 'サーバーに接続できませんでした');
       });
     }

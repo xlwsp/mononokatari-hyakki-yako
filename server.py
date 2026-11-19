@@ -32,6 +32,7 @@ DRIVER = os.path.join(ROOT, 'tools', 'sim_driver.js')
 MAX_BUFFER = 1024 * 1024  # 送信が詰まったプレイヤーにはスナップショットを間引く
 VERSION = str(int(time.time()))  # キャッシュ対策（起動ごとに変わる）
 SAVE_FILE = os.path.join(ROOT, 'tools', 'saves.json')  # tools/ は配信しない
+MAINT_FILE = os.path.join(ROOT, 'tools', 'maintenance')  # このファイルがある間はメンテナンス中（遊べない）
 
 
 # ---------------- セーブ（端末ごとの合言葉 tok で保存。サーバーを再起動しても残る） ----------------
@@ -125,6 +126,94 @@ class HighScores:
 highscores = HighScores()
 
 
+# ---------------- ガチャポイント・持ち物・装備（端末ごと） ----------------
+PROFILE_FILE = os.path.join(ROOT, 'tools', 'profiles.json')
+ITEM_TYPES = 4                       # 小剣・勾玉・赤ファイア・青ファイア（js/sim.js の ITEMS と同じ順）
+RARITY_RATES = [50, 28, 15, 6, 1]    # コモン・アンコモン・レア・エピック・レジェンド（%）
+GACHA_COST = 100
+
+
+class Profiles:
+    def __init__(self):
+        self.data = {}
+        self.dirty = False
+        try:
+            with open(PROFILE_FILE, encoding='utf-8') as f:
+                self.data = json.load(f)
+        except Exception:
+            self.data = {}
+
+    def get(self, tok):
+        p = self.data.get(tok)
+        if p is None:
+            p = {'pts': 0, 'inv': {}, 'eq': {}}
+            if tok:
+                self.data[tok] = p
+        return p
+
+    def view(self, tok):
+        p = self.get(tok)
+        return {'pts': p['pts'], 'inv': p['inv'], 'eq': p['eq'], 'cost': GACHA_COST}
+
+    def add_pts(self, tok, n):
+        if not tok:
+            return
+        self.get(tok)['pts'] += int(n)
+        self.dirty = True
+
+    def gacha(self, tok, times=1):
+        p = self.get(tok)
+        if not tok or p['pts'] < GACHA_COST * times:
+            return None
+        got = []
+        for _ in range(times):
+            p['pts'] -= GACHA_COST
+            x = random.uniform(0, sum(RARITY_RATES))
+            r = 0
+            for i, w in enumerate(RARITY_RATES):
+                x -= w
+                if x <= 0:
+                    r = i
+                    break
+            t = random.randrange(ITEM_TYPES)
+            key = '%d_%d' % (t, r)
+            p['inv'][key] = p['inv'].get(key, 0) + 1
+            got.append({'t': t, 'r': r})
+        self.dirty = True
+        return got
+
+    def equip(self, tok, sp, key):
+        p = self.get(tok)
+        if not tok or not isinstance(sp, str) or len(sp) > 20:
+            return
+        if key is None:
+            p['eq'].pop(sp, None)
+        elif isinstance(key, str) and p['inv'].get(key, 0) > 0:
+            p['eq'][sp] = key
+        self.dirty = True
+
+    def item_for(self, tok, sp):
+        if not tok:
+            return None
+        key = self.data.get(tok, {}).get('eq', {}).get(sp)
+        if not key:
+            return None
+        t, r = key.split('_')
+        return {'t': int(t), 'r': int(r)}
+
+    def flush(self):
+        if not self.dirty:
+            return
+        self.dirty = False
+        tmp = PROFILE_FILE + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(self.data, f, separators=(',', ':'))
+        os.replace(tmp, PROFILE_FILE)
+
+
+profiles = Profiles()
+
+
 def valid_tok(t):
     return isinstance(t, str) and 16 <= len(t) <= 64 and all(ch in '0123456789abcdef' for ch in t)
 
@@ -211,6 +300,8 @@ class World:
         self.joins, self.leaves, self.respawns, self.choices = [], [], [], []
         self.inputs = {}
         self.members = set()
+        self.maint = os.path.exists(MAINT_FILE)
+        self.maint_check = 0
         self.toks = {}  # プレイヤーid → セーブの合言葉
         self.names = {}  # プレイヤーid → 名前（抜けた後に届くスコア用）
         self.last_flush = time.monotonic()
@@ -266,6 +357,13 @@ class World:
                 if line.startswith('#'):
                     log(line[:300])
                     continue
+                if line.startswith('!P\t'):
+                    _, pid, n = line.split('\t', 2)
+                    try:
+                        profiles.add_pts(world.toks.get(pid), int(n))
+                    except Exception:
+                        pass
+                    continue
                 if line.startswith('!H\t'):
                     _, pid, js = line.split('\t', 2)
                     tok = world.toks.get(pid)
@@ -287,11 +385,21 @@ class World:
                 c = clients.get(pid)
                 if c and c.joined:
                     c.send_raw('{"t":"st","s":' + js + '}', droppable=True)
+            # メンテナンスの開始・終了（tools/maintenance があるかどうか）
+            if time.monotonic() - self.maint_check > 1:
+                self.maint_check = time.monotonic()
+                m = os.path.exists(MAINT_FILE)
+                if m and not self.maint:
+                    start_maint()
+                elif not m and self.maint:
+                    self.maint = False
+                    log('maintenance end')
             if time.monotonic() - self.last_flush > 5:
                 self.last_flush = time.monotonic()
                 try:
                     saves.flush()
                     highscores.flush()
+                    profiles.flush()
                 except Exception as e:
                     log('save error:', repr(e))
             nxt += TICK
@@ -303,6 +411,16 @@ class World:
 
 
 world = World()
+
+
+def start_maint():
+    """メンテナンス開始：遊んでいる人をロビーへ戻す（セーブは抜けるときに保存される）"""
+    world.maint = True
+    log('maintenance start')
+    for c in list(clients.values()):
+        if c.joined:
+            c.send({'t': 'maint'})
+            leave(c)
 
 
 def handle_msg(c: Client, text: str):
@@ -322,6 +440,9 @@ def handle_msg(c: Client, text: str):
             world.choices.append([c.id, m.get('s'), m.get('i')])
     elif t == 'join':
         if c.joined:
+            return
+        if world.maint:
+            c.send({'t': 'maint'})
             return
         if len(world.members) >= MAX_HUMANS:
             c.send({'t': 'full'})
@@ -344,14 +465,28 @@ def handle_msg(c: Client, text: str):
             world.names[c.id] = c.name
         c.joined = True
         world.members.add(c.id)
-        world.joins.append([c.id, c.name, str(m.get('sp') or ''), state])
+        sp = state['sp'] if state else str(m.get('sp') or '')
+        world.joins.append([c.id, c.name, sp, state, profiles.item_for(tok, sp)])
         c.send({'t': 'joined', 'id': c.id, 'seed': world.seed, 'v': VERSION, 'cont': 1 if state else 0, 'sp': state['sp'] if state else None})
         log(c.name, 'joined', '(online %d)' % len(world.members))
     elif t == 'respawn':
         if c.joined:
-            world.respawns.append([c.id, str(m.get('sp') or '')])
+            sp = str(m.get('sp') or '')
+            world.respawns.append([c.id, sp, profiles.item_for(c.tok, sp)])
     elif t == 'leave':
         leave(c)
+    elif t in ('prof?', 'gacha', 'equip'):
+        # ガチャ・装備（ロビーから）
+        tok = m.get('tok')
+        tok = tok if valid_tok(tok) else None
+        got = None
+        if t == 'gacha':
+            got = profiles.gacha(tok, 10 if m.get('n') == 10 else 1)
+        elif t == 'equip':
+            profiles.equip(tok, m.get('sp'), m.get('key'))
+        c.send({'t': 'prof', 'd': dict(profiles.view(tok), got=got)})
+    elif t == 'ping':
+        c.send({'t': 'pong', 'd': {'maint': world.maint}})
     elif t == 'hs?':
         # ハイスコアランキング
         tok = m.get('tok')
@@ -482,10 +617,17 @@ async def main():
         sys.exit(1)
     import signal
 
-    def on_term():
+    def finish():
         saves.flush()  # kill されたときもセーブを書き出してから終わる
         highscores.flush()
+        profiles.flush()
         os._exit(0)
+
+    def on_term():
+        # 止める前に、遊んでいる人へ「メンテナンス中」を伝えてロビーへ戻し、最後のセーブを受け取ってから終わる
+        if not world.maint:
+            start_maint()
+        asyncio.get_running_loop().call_later(0.5, finish)
     asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, on_term)
     server = await asyncio.start_server(handle, '0.0.0.0', PORT)
     asyncio.create_task(world.run())
@@ -510,3 +652,4 @@ if __name__ == '__main__':
     finally:
         saves.flush()  # 止めるときにセーブを書き出す
         highscores.flush()
+        profiles.flush()

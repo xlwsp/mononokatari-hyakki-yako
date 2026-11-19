@@ -10,3 +10,7 @@ tools/saves.json
 tools/saves.json.tmp
 tools/highscores.json
 tools/highscores.json.tmp
+tools/profiles.json
+tools/profiles.json.tmp
+tools/maintenance
+tools/server.log

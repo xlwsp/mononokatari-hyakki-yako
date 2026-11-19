@@ -4,7 +4,7 @@
 //   以降  : {"join":[[id,name,sp,save]],"leave":[id],"respawn":[[id,sp]],"in":{"id":[x,y]},"ch":[[id,seq,idx]]}
 //   出力  : 毎ティック "id<TAB>json" を人数分、最後に "."
 //           セーブは "!S<TAB>id<TAB>json"（2秒ごと・抜けるとき。やられていたら null）
-//           ハイスコアは "!H<TAB>id<TAB>json"
+//           ハイスコアは "!H<TAB>id<TAB>json"、ガチャポイントは "!P<TAB>id<TAB>数"
 var window = this;
 load(arguments[0] + '/js/sim.js');
 
@@ -30,9 +30,9 @@ for (;;) {
   var cmd;
   try { cmd = JSON.parse(line); } catch (e) { cmd = {}; }
   try {
-    if (cmd.join) cmd.join.forEach(function (j) { sim.join(j[0], j[1], j[2], j[3] || null); if (humans.indexOf(j[0]) < 0) humans.push(j[0]); });
+    if (cmd.join) cmd.join.forEach(function (j) { sim.join(j[0], j[1], j[2], j[3] || null, j[4] || null); if (humans.indexOf(j[0]) < 0) humans.push(j[0]); });
     if (cmd.leave) cmd.leave.forEach(function (id) { saveLine(id); sim.remove(id); humans = humans.filter(function (h) { return h !== id; }); });
-    if (cmd.respawn) cmd.respawn.forEach(function (r) { sim.respawn(r[0], r[1]); });
+    if (cmd.respawn) cmd.respawn.forEach(function (r) { sim.respawn(r[0], r[1], r[2] || null); });
     if (cmd.in) for (var id in cmd.in) sim.setInput(id, cmd.in[id][0], cmd.in[id][1]);
     if (cmd.ch) cmd.ch.forEach(function (c) { sim.choose(c[0], c[1], c[2]); });
     sim.step(GD.TICK);
@@ -45,6 +45,7 @@ for (;;) {
   } catch (e) { if (errors++ < 20) print('#err ' + e + ' ' + (e.stack || '')); }
   if (true) { // 毎ティック（1秒に20回）送ってなめらかに
     var base = sim.snapshot();
+    base.ev.forEach(function (e) { if (e.e === 'pt') print('!P\t' + e.p + '\t' + e.n); }); // ガチャポイント
     humans.forEach(function (id) {
       var s = sim.snapshotFor(base, id);
       if (s) print(id + '\t' + JSON.stringify(s));

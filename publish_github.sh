@@ -17,6 +17,8 @@ if [ ! -d .git ]; then
 fi
 # サーバーのURLを書く場所（最初は空）
 [ -f server.json ] || echo '{"ws":""}' > server.json
+# 版番号（遊んでいる人のブラウザに古いファイルが残らないように）
+echo "{\"v\":\"$(date +%s)\"}" > version.json
 git add -A
 git commit -q -m "ゲームを更新" >/dev/null 2>&1 || true
 

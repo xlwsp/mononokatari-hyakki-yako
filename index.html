@@ -30,17 +30,28 @@
   <div id="game"></div>
   <div id="rotate"><div class="phone">📱</div><div>スマホを縦にして遊んでね</div></div>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
-  <script src="js/sim.js"></script>
-  <script src="js/net.js"></script>
-  <script src="js/sfx.js"></script>
-  <script src="js/bgm.js"></script>
-  <script src="js/textures.js"></script>
-  <script src="js/ui-kit.js"></script>
-  <script src="js/fx.js"></script>
-  <script src="js/scenes/menu.js"></script>
-  <script src="js/scenes/game.js"></script>
-  <script src="js/scenes/hud.js"></script>
-  <script>window.GV = "__VERSION__";</script>
-  <script src="js/main.js"></script>
+  <script>
+    // ゲームのファイルを読み込む。更新のたびに古いファイルが残らないよう、版番号を付けて読む
+    window.GV = "__VERSION__";
+    (function () {
+      var files = ['js/sim.js', 'js/net.js', 'js/sfx.js', 'js/bgm.js', 'js/textures.js', 'js/ui-kit.js', 'js/fx.js',
+        'js/scenes/shop.js', 'js/scenes/menu.js', 'js/scenes/game.js', 'js/scenes/hud.js', 'js/main.js'];
+      function load(v) {
+        if (v) window.GV = String(v);
+        files.forEach(function (f) {
+          var s = document.createElement('script');
+          s.src = f + (v ? '?v=' + encodeURIComponent(v) : '');
+          s.async = false; // 書いた順に実行
+          document.body.appendChild(s);
+        });
+      }
+      if (window.GV !== '__VERS' + 'ION__') { load(window.GV); return; } // サーバーから配信（版番号入り）
+      // GitHub Pages：version.json の版番号を見る
+      fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { load(j.v); })
+        .catch(function () { load(String(Date.now())); });
+    })();
+  </script>
 </body>
 </html>

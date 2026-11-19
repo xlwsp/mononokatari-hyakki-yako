@@ -135,7 +135,7 @@
     hp:       { name: 'タフネス', desc: '最大HP +25% & 全回復', ok: () => true, apply: p => { p.mhp *= 1.25; p.hp = p.mhp; } },
     regen:    { name: '自然回復', desc: '毎秒HPが回復 +1.5', ok: p => p.regen < 9, apply: p => { p.regen += 1.5; } },
     magnet:   { name: 'マグネット', desc: '経験値の吸引範囲 +40%', ok: p => p.magnet < 450, apply: p => { p.magnet *= 1.4; } },
-    bump:     { name: '体当たり強化', desc: 'ぶつかったときのダメージ +25%', ok: p => p.bumpMul < 3, apply: p => { p.bumpMul *= 1.25; } },
+    bump:     { name: '体当たり強化', desc: 'ぶつかったときのダメージ +25%', ok: () => true, apply: p => { p.bumpMul *= 1.25; } },
     trait:    { name: '{trait} 覚醒', desc: '【{trait}】の効果 大アップ＋攻撃と体当たり +10%', ok: p => p.traitLv < 5, apply: p => { p.traitLv++; p.dmgMul *= 1.1; p.bumpMul *= 1.1; } },
   };
   const UPGRADE_KEYS = Object.keys(UPGRADES);
@@ -379,12 +379,13 @@
       this.pmap.set(id, p);
       return p;
     }
-    join(id, name, sp, save) {
+    join(id, name, sp, save, item) {
       if (this.pmap.has(id)) return this.pmap.get(id);
       // 満員ならBotに抜けてもらう
       if (this.players.length >= MAX_PLAYERS) this.removeBot();
       const p = this.addPlayer(id, String(name || 'Player').slice(0, 12), false, save && SPECIES[save.sp] ? save.sp : sp);
       if (save) this.loadSave(p, save);
+      this.setItem(p, item);
       return p;
     }
 
@@ -410,10 +411,11 @@
       this.pmap.delete(id);
       this.ev({ e: 'gone', p: id });
     }
-    respawn(id, sp) {
+    respawn(id, sp, item) {
       const p = this.pmap.get(id);
       if (!p || p.alive) return;
       this.resetPlayer(p, sp);
+      this.setItem(p, item);
       this.ev({ e: 'spawn', p: id, x: r1(p.x), y: r1(p.y) });
     }
     removeBot() {
@@ -481,6 +483,7 @@
         p.hp = Math.min(p.mhp, p.hp + p.mhp * 0.2);
         this.makeChoices(p);
         this.ev({ e: 'lu', p: p.id, lv: p.lv, x: r1(p.x), y: r1(p.y) });
+        if (p.human && p.lv % 5 === 0) this.ev({ e: 'pt', p: p.id, n: 10 }); // 5レベルごとにガチャポイント
         if (!p.evo && p.lv >= EVOLVE_LV) {
           p.evo = 1;
           p.mhp *= 1.5; p.hp = p.mhp;
@@ -653,7 +656,10 @@
     hitOnce(atk, def) {
       const ta = SPECIES[atk.sp].trait.id, td = SPECIES[def.sp].trait.id;
       const wa = this.traitPow(atk), wd = this.traitPow(def);
-      let dmg = this.bumpPower(atk), note = '';
+      // 固定ダメージ＋相手の最大HPの割合ダメージ（大きくなっても戦いが長引かないように。上限なし）
+      const pct = 0.04 + 0.002 * Math.min(atk.lv, 40);
+      const rel = clamp(this.lvMul(atk) / this.lvMul(def), 0.5, 1.5);
+      let dmg = this.bumpPower(atk) + def.mhp * pct * rel * Math.sqrt(atk.bumpMul), note = '';
       if (ta === 'underdog' && def.lv > atk.lv) dmg *= 1 + Math.min(0.6 * wa, (def.lv - atk.lv) * 0.08 * wa);
       if (ta === 'first' && this.time - atk.lastBump > 3) { dmg *= 1 + wa; note = '先制！'; }
       if (ta === 'luck' && chance(Math.min(0.6, 0.32 * wa))) { dmg *= 2; note = '会心！'; }
@@ -1025,8 +1031,35 @@
 
     lvMul(p) { return (1 + 0.06 * (p.lv - 1)) * (p.evo ? 2 : 1); } // 進化すると2倍
 
+    // 装備アイテム（体のまわりをくるくる回って、触れた敵にダメージ）
+    setItem(p, item) {
+      p.item = null;
+      if (!item) return;
+      const t = item.t | 0, r = item.r | 0;
+      if (t >= 0 && t < ITEMS.length && r >= 0 && r < RARITIES.length) p.item = { t, r };
+    }
+    orbitHits(p) {
+      const it = p.item;
+      if (!it) return;
+      const def = ITEMS[it.t], n = RARITIES[it.r].n;
+      const R = this.radius(p) + 46, hitR = 24 + it.r * 2;
+      const dmg = def.dmg * RARITIES[it.r].pow * this.lvMul(p);
+      const base = this.time * ORBIT_SPEED;
+      for (let i = 0; i < n; i++) {
+        const a = base + (i / n) * Math.PI * 2;
+        const ox = p.x + Math.cos(a) * R, oy = p.y - 20 + Math.sin(a) * R;
+        this.enemiesIn(ox, oy, hitR, e => {
+          if ((e.oc || 0) > this.time) return;
+          e.oc = this.time + 0.35;
+          this.damage(e, dmg, p, def.slow || 0);
+          if (def.heal) p.hp = Math.min(p.mhp, p.hp + p.mhp * def.heal);
+        });
+      }
+    }
+
     playerCombat(p, dt) {
       if (!p.alive) return;
+      this.orbitHits(p);
       // 接触ダメージ
       if (p.iframe <= 0) {
         // 当たり判定は見た目の大きさに比例（大きくなるほど当たりやすい）
@@ -1297,6 +1330,7 @@
         sc: p.score, cl: p.color, au: auraTier(p.lv), spd: Math.round(p.espd || p.spd), ps: p.poisonT > 0 ? 1 : 0,
         sh: p.shield > 0 ? 1 : 0, hs: p.hasteT > 0 ? 1 : 0, pr: isProtected(p) ? 1 : 0,
         bt: p.tpT > 0 ? 1 : 0, tp: p.tp, iv: p.iframe > 0 ? 1 : 0, bn: this.bounty === p ? 1 : 0,
+        it: p.item ? p.item.t * 8 + p.item.r : -1,
       };
     }
 
@@ -1377,6 +1411,23 @@
     }
   }
 
+  // 装備アイテム（ガチャで手に入る）。t=種類, r=レアリティ
+  const ITEMS = [
+    { key: 'sword', name: '小剣', dmg: 11, desc: '鋭い刃で切り裂く' },
+    { key: 'magatama', name: '勾玉', dmg: 7, heal: 0.004, desc: '当てるたびにHPが少し回復' },
+    { key: 'redfire', name: '赤ファイア', dmg: 14, desc: '燃えさかる炎で大ダメージ' },
+    { key: 'bluefire', name: '青ファイア', dmg: 8, slow: 1.2, desc: '冷たい炎で敵を遅くする' },
+  ];
+  // n=まわりに出る数, pow=威力
+  const RARITIES = [
+    { name: 'コモン', color: 0xd0d0d0, css: '#d0d0d0', n: 2, pow: 1.0, rate: 50 },
+    { name: 'アンコモン', color: 0x5ad06a, css: '#5ad06a', n: 3, pow: 1.25, rate: 28 },
+    { name: 'レア', color: 0x4aa0ff, css: '#4aa0ff', n: 4, pow: 1.55, rate: 15 },
+    { name: 'エピック', color: 0xb060ff, css: '#c080ff', n: 5, pow: 1.9, rate: 6 },
+    { name: 'レジェンド', color: 0xffc030, css: '#ffc840', n: 6, pow: 2.4, rate: 1 },
+  ];
+  const ORBIT_SPEED = 3.2; // 回る速さ（ラジアン/秒）
+
   // セーブする項目（レベル・経験値・強化の状態など）
   const SAVE_KEYS = ['lv', 'xp', 'txp', 'evo', 'hp', 'mhp', 'kills', 'score', 'bossKills', 'pkills', 'pkScore', 'spd',
     'dmgMul', 'rateMul', 'extra', 'pierce', 'skillPow', 'skillCd', 'areaMul', 'magnet', 'regen', 'bumpMul', 'traitLv', 'revived'];
@@ -1390,7 +1441,7 @@
   const UNLOCK_AT = {}; UNLOCKS.forEach(([k, v]) => { UNLOCK_AT[k] = v; });
 
   global.GD = {
-    UNLOCKS, UNLOCK_AT,
+    UNLOCKS, UNLOCK_AT, ITEMS, RARITIES, ORBIT_SPEED,
     WORLD, TICK, EDGE, VIEW_R, RADAR_R, MAX_PLAYERS, EVOLVE_LV, PROTECT_TIME, NEWBIE_LV, generateMap, resolve, auraTier,
     SPECIES, SPECIES_KEYS, ENEMY_TYPES, ENEMIES, UPGRADES, COLORS, upgradeText,
     xpNeed, clamp,
