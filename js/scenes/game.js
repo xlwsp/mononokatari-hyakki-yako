@@ -5,9 +5,14 @@
   const lerp = (a, b, t) => a + (b - a) * t;
   const FX_DEPTH = 1000000;
   const ENEMY_KEYS = ['en_slime', 'en_bat', 'en_wisp', 'en_brute', 'en_boss', 'en_shroom', 'en_beetle', 'en_gold', 'en_golem',
-    'en_kedama', 'en_kasa', 'en_chochin', 'en_nezumi', 'en_hitodama', 'en_daruma', 'bigboss'];
-  const ENEMY_SCALE = [0.8, 0.75, 0.78, 0.85, 0.9, 0.85, 0.75, 0.85, 1.0, 0.85, 0.85, 0.85, 0.85, 0.85, 0.85, 0.95];
-  const ENEMY_BURST = [0xb48cff, 0x9a7ad0, 0x8fb8ff, 0xff9a7a, 0xff5a7e, 0xd8604a, 0x5a7ad0, 0xffd84f, 0x9a9288, 0xf0e2c4, 0xff6a7a, 0xffb050, 0xc0c0d0, 0x9ff0d8, 0xff4a3a, 0xb070ff];
+    'en_kedama', 'en_kasa', 'en_chochin', 'en_nezumi', 'en_hitodama', 'en_daruma', 'bigboss',
+    'ek_obake', 'ek_chochin', 'ek_boss1', 'ek_kitsune', 'ek_tanuki', 'ek_boss2', 'ek_oni', 'ek_mujina', 'ek_boss3', 'ek_boss4'];
+  // 新しい妖怪の画像は大きめに書き出してあるので小さく表示（見た目の直径 ≒ 当たり判定の約3.4倍）
+  const ENEMY_SCALE = [0.8, 0.75, 0.78, 0.85, 0.9, 0.85, 0.75, 0.85, 1.0, 0.85, 0.85, 0.85, 0.85, 0.85, 0.85, 0.95,
+    0.42, 0.44, 0.6, 0.4, 0.44, 0.62, 0.45, 0.42, 0.62, 0.64];
+  const ENEMY_BURST = [0xb48cff, 0x9a7ad0, 0x8fb8ff, 0xff9a7a, 0xff5a7e, 0xd8604a, 0x5a7ad0, 0xffd84f, 0x9a9288, 0xf0e2c4, 0xff6a7a, 0xffb050, 0xc0c0d0, 0x9ff0d8, 0xff4a3a, 0xb070ff,
+    0xc08aff, 0xff5a4a, 0xff7a3a, 0xff6a6a, 0xd8a060, 0xb070ff, 0xff4a3a, 0xa060ff, 0xff4a8a, 0xffe07a];
+  const FIELD_BOSS = { 18: 1, 21: 2, 24: 3, 25: 4 }; // 段階ボス
   // オーラの色（レベルが上がるほど派手に）：Lv5 白 / 10 緑 / 15 水色 / 20 紫 / 30 金 / 40 虹
   const AURA = [0, 0xffffff, 0x7cff8a, 0x6fd8ff, 0xc58bff, 0xffd84f, 0xff7ad9];
   const CHUNK = 800;
@@ -618,8 +623,8 @@
       const v = this.cameras.main.worldView;
       let bossNear = false;
       for (let i = 0; i < be.length; i += 4) {
-        const id = be[i], raw = be[i + 1], ty = raw & 15, el = raw >= 16; // 強敵は種類+16
-        if (ty === 4 || ty === 15) bossNear = true;
+        const id = be[i], raw = be[i + 1], ty = raw & 63, el = raw >= 64; // 強敵は種類+64
+        if (ty === 4 || ty === 15 || FIELD_BOSS[ty]) bossNear = true;
         let o = this.eSprites.get(id);
         if (!o) {
           o = this.getEnemy(ty); this.eSprites.set(id, o);
@@ -638,13 +643,16 @@
         const wob = Math.sin(this.time.now / 140 + id) * 0.06;
         const s = (ENEMY_SCALE[ty] || 0.8) * (o.el ? 1.4 : 1);
         if (ty === 15) o.img.setScale(s * (1 + wob * 0.25), s * (1 - wob * 0.25)); // 大妖はゆっくり息をする
-        else if (ty === 0 || ty === 7 || ty === 9 || ty === 12) o.img.setScale(s * (1 + wob), s * (1 - wob));
+        else if (ty === 0 || ty === 7 || ty === 9 || ty === 12 || ty === 20 || ty === 23) o.img.setScale(s * (1 + wob), s * (1 - wob));
+        else if (ty === 17 || ty === 18) o.img.setScale(s).setRotation(wob * 1.6); // ちょうちんはぶらぶら
+        else if (FIELD_BOSS[ty]) o.img.setScale(s * (1 + wob * 0.4), s * (1 - wob * 0.4)); // ボスは息づかい
         else if (ty === 14) o.img.setScale(s).setRotation(wob * 2.5); // だるまはゆらゆら
         else if (ty === 1) o.img.setScale(s, s * (1 + wob * 1.5));
         else o.img.setScale(s);
-        const lift = ty === 1 || ty === 2 || ty === 13 ? 14 + wob * 40 : ty === 10 ? Math.abs(wob) * 140 : ty === 11 ? 6 + wob * 30 : 0; // 浮く・跳ねる
+        const lift = ty === 1 || ty === 2 || ty === 13 || ty === 16 || ty === 17 ? 14 + wob * 40 : ty === 19 ? Math.abs(wob) * 90 : ty === 10 ? Math.abs(wob) * 140 : ty === 11 ? 6 + wob * 30 : 0; // 浮く・跳ねる
         o.img.setPosition(x, y - lift).setDepth(y);
         o.shadow.setPosition(x, y + 2).setDepth(y - 1);
+        if (FIELD_BOSS[ty] && Math.random() < 0.06 * FIELD_BOSS[ty]) this.burst(x + Phaser.Math.Between(-60, 60), y - Phaser.Math.Between(20, 140), ENEMY_BURST[ty], 1); // ボスの妖気
         if (ty === 15 && Math.random() < 0.3) this.burst(x + Phaser.Math.Between(-150, 150), y - Phaser.Math.Between(60, 300), 0x8a4aff, 1); // 妖気
         if (ty === 7 && Math.random() < 0.15) FX.twinkle(this, x + Phaser.Math.Between(-15, 15), y - 20, 1);
         if (o.el && Math.random() < 0.08) this.burst(x + Phaser.Math.Between(-20, 20), y - 30, 0xff3a3a, 1);
@@ -794,10 +802,16 @@
             break;
           }
           case 'ed': {
-            this.burst(ev.x, ev.y - 10, ENEMY_BURST[ev.ty] || 0xffffff, ev.ty === 15 ? 140 : ev.ty === 4 ? 60 : ev.ty === 7 ? 30 : 8);
+            this.burst(ev.x, ev.y - 10, ENEMY_BURST[ev.ty] || 0xffffff, ev.ty === 15 ? 140 : ev.ty === 4 ? 60 : FIELD_BOSS[ev.ty] ? 30 + FIELD_BOSS[ev.ty] * 10 : ev.ty === 7 ? 30 : 8);
             this.freeEnemy(ev.i);
             if (ev.by === me) { this.ui.addCombo(); FX.twinkle(this, ev.x, ev.y - 20, 3); Sfx.pop(ev.ty, ev.el, this.ui.combo); } // 倒した！の音
             if (ev.ty === 7 && ev.by === me) { FX.confetti(this, ev.x, ev.y - 30, 60, 0xffd84f); this.ui.stampFx('GOLD!!', '#ffd84f'); Sfx.play('legend'); }
+            if (FIELD_BOSS[ev.ty]) {
+              const lvB = FIELD_BOSS[ev.ty];
+              this.cameras.main.shake(200 + lvB * 60, 0.004 + lvB * 0.002);
+              FX.shockwave(this, ev.x, ev.y - 20, ENEMY_BURST[ev.ty], 140 + lvB * 40);
+              if (ev.by === me) { FX.rays(this, ev.x, ev.y - 30, ENEMY_BURST[ev.ty], 300 + lvB * 80, 900); FX.confetti(this, ev.x, ev.y - 40, 30 + lvB * 15); this.ui.stampFx(['', '化け提灯 撃破！', '大蛇 撃破！！', '獅子 撃破！！', '白獅子神 撃破！！！'][lvB], '#ffe07a'); }
+            }
             if (ev.ty === 4) {
               this.cameras.main.shake(400, 0.01);
               FX.rays(this, ev.x, ev.y - 30, 0xffd060, 600, 1600); FX.confetti(this, ev.x, ev.y - 40, 120); FX.punch(this, 0.12);

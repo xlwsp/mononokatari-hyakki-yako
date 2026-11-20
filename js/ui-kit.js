@@ -25,6 +25,14 @@
     };
   }
 
+  // 読みやすさ重視の太い丸ゴシック（カードの名前・数値・説明用）
+  function TR(size, color, stroke, thick, extra) {
+    return Object.assign({
+      fontFamily: FONT, fontSize: Math.round(size) + 'px', color: color || C.brownCss, fontStyle: '900',
+      stroke: stroke || '#000', strokeThickness: thick == null ? 0 : thick,
+    }, extra || {});
+  }
+
   // 筆文字の見出し：古い紙のような金色＋こげ茶のフチ＋ほのかな光
   function TB(size, color, stroke, thick) {
     return {
@@ -169,5 +177,5 @@
     } catch (e) { /* noop */ }
   }
 
-  window.UI = { FONT, DISPLAY, BRUSH, C, T, TO, TB, panel, button, keyNav, forestBackdrop, isMobile, mobileEnter };
+  window.UI = { FONT, DISPLAY, BRUSH, C, T, TO, TB, TR, panel, button, keyNav, forestBackdrop, isMobile, mobileEnter };
 })();

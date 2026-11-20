@@ -8,8 +8,9 @@
   const TICK = 0.05;           // 20Hz
   const MAX_PLAYERS = 50;      // 1つの世界に入れる人数（Bot含む）
   const BOT_TARGET = 24;       // 人が少ないときはBotでこの人数まで埋める
-  const ENEMY_PER_PLAYER = 75; // プレイヤー1人あたりの敵の上限（密度）
-  const ENEMY_CAP = 3200;
+  const ENEMY_PER_PLAYER = 95; // プレイヤー1人あたりの敵の上限（密度）
+  const ENEMY_CAP = 3800;
+  const FIELD_BOSS_CAP = 70;   // フィールドボス（各段階のボス）は世界にこの数まで
   const GEM_CAP = 5000;
   const SWARM_EVERY = 28;      // 敵の群れが押し寄せる間隔（プレイヤーごと）
   const BOSS_EVERY = 100;      // どこかにボスが出る間隔
@@ -117,7 +118,12 @@
   // 敵（番号は描画側と共通。4番はボス）
   const ENEMY_TYPES = ['slime', 'bat', 'wisp', 'brute', 'boss', 'shroom', 'beetle', 'gold', 'golem',
     'kedama', 'kasa', 'chochin', 'nezumi', 'hitodama', 'daruma', // 9〜14は弱い雑魚（群れで出る）
-    'bigboss']; // 15は大妖（世界に1体だけ）
+    'bigboss', // 15は大妖（世界に1体だけ）
+    // 16〜25：新しい妖怪たち。レベルの段階ごとにこの順番で出てくる
+    'obake', 'chochin2', 'boss1',   // 第1段階（Lv1〜）：笠おばけ・ちょうちん ／ ボス：化け提灯
+    'kitsune', 'tanuki', 'boss2',   // 第2段階（Lv40〜）：狐・狸 ／ ボス：大蛇（Lv60〜）
+    'oni', 'mujina', 'boss3',       // 第3段階（Lv110〜）：鬼・妖狸 ／ ボス：獅子（Lv140〜）
+    'boss4'];                       // 第4段階（Lv200〜）：ボス：白獅子神
   const ENEMIES = {
     slime:  { hp: 14, spd: 72, dmg: 6, r: 17, xp: 1 },
     bat:    { hp: 8, spd: 135, dmg: 5, r: 14, xp: 1 },
@@ -137,7 +143,23 @@
     daruma:   { hp: 12, spd: 58, dmg: 5, r: 15, xp: 1 },
     // 大妖：とても大きくて、とてもゆっくり。倒すと経験値の玉が世界の中央にばらまかれる
     bigboss:  { hp: BIG_HP, spd: 22, dmg: 30, r: 150, xp: 0 },
+    // 新しい妖怪（高レベルの人向けに硬くて経験値も多い）
+    obake:    { hp: 6, spd: 96, dmg: 3, r: 15, xp: 1 },
+    chochin2: { hp: 10, spd: 72, dmg: 4, r: 16, xp: 1 },
+    boss1:    { hp: 700, spd: 70, dmg: 12, r: 44, xp: 10 },
+    kitsune:  { hp: 40, spd: 168, dmg: 6, r: 18, xp: 3 },
+    tanuki:   { hp: 70, spd: 84, dmg: 7, r: 20, xp: 3 },
+    boss2:    { hp: 1700, spd: 76, dmg: 14, r: 54, xp: 16 },
+    oni:      { hp: 260, spd: 88, dmg: 10, r: 26, xp: 8 },
+    mujina:   { hp: 200, spd: 124, dmg: 9, r: 24, xp: 7 },
+    boss3:    { hp: 3300, spd: 82, dmg: 16, r: 62, xp: 26 },
+    boss4:    { hp: 5200, spd: 88, dmg: 18, r: 70, xp: 42 },
   };
+  // フィールドボス：段階ごとのボス。解放されるレベルと、たたきつけの大きさ
+  const FIELD_BOSSES = [[18, 8, 230], [21, 60, 270], [24, 140, 310], [25, 200, 350]];
+  const FB_R = {}; for (const [t, , r] of FIELD_BOSSES) FB_R[t] = r;
+  // 群れで出る雑魚
+  const PACK = { 9: 1, 10: 1, 11: 1, 12: 1, 13: 1, 14: 1, 16: 1, 17: 1, 19: 1, 20: 1 };
 
   // 強化カード。{skill} {trait} はモンスターごとのスキル名・特性名に置き換わる
   const UPGRADES = {
@@ -172,9 +194,12 @@
   // 必要経験値：低レベルは少なめ、高レベルでも上がり続けるようゆるやかに
   const xpNeed = lv => Math.floor(3 + lv * 2 + lv * lv * 0.2);
   // 敵の攻撃の強さ（レベルが上がるほど痛い）
-  const dmgCurve = lv => 1 + (lv - 1) * 0.05 + (lv - 1) * (lv - 1) * 0.0015;
+  // Lv150を超えたらゆるやかな直線に（Lv200〜300の人もちゃんと遊べるように）
+  const dmgCurve0 = lv => 1 + (lv - 1) * 0.05 + (lv - 1) * (lv - 1) * 0.0015;
+  const dmgCurve = lv => (lv <= 150 ? dmgCurve0(lv) : dmgCurve0(150) + (lv - 150) * 0.22);
   // 高レベル向けに出た敵が低レベルの人に当たったときは、その人のレベル相当まで弱める
-  const isBoss = e => e.ty === 4 || e.ty === 15; // 押し返し・気絶が効かない
+  const isBoss = e => e.ty === 4 || e.ty === 15 || FB_R[e.ty] !== undefined; // 押し返し・気絶が効かない
+  const isWorldBoss = e => e.ty === 4 || e.ty === 15; // 誰もいなくても消えない
   const dmgFor = (e, p) => (e.lvd > 1 ? e.dmg * Math.min(1, dmgCurve(p.lv) / e.lvd) : e.dmg);
   const rand = (a, b) => a + Math.random() * (b - a);
   const randInt = (a, b) => Math.floor(rand(a, b + 1));
@@ -821,16 +846,16 @@
       const cap = Math.min(ENEMY_CAP, alive.length * ENEMY_PER_PLAYER);
       for (const p of alive) {
         // プレイヤーごとに、そのまわりへ敵を補充する（どこにいても密度は同じ）
-        p.spawnAcc = (p.spawnAcc || 0) + (3.2 + Math.min(p.lv, 40) * 0.12) * dt;
+        p.spawnAcc = (p.spawnAcc || 0) + (3.4 + Math.min(p.lv, 80) * 0.1) * dt;
         while (p.spawnAcc >= 1) {
           p.spawnAcc -= 1;
           if (this.enemies.length >= cap) continue;
           const ty = this.pickEnemyType(p.lv);
-          if (ty >= 9) {
-            // 弱い雑魚は小さな群れでまとめて出る
+          if (PACK[ty]) {
+            // 弱い雑魚は群れでまとめて出る（高レベルほど大きな群れ）
             const a = rand(0, Math.PI * 2), d = rand(680, 860);
             const cx = p.x + Math.cos(a) * d, cy = p.y + Math.sin(a) * d;
-            const n = randInt(3, 6);
+            const n = randInt(3, 6) + (p.lv >= 60 ? 2 : 0) + (p.lv >= 150 ? 2 : 0);
             for (let k = 0; k < n; k++) this.spawnEnemy(ty, p, cx + rand(-60, 60), cy + rand(-60, 60));
           } else this.spawnEnemy(ty, p, undefined, undefined, p.lv >= ELITE_LV && chance(Math.min(0.25, (p.lv - ELITE_LV + 1) * 0.012)));
         }
@@ -843,6 +868,24 @@
             const a = (i / 14) * Math.PI * 2;
             if (this.enemies.length < cap + 300) this.spawnEnemy(ty, p, p.x + Math.cos(a) * 560, p.y + Math.sin(a) * 560);
           }
+        }
+      }
+      // フィールドボス：レベルに応じた段階のボスが、あちこちにどんどん出る
+      let fb = 0;
+      for (const e of this.enemies) if (FB_R[e.ty] !== undefined && !e.dead) fb++;
+      for (const p of alive) {
+        if (p.lv < FIELD_BOSSES[0][1]) continue;
+        p.fbT = (p.fbT === undefined ? rand(8, 20) : p.fbT) - dt;
+        if (p.fbT > 0) continue;
+        p.fbT = p.lv >= 150 ? rand(14, 20) : p.lv >= 60 ? rand(18, 26) : rand(24, 34);
+        const n = p.lv >= 200 ? 2 : 1;
+        for (let k = 0; k < n && fb < FIELD_BOSS_CAP; k++, fb++) {
+          const open = FIELD_BOSSES.filter(f => p.lv >= f[1]);
+          const ty = chance(0.55) ? open[open.length - 1][0] : open[randInt(0, open.length - 1)][0];
+          const e = this.spawnEnemy(ty, p);
+          // おともの雑魚
+          const mob = ty === 18 ? 16 : ty === 21 ? 19 : ty === 24 ? 22 : 23;
+          for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; this.spawnEnemy(mob, p, e.x + Math.cos(a) * 110, e.y + Math.sin(a) * 110); }
         }
       }
       // ボス：どこかのプレイヤーの近くに出現
@@ -889,7 +932,7 @@
           p.hyW = 8;
           const n = p.evo ? 12 + Math.min(10, Math.floor(p.lv / 6)) : 7; // 進化前は少なめ
           let ty = this.pickEnemyType(p.lv + 8, true);
-          while (ty >= 9) ty = this.pickEnemyType(p.lv + 8, true); // 百鬼夜行は強い敵だけ
+          while (PACK[ty] && !(ty >= 19 && p.lv >= 110)) ty = this.pickEnemyType(p.lv + 8, true); // 百鬼夜行は強い敵だけ
           for (let i = 0; i < n; i++) {
             const a = (i / n) * Math.PI * 2;
             this.spawnEnemy(i % 3 === 0 ? 3 : ty, p, p.x + Math.cos(a) * 640, p.y + Math.sin(a) * 640, true);
@@ -931,7 +974,7 @@
           if (!p.alive || p.iframe > 0) continue;
           const rr = s.r + this.radius(p) * 0.6;
           if ((p.x - s.x) ** 2 + (p.y - s.y) ** 2 > rr * rr) continue;
-          const dmg = Math.min(dmgFor(s, p), p.mhp * 0.4); // 1発で最大HPの4割まで
+          const dmg = Math.min(dmgFor(s, p), p.mhp * (p.lv >= 100 ? 0.25 : 0.4)); // 1発で最大HPの4割（Lv100以上は2.5割）まで
           this.hurtPlayer(p, dmg);
           p.iframe = Math.max(p.iframe, 0.4);
           this.ev({ e: 'sl', p: p.id, d: Math.round(dmg), x: r1(p.x), y: r1(p.y) });
@@ -1011,10 +1054,15 @@
     }
 
     pickEnemyType(lv, swarm) {
-      // [番号, 重み]（レベルが上がるほど強い敵が混ざる）
-      const w = [[0, 1], [9, 0.45], [12, lv > 1 ? 0.35 : 0], [10, lv > 3 ? 0.35 : 0], [13, lv > 5 ? 0.35 : 0],
-        [11, lv > 8 ? 0.3 : 0], [14, lv > 12 ? 0.3 : 0], [1, lv > 2 ? 0.7 : 0], [5, lv > 4 ? 0.6 : 0], [2, lv > 7 ? 0.5 : 0], [6, lv > 10 ? 0.5 : 0],
-        [3, lv > 14 ? 0.35 : 0], [8, lv > 20 ? 0.25 : 0], [7, swarm ? 0 : 0.015]];
+      // [番号, 重み]（レベルが上がるほど強い敵が混ざる。高レベルでは昔の敵は減って、新しい段階の妖怪が増える）
+      const f = lv >= 150 ? 0.3 : lv >= 80 ? 0.55 : 1;
+      const t3 = lv >= 200 ? 1.6 : 1;
+      const w = [[0, 1 * f], [9, 0.45 * f], [12, lv > 1 ? 0.35 * f : 0], [10, lv > 3 ? 0.35 * f : 0], [13, lv > 5 ? 0.35 * f : 0],
+        [11, lv > 8 ? 0.3 * f : 0], [14, lv > 12 ? 0.3 * f : 0], [1, lv > 2 ? 0.7 * f : 0], [5, lv > 4 ? 0.6 * f : 0], [2, lv > 7 ? 0.5 * f : 0], [6, lv > 10 ? 0.5 * f : 0],
+        [3, lv > 14 ? 0.35 * f : 0], [8, lv > 20 ? 0.25 * f : 0], [7, swarm ? 0 : 0.015],
+        [16, 0.8], [17, lv > 2 ? 0.6 : 0],
+        [19, lv >= 40 ? 0.7 : 0], [20, lv >= 40 ? 0.6 : 0],
+        [22, lv >= 110 ? 0.5 * t3 : 0], [23, lv >= 110 ? 0.6 * t3 : 0]];
       const total = w.reduce((a, b) => a + b[1], 0);
       let x = Math.random() * total;
       for (const [ty, wt] of w) { x -= wt; if (x <= 0) return ty; }
@@ -1060,7 +1108,7 @@
           }
           e.tgt = bt;
           // 誰も近くにいない敵は消える
-          if (!bt && !isBoss(e)) { e.dead = true; e.gone = true; continue; }
+          if (!bt && !isWorldBoss(e)) { e.dead = true; e.gone = true; continue; }
         }
         if (e.ty === 15) { this.moveBig(e, dt); continue; }
         if (!e.tgt) continue;
@@ -1077,21 +1125,28 @@
         }
         const dx = e.tgt.x - e.x, dy = e.tgt.y - e.y, d = Math.hypot(dx, dy) || 1;
         // ボスと大きな強敵は、予告のあとに地面をたたきつける範囲攻撃
-        if (e.ty === 4 || (e.el && (e.ty === 3 || e.ty === 8))) {
+        const fbr = FB_R[e.ty];
+        if (e.ty === 4 || fbr || (e.el && (e.ty === 3 || e.ty === 8 || e.ty === 22))) {
           e.slamT -= dt;
-          if (e.slamT <= 0 && d < 420 && e.tgt.lv >= 10) { // 低レベルの人には使わない
-            const boss = e.ty === 4;
-            e.slamT = boss ? 4.5 : 6;
-            const r = boss ? 300 : 210, delay = boss ? 1.0 : 0.9;
-            this.slams.push({ x: e.tgt.x, y: e.tgt.y, r, at: this.time + delay, dmg: e.dmg * (boss ? 3 : 2.2), lvd: e.lvd });
+          if (e.slamT <= 0 && d < 460 && e.tgt.lv >= 10) { // 低レベルの人には使わない
+            const boss = e.ty === 4 || !!fbr;
+            e.slamT = e.ty === 4 ? 4.5 : fbr ? 5 : 6;
+            const r = fbr || (boss ? 300 : 210), delay = boss ? 1.0 : 0.9;
+            this.slams.push({ x: e.tgt.x, y: e.tgt.y, r, at: this.time + delay, dmg: e.dmg * (boss ? 2.6 : 2.2), lvd: e.lvd });
             this.ev({ e: 'tg', x: r1(e.tgt.x), y: r1(e.tgt.y), r, d: delay });
+            // 白獅子神はまわりにも追加でたたきつける
+            if (e.ty === 25) for (let i = 0; i < 3; i++) {
+              const a = rand(0, Math.PI * 2), x = e.tgt.x + Math.cos(a) * 360, y = e.tgt.y + Math.sin(a) * 360;
+              this.slams.push({ x, y, r: 220, at: this.time + delay + 0.4, dmg: e.dmg * 2, lvd: e.lvd });
+              this.ev({ e: 'tg', x: r1(x), y: r1(y), r: 220, d: delay + 0.4 });
+            }
           }
         }
         let sp = e.spd;
         if (e.slowT > 0) { e.slowT -= dt; sp *= 0.45; }
         e.x += dx / d * sp * dt;
         e.y += dy / d * sp * dt;
-        if (!isBoss(e)) resolve(this.map, e, e.r * 0.6);
+        if (!isWorldBoss(e)) resolve(this.map, e, e.r * 0.6);
       }
     }
 
@@ -1216,7 +1271,9 @@
           if (!hitBy && e.stunT <= 0 && e.dmg) hitBy = e;
         });
         if (hitBy) {
-          this.hurtPlayer(p, dmgFor(hitBy, p));
+          // Lv100以上：1回で受けるダメージは最大HPの6%（ボスは12%）まで。囲まれると危ないが一瞬では溶けない
+          const raw = dmgFor(hitBy, p);
+          this.hurtPlayer(p, p.lv >= 100 ? Math.min(raw, p.mhp * (isBoss(hitBy) ? 0.1 : p.lv >= 200 ? 0.05 : 0.06)) : raw);
           p.iframe = 0.5;
           this.ev({ e: 'hu', p: p.id, x: r1(p.x), y: r1(p.y) });
           if (p.hp <= 0) { this.kill(p, null); return; }
@@ -1375,6 +1432,11 @@
         else if (e.ty === 4) {
           if (owner) owner.bossKills++;
           for (let i = 0; i < 24; i++) this.dropGem(e.x + rand(-90, 90), e.y + rand(-90, 90), 4 + Math.floor(e.xp));
+        } else if (FB_R[e.ty] !== undefined) {
+          // フィールドボス：経験値の玉をどさっと
+          if (owner) owner.bossKills++;
+          const n = e.ty === 18 ? 10 : e.ty === 21 ? 14 : e.ty === 24 ? 18 : 22;
+          for (let i = 0; i < n; i++) this.dropGem(e.x + rand(-80, 80), e.y + rand(-80, 80), e.xp * 5 / n);
         } else if (e.ty === 7) {
           for (let i = 0; i < 10; i++) this.dropGem(e.x + rand(-60, 60), e.y + rand(-60, 60), e.xp / 8);
         } else if (!e.el) this.dropGem(e.x, e.y, e.xp);
@@ -1493,7 +1555,7 @@
         E: [],
         ev: this.events,
       };
-      for (const en of this.enemies) base.E.push(en.id, en.ty + (en.el ? 16 : 0), r1(en.x), r1(en.y)); // 強敵は種類+16
+      for (const en of this.enemies) base.E.push(en.id, en.ty + (en.el ? 64 : 0), r1(en.x), r1(en.y)); // 強敵は種類+64
       if (this.tick % 40 < 2) base.G = this.gems;
       // ランキング（スコア順・Botも含めた順位）
       base.LB = this.players.filter(p => p.alive).sort((a, b) => b.score - a.score);
@@ -1519,9 +1581,9 @@
       if (half) {
         s.f = []; // レーダー用：遠くのボスとゴールドスライム
         for (let i = 0; i < base.E.length; i += 4) {
-          const ty = base.E[i + 1], x = base.E[i + 2], y = base.E[i + 3], bt = ty & 15;
+          const ty = base.E[i + 1], x = base.E[i + 2], y = base.E[i + 3], bt = ty & 63;
           if (inR(x, y, R)) s.e.push(base.E[i], ty, x, y);
-          else if ((bt === 4 || bt === 7) && inR(x, y, RADAR_R)) s.f.push(bt, Math.round(x), Math.round(y));
+          else if ((bt === 4 || bt === 7 || FB_R[bt] !== undefined) && inR(x, y, RADAR_R)) s.f.push(bt, Math.round(x), Math.round(y));
         }
         // 大妖はどこにいても：位置とHP（千分率）。いないときは次に現れるまでの秒数
         const B = this.big;

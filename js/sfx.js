@@ -78,7 +78,7 @@
       const c = this.ctx;
       if (!c || this.muted) return;
       const now = performance.now();
-      const big = ty === 4 || ty === 15 || ty === 3 || ty === 8 || elite;
+      const big = ty === 4 || ty === 15 || ty === 3 || ty === 8 || ty === 18 || ty === 21 || ty === 22 || ty === 24 || ty === 25 || elite;
       if (!big && now - (this.last.pop || 0) < 38) { this.popQ = (this.popQ || 0) + 1; return; } // 同時に倒したぶんはまとめる
       this.last.pop = now;
       const many = Math.min(this.popQ || 0, 6); this.popQ = 0;
@@ -106,6 +106,17 @@
       const SC = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
       const step = SC[Math.min(Math.floor((combo || 0) / 3), SC.length - 1)];
       const up = Math.pow(2, step / 12) * (0.95 + Math.random() * 0.1);
+      if (ty === 18 || ty === 21 || ty === 24 || ty === 25) {
+        // 段階ボス：ドドーンッ＋鐘の響き＋キラキラ（強いボスほど低く長く）
+        const k = ty === 18 ? 1 : ty === 21 ? 1.25 : ty === 24 ? 1.5 : 1.8;
+        osc('sine', 120 / k, 32, 0.55 * k, 0.22, t);
+        osc('sine', 90 / k, 30, 0.4 * k, 0.18, t + 0.09);
+        hiss(700, 0.6, 0.35 * k, 0.16, t);
+        hiss(4500, 1.0, 0.14, 0.08, t + 0.01, 'highpass');
+        for (const [m, d] of [[1, 0], [2.76, 0], [5.4, 0]]) osc('sine', 330 * m / k, 330 * m / k * 0.98, 1.2 * k, 0.05 / m, t + 0.05 + d);
+        for (let i = 0; i < 5; i++) osc('triangle', 1320 * Math.pow(2, i / 5), 1760 * Math.pow(2, i / 5), 0.1, 0.03, t + 0.12 + i * 0.05);
+        return;
+      }
       if (big) {
         // ドパンッ：低いドン＋破裂音＋キラッ
         osc('sine', 160, 45, 0.28, 0.16, t);
@@ -115,7 +126,7 @@
         return;
       }
       // ポンッ（上から下に落ちる玉の音）＋パチッ（はじける音）
-      const base = (ty === 9 || ty === 12 || ty === 13 ? 760 : ty === 0 || ty === 7 ? 620 : 540) * up;
+      const base = (ty === 9 || ty === 12 || ty === 13 || ty === 16 ? 760 : ty === 17 || ty === 19 ? 680 : ty === 0 || ty === 7 ? 620 : 540) * up;
       osc('sine', base * 1.6, base * 0.55, 0.09, 0.075, t);
       osc('triangle', base * 2.4, base * 1.2, 0.05, 0.025, t);
       hiss(3500, 1.5, 0.045, 0.05, t);

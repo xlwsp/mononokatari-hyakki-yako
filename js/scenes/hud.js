@@ -1,7 +1,7 @@
 // HUD（HP・レベル・スコア・ランキング・レーダー・スキル・強化カード・演出・仮想スティック）
 (function () {
   'use strict';
-  const { T, TO, TB, C, button } = UI;
+  const { T, TO, TB, TR, C, button } = UI;
   // 強化カードの種類ごとの色とアイコン
   const UP_COLOR = { dmg: 0xe8505a, rate: 0xe8505a, extra: 0xe8505a, pierce: 0xe8505a, skillPow: 0xf08a20, skillCd: 0xf08a20, area: 0xf08a20,
     hp: 0x3cb85a, regen: 0x3cb85a, magnet: 0x3a8ae8, bump: 0xe8505a, trait: 0x9a5ae8 };
@@ -9,6 +9,13 @@
     hp: 'GUARD', regen: 'GUARD', magnet: 'SUPPORT', bump: 'ATTACK', trait: 'POWER' };
   const UP_SHORT = { dmg: '攻撃', rate: '連射', extra: '弾数', pierce: '貫通', skillPow: '技威力', skillCd: '技連発', area: '技範囲', hp: 'HP', regen: '回復', magnet: '吸引', bump: '体当り', trait: '覚醒' };
   const UP_ORDER = ['dmg', 'rate', 'extra', 'pierce', 'bump', 'skillPow', 'skillCd', 'area', 'hp', 'regen', 'magnet', 'trait'];
+  // カードの「数値」と「説明」（数値は大きく色つきで見せる）
+  const UP_VAL = {
+    dmg: ['+20%', '攻撃のダメージ'], rate: ['-13%', '攻撃の間隔（速く撃てる）'], extra: ['+1発', '通常攻撃の弾が増える'],
+    pierce: ['+1体', '弾が敵をつらぬく'], skillPow: ['+45%', '{skill}の威力'], skillCd: ['-22%', '{skill}の待ち時間'],
+    area: ['+30%', '{skill}の範囲'], hp: ['HP UP', '最大HPアップ＆全回復\n（30枚まで）'], regen: ['+1.5/秒', '毎秒HPが回復'],
+    magnet: ['+40%', '経験値を吸い寄せる範囲'], bump: ['+25%', 'ぶつかったときのダメージ'], trait: ['+10%', '【{trait}】大アップ\n＋攻撃と体当たり'],
+  };
   const UP_ICON = { dmg: '⚔️', rate: '⚡', extra: '✨', pierce: '🏹', skillPow: '💥', skillCd: '⏱️', area: '🌀', hp: '❤️', regen: '💚', magnet: '🧲', bump: '💢', trait: '👑' };
 
   class UIScene extends Phaser.Scene {
@@ -84,7 +91,7 @@
       this.comboSub = this.add.text(0, 0, 'COMBO', TO(13, '#fff', '#3a2a20', 4)).setOrigin(1, 0.5).setDepth(34).setAlpha(0);
       this.bannerText = null;
       // 持っているカード（アイコン×枚数）
-      this.cardBag = this.add.text(0, 0, '', T(12, '#fff8ea', { lineSpacing: 3 })).setDepth(3);
+      this.cardBag = this.add.text(0, 0, '', TR(14, '#fff8ea', '#10141f', 3, { lineSpacing: 3 })).setDepth(3);
       this.cardBagG = this.add.graphics().setDepth(2);
       this.cardBagKey = '';
       // 大妖のHPバー
@@ -262,7 +269,7 @@
       g.clear();
       if (!parts.length || !this.skPos) { this.cardBag.setText(''); return; }
       const w = Math.min(L.portrait ? L.w - 20 : 330, L.w - 20);
-      this.cardBag.setText(parts.join('  ')).setWordWrapWidth(w - 16, true).setFontSize(short ? 13 : 12);
+      this.cardBag.setText(parts.join('  ')).setWordWrapWidth(w - 16, true).setFontSize(short ? 15 : 14);
       const h = this.cardBag.height + 10;
       const x = L.portrait ? (L.w - w) / 2 : this.skPos.x, y = this.skPos.y - h - 8;
       g.fillStyle(0x161c30, 0.62); g.fillRoundedRect(x, y, Math.min(w, this.cardBag.width + 16), h, 8);
@@ -373,9 +380,9 @@
       for (let i = 0; i < es.length; i += 4) {
         const [px, py] = toR(es[i + 2], es[i + 3]);
         if (!inside(px, py, 3)) continue;
-        const ty = es[i + 1] & 15, el = es[i + 1] >= 16;
+        const ty = es[i + 1] & 63, el = es[i + 1] >= 64;
         if (ty === 7) { g.fillStyle(0xffd84f, 1); g.fillCircle(px, py, 3.5); continue; }
-        const boss = ty === 4, big = boss || el;
+        const boss = ty === 4 || ty === 18 || ty === 21 || ty === 24 || ty === 25, big = boss || el;
         g.fillStyle(0x200000, 0.9); g.fillCircle(px, py, boss ? 7.5 : el ? 5 : 3.4);
         g.fillStyle(boss ? 0xff2a5a : el ? 0xc040ff : 0xff4a3a, big ? blink : 1); g.fillCircle(px, py, boss ? 6 : el ? 3.8 : 2.4);
       }
@@ -448,15 +455,15 @@
       this.hideCards();
       this.cardSeq = ch.s;
       const L = this.L, n = ch.o.length;
-      const cw = Math.min(220, (L.w - 20) / n - 6), chh = L.compact ? 176 : 200;
+      const cw = Math.min(250, (L.w - 16) / n - 6), chh = L.compact ? 214 : 262;
       const gap = L.compact ? 6 : 22;
       const total = n * cw + (n - 1) * gap;
       const cy = L.h * 0.5 + (L.compact ? 20 : 10);
       const objs = [];
       const dim = this.add.rectangle(0, 0, L.w, L.h, 0x0d1020, 0.5).setOrigin(0).setDepth(39);
-      const title = this.add.text(L.w / 2, cy - chh / 2 - 56, 'レベルアップ！ 能力をのばそう', TO(L.compact ? 19 : 26, '#ffe07a', '#3a2a20', 6)).setOrigin(0.5).setDepth(41);
-      const hint = this.add.text(L.w / 2, cy + chh / 2 + 30, L.compact ? 'タップで決定' : '← → でえらぶ　Enter で決定　（1・2・3 キーでもOK）', TO(L.compact ? 13 : 15, '#fff', '#3a2a20', 4)).setOrigin(0.5).setDepth(41);
-      const timer = this.add.text(L.w / 2, cy + chh / 2 + 54, '', TO(12, '#ffe7c0', '#3a2a20', 3)).setOrigin(0.5).setDepth(41);
+      const title = this.add.text(L.w / 2, cy - chh / 2 - 62, 'レベルアップ！ 能力をのばそう', TR(L.compact ? 21 : 28, '#ffe07a', '#3a1a08', 7)).setOrigin(0.5).setDepth(41);
+      const hint = this.add.text(L.w / 2, cy + chh / 2 + 30, L.compact ? 'タップで決定' : '← → でえらぶ　Enter で決定　（1・2・3 キーでもOK）', TR(L.compact ? 15 : 17, '#fff', '#2a1a10', 5)).setOrigin(0.5).setDepth(41);
+      const timer = this.add.text(L.w / 2, cy + chh / 2 + 56, '', TR(14, '#ffe7c0', '#2a1a10', 4)).setOrigin(0.5).setDepth(41);
       const arrow = this.add.text(0, 0, '▼', TO(24, '#ffe07a', '#7a4a1e', 5)).setOrigin(0.5).setDepth(42);
       this.tweens.add({ targets: arrow, scaleY: 0.8, duration: 300, yoyo: true, repeat: -1 });
       objs.push(dim, title, hint, timer, arrow);
@@ -469,20 +476,30 @@
         const col = UP_COLOR[key] || 0x3a8ae8;
         const dark = Phaser.Display.Color.ValueToColor(col).darken(30).color;
         const fsz = L.compact ? 0.88 : 1;
-        // 文字は大きく、説明はクリーム色の地に濃い茶色で読みやすく
-        const iconY = -chh * 0.27, nameY = -chh * 0.03, descTop = nameY + 17 * fsz;
-        const tag = this.add.text(0, -chh / 2 + 14, UP_TAG[key] || '', TO(11 * fsz, '#fff', Tex.rgb(dark, -0.3), 3)).setOrigin(0.5);
-        const icon = this.add.text(0, iconY, UP_ICON[key] || '★', T(28 * fsz)).setOrigin(0.5);
-        const nm = this.add.text(0, nameY, up.name, TO(17 * fsz, '#ffffff', '#1a1020', 5)).setOrigin(0.5);
-        if (nm.width > cw - 14) nm.setScale((cw - 14) / nm.width);
-        const ds = this.add.text(0, (descTop + chh / 2 - 8) / 2, up.desc, T(14 * fsz, '#3a2414', { align: 'center', lineSpacing: 2, wordWrap: { width: cw - 26, useAdvancedWrap: true } })).setOrigin(0.5);
-        if (ds.height > chh / 2 - descTop - 12) ds.setScale((chh / 2 - descTop - 12) / ds.height);
-        const kh = this.add.text(cw / 2 - 9, chh / 2 - 6, String(i + 1), TO(12, '#ffd76a', '#1a1020', 3)).setOrigin(1, 1);
-        // いま持っている枚数
+        // 上半分：アイコンと名前 ／ 下半分：大きな数値＋説明（クリーム色の地に濃い文字）
+        const iconY = -chh * 0.29, nameY = -chh * 0.075, descTop = nameY + 19 * fsz;
+        const dsp = GD.SPECIES[sp];
+        const fill = t => t.replace(/\{skill\}/g, dsp ? dsp.skill.name : 'スキル').replace(/\{trait\}/g, dsp ? dsp.trait.name : '特性');
+        const [val, sub0] = UP_VAL[key] || ['', up.desc];
+        const sub = fill(sub0);
+        const tag = this.add.text(0, -chh / 2 + 15, UP_TAG[key] || '', TR(12 * fsz, '#fff', Tex.rgb(dark, -0.4), 3)).setOrigin(0.5);
+        const icon = this.add.text(0, iconY, UP_ICON[key] || '★', T(32 * fsz)).setOrigin(0.5);
+        const nm = this.add.text(0, nameY, up.name, TR(21 * fsz, '#ffffff', '#140a04', 6)).setOrigin(0.5);
+        if (nm.width > cw - 16) nm.setScale((cw - 16) / nm.width);
+        const boxTop = descTop + 2, boxBot = chh / 2 - 10;
+        // 数値：プラスは赤、短くなる系（マイナス）は青、HPは緑
+        const vcol = key === 'hp' || key === 'regen' ? '#12923a' : val[0] === '-' ? '#1a64d0' : '#d8281a';
+        const vl = this.add.text(0, boxTop + 24 * fsz, val, TR(34 * fsz, vcol, '#ffffff', 6)).setOrigin(0.5);
+        if (vl.width > cw - 24) vl.setScale((cw - 24) / vl.width);
+        const subTop = boxTop + 46 * fsz;
+        const ds = this.add.text(0, (subTop + boxBot) / 2, sub, TR(15.5 * fsz, '#2a1608', null, 0, { align: 'center', lineSpacing: 3, wordWrap: { width: cw - 26, useAdvancedWrap: true } })).setOrigin(0.5);
+        if (ds.height > boxBot - subTop - 4) ds.setScale((boxBot - subTop - 4) / ds.height);
+        const kh = this.add.text(cw / 2 - 10, chh / 2 - 6, String(i + 1), TR(14, '#ffd76a', '#1a1020', 4)).setOrigin(1, 1);
+        // いま持っている枚数（数字を大きく）
         const have = (this.gs.myCards || {})[key] || 0;
-        const hv = this.add.text(0, -chh / 2 - 15, have ? `いま ×${have}` : 'はじめて', TO(13 * fsz, have ? '#ffe07a' : '#d8f0ff', '#1a1020', 4)).setOrigin(0.5, 1);
+        const hv = this.add.text(0, -chh / 2 - 12, have ? `いま ×${have}` : 'はじめて！', TR(17 * fsz, have ? '#ffe07a' : '#a8f0ff', '#140a04', 5)).setOrigin(0.5, 1);
         const zone = this.add.zone(0, 0, cw, chh).setInteractive({ useHandCursor: true });
-        c.add([g, tag, icon, nm, ds, kh, hv, zone]);
+        c.add([g, tag, icon, nm, vl, ds, kh, hv, zone]);
         const card = { c, g, cw, chh, x, y: cy };
         card.draw = sel => {
           g.clear();
@@ -498,11 +515,11 @@
           g.fillStyle(col, 1); g.fillRoundedRect(-hw + 5, -hh + 5, cw - 10, chh * 0.55, { tl: R - 4, tr: R - 4, bl: 0, br: 0 });
           g.fillStyle(0xffffff, 0.16);
           g.fillTriangle(-hw + 5, -hh + 5, -hw + cw * 0.55, -hh + 5, -hw + 5, -hh + chh * 0.45);
-          const iconY = -chh * 0.27, nameY = -chh * 0.03, descTop = nameY + 17 * fsz;
-          g.fillStyle(0x000000, 0.45); g.fillRect(-hw + 5, nameY - 15 * fsz, cw - 10, 30 * fsz);
+          g.fillStyle(0x000000, 0.5); g.fillRect(-hw + 5, nameY - 17 * fsz, cw - 10, 34 * fsz);
           g.fillStyle(0xfff6dc, 1); g.fillRoundedRect(-hw + 9, descTop + 2, cw - 18, hh - descTop - 10, 8);
-          g.fillStyle(0x7a5010, 1); g.fillCircle(0, iconY, 26 * fsz);
-          g.fillStyle(0xfff6dc, 1); g.fillCircle(0, iconY, 23 * fsz);
+          g.fillStyle(0xffe6a8, 1); g.fillRoundedRect(-hw + 15, descTop + 7, cw - 30, 36 * fsz, 6); // 数値の帯
+          g.fillStyle(0x7a5010, 1); g.fillCircle(0, iconY, 30 * fsz);
+          g.fillStyle(0xfff6dc, 1); g.fillCircle(0, iconY, 27 * fsz);
           g.fillStyle(0xffffff, 0.8); g.fillEllipse(-6 * fsz, iconY - 10 * fsz, 20 * fsz, 8 * fsz);
           if (sel) { g.lineStyle(3, 0xfff6c0, 1); g.strokeRoundedRect(-hw, -hh, cw, chh, R); }
         };

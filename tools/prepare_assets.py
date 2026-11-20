@@ -510,13 +510,39 @@ def make_bigboss_and_title():
         print('wrote title_bg', im.size)
 
 
+# 新しい敵（images/ の透過PNG）→ assets/ek_*.png（余白を切って縮小）
+NEW_ENEMIES = [
+    ('雑魚敵lv1_01', 'ek_obake', 128), ('雑魚敵02', 'ek_chochin', 128), ('lv1_Boss', 'ek_boss1', 256),
+    ('lv2_01', 'ek_kitsune', 160), ('lv2_02', 'ek_tanuki', 160), ('lv2_Boss', 'ek_boss2', 300),
+    ('lv3_kyouteki_01', 'ek_oni', 200), ('lv3_kyouteki_02', 'ek_mujina', 200), ('lv3_Boss', 'ek_boss3', 340),
+    ('lv4_Boss', 'ek_boss4', 380),
+]
+
+
+def make_new_enemies():
+    for src, key, size in NEW_ENEMIES:
+        p = os.path.join(SRC, src + '.png')
+        if not os.path.exists(p):
+            print('skip', src); continue
+        im = Image.open(p).convert('RGBA')
+        bbox = im.getchannel('A').point(lambda a: 255 if a > 20 else 0).getbbox()
+        im = im.crop(bbox)
+        sc = size / max(im.size)
+        im = im.resize((max(1, round(im.width * sc)), max(1, round(im.height * sc))), Image.LANCZOS)
+        im.save(os.path.join(OUT, key + '.png'), optimize=True)
+        print('wrote', key, im.size)
+
+
 if __name__ == '__main__':
     import sys as _sys
     args = _sys.argv[1:]
     if 'big' in args:  # 大妖とタイトル背景だけ作り直す
         make_bigboss_and_title()
+    elif 'enemies' in args:  # 新しい敵だけ作り直す
+        make_new_enemies()
     else:
         if 'creatures' not in args:
             main()
         process_creatures()
         make_bigboss_and_title()
+        make_new_enemies()
