@@ -1,7 +1,7 @@
 // 起動・タイトル（モンスター選び）・やられた画面
 (function () {
   'use strict';
-  const { T, TO, TB, C, panel, button, keyNav, forestBackdrop } = UI;
+  const { T, TO, TB, TR, C, panel, button, keyNav, forestBackdrop } = UI;
 
   const store = {
     get(k, d) { try { const v = localStorage.getItem('nakama_' + k); return v == null ? d : v; } catch (e) { return d; } },
@@ -96,10 +96,10 @@
 
   // モンスター選びのグリッド（タイトルとやられた画面で共通）
   const PICK_KEYS = () => GD.UNLOCKS.map(u => u[0]);
-  function monsterPicker(scene, cx, top, width, sel, onPick) {
+  function monsterPicker(scene, cx, top, width, sel, onPick, opt = {}) {
     const keys = PICK_KEYS();
-    const cols = width < 420 ? 5 : 7;
-    const size = Math.min(58, Math.floor((width - 10) / cols) - 8);
+    const cols = opt.cols || (width < 420 ? 5 : 7);
+    const size = Math.min(opt.maxSize || 58, Math.floor((width - 10) / cols) - 8);
     const gap = Math.floor((width - cols * size) / (cols + 1));
     const objs = [];
     const items = keys.map((k, i) => {
@@ -221,9 +221,13 @@
       const info = speciesInfo(k);
       this.infoTitle.setText(info.title);
       this.infoLine.setText(info.line);
+      // 説明が枠に入りきらないときは縮める
+      this.infoLine.setScale(1);
+      if (this.infoMaxH && this.infoLine.height > this.infoMaxH) this.infoLine.setScale(this.infoMaxH / this.infoLine.height);
+      if (this.infoTitle.width > this.infoMaxW) this.infoTitle.setScale(this.infoMaxW / this.infoTitle.width); else this.infoTitle.setScale(1);
       if (this.preview) {
         this.preview.setTexture('cr_' + k).setTint(Unlock.ok(k) ? 0xffffff : 0x111111);
-        const s = this.previewH / this.preview.height;
+        const s = Math.min(this.previewH / this.preview.height, this.previewW / this.preview.width);
         this.preview.setScale(s * 0.6);
         this.tweens.add({ targets: this.preview, scale: s, duration: 260, ease: 'Back.out' });
       }
@@ -232,95 +236,178 @@
     build() {
       const w = this.scale.width, h = this.scale.height;
       titleBackdrop(this, true);
-      const wide = w > 900;
-      const s = Math.min(1, w / 1000, h / 720);
-
-      // 選んだモンスターを大きく
-      if (wide) {
-        this.previewH = Math.min(h * 0.5, 320);
-        this.add.image(w * 0.83, h * 0.78, 'shadow').setDisplaySize(260, 60).setAlpha(0.8);
-        this.preview = this.add.image(w * 0.83, h * 0.8, 'cr_' + this.sp).setOrigin(0.5, 1);
-        this.preview.setScale(this.previewH / this.preview.height);
-        this.tweens.add({ targets: this.preview, y: h * 0.8 - 8, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-      }
-
-      const cx = wide ? w * 0.4 : w / 2;
-      const logoY = Math.max(48, h * 0.1);
-      // ロゴ（タイトル絵と同じ、古い紙のような金色の筆文字）
-      const logo = this.add.text(cx, logoY, 'モノノカタリ', TB(64 * s + 10, '#f8e6bc', '#2a160a', 8 * s + 3)).setOrigin(0.5);
-      this.tweens.add({ targets: logo, scale: 1.03, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-      this.add.text(cx, logoY + 40 * s + 18, '― 百鬼夜行 ―', TB(22 * s + 8, '#e0c0ff', '#1a0a2a', 4)).setOrigin(0.5);
-
-      // メニューパネル
-      const pw = Math.min(560, w - 20);
-      const py = logoY + 60 * s + 34;
-      const gridTop = py + 84;
-      // 先にピッカーの高さを測るため仮配置
-      const tmp = monsterPicker(this, cx, -9999, pw - 30, this.sp, () => {});
-      const gridH = tmp.height; tmp.destroy();
-      const ph = 84 + gridH + 150 + 74;
-      // 古い紙のようなパネル＋金のフチ
-      panel(this, cx - pw / 2, py, pw, ph, { color: 0xf6ead0, alpha: 0.95, border: 0x8a5a1a, borderW: 4, shadow: 0.5 });
-      this.add.graphics().lineStyle(1.5, 0xc89a4a, 0.8).strokeRoundedRect(cx - pw / 2 + 6, py + 6, pw - 12, ph - 12, 13);
+      // 横長で十分な広さ → 2段組（左：名前とえらぶ / 右：大きなモンスターと出撃ボタン）。それ以外は縦1列
+      const two = w >= 760 && w / h >= 1.15;
       const BR = (sz, col) => T(sz, col, { fontFamily: UI.BRUSH, fontStyle: 'normal' });
-      this.add.text(cx - pw / 2 + 22, py + 16, 'なまえ', BR(19, '#5a3a1a'));
-      const inputW = pw - 120;
-      this.input_ = this.add.dom(cx - pw / 2 + 92 + inputW / 2, py + 30, 'input', [
-        `width:${inputW}px`, 'height:40px', 'box-sizing:border-box', 'border-radius:12px', 'border:3px solid #4a3a2e',
-        'background:#fff', 'padding:0 12px', `font-family:${UI.FONT}`, 'font-weight:800', 'font-size:18px', 'color:#4a3a2e', 'outline:none',
-      ].join(';'));
-      this.input_.node.maxLength = 12;
-      this.input_.node.placeholder = 'ゆうしゃ';
-      this.input_.node.value = store.get('name', '');
-      this.input_.node.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') this.input_.node.blur(); });
+      const best = parseInt(store.get('best', '0'), 10) || 0;
+      const narrow = !two;
+      const menu = [
+        ['🏆 ランキング', () => this.showRanking(), 0xf0b030, 0xb07a18],
+        ['🎲 ガチャ', () => this.openShop('gacha'), 0xef7a6a, 0xb24a3e],
+        ['🛡 装備', () => this.openShop('equip'), 0x6fb6e8, 0x3f7fae],
+      ];
+      const parchment = (x, y, pw, ph) => {
+        panel(this, x, y, pw, ph, { color: 0xf6ead0, alpha: 0.95, border: 0x8a5a1a, borderW: 4, shadow: 0.5 });
+        this.add.graphics().lineStyle(1.5, 0xc89a4a, 0.8).strokeRoundedRect(x + 6, y + 6, pw - 12, ph - 12, 13);
+      };
+      const nameInput = (x, y, iw, ih, fs) => {
+        this.input_ = this.add.dom(x + iw / 2, y, 'input', [
+          `width:${iw}px`, `height:${ih}px`, 'box-sizing:border-box', 'border-radius:12px', 'border:3px solid #4a3a2e',
+          'background:#fff', 'padding:0 12px', `font-family:${UI.FONT}`, 'font-weight:800', `font-size:${fs}px`, 'color:#4a3a2e', 'outline:none',
+        ].join(';'));
+        this.input_.node.maxLength = 12;
+        this.input_.node.placeholder = 'ゆうしゃ';
+        this.input_.node.value = store.get('name', '');
+        this.input_.node.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') this.input_.node.blur(); });
+      };
+      const startButtons = (cx, by, bw, bh, fs) => {
+        const gap = 14;
+        this.contBtn = button(this, cx - bw / 2 - gap / 2, by, bw, bh, '続きから', () => this.go(true), { color: 0xd0503e, dark: 0x7a2418, size: fs, brush: true });
+        this.newBtn = button(this, cx + bw / 2 + gap / 2, by, bw, bh, '初めから', () => this.goNew(), { color: 0x6a54b0, dark: 0x352668, size: fs, brush: true });
+        const sub = TR(Math.max(12, fs * 0.5), '#fff8ea', '#2a160a', 4);
+        this.contInfo = this.add.text(cx - bw / 2 - gap / 2, by + bh / 2 + 6, '確認中…', sub).setOrigin(0.5, 0);
+        this.newInfo = this.add.text(cx + bw / 2 + gap / 2, by + bh / 2 + 6, '選んだ妖怪でLv1から', sub).setOrigin(0.5, 0);
+      };
 
-      this.add.text(cx, py + 66, '― 妖怪をえらぶ ―', BR(17, '#5a3a1a')).setOrigin(0.5);
-      this.picker = monsterPicker(this, cx, gridTop, pw - 30, this.sp, k => this.pick(k));
-      const infoY = gridTop + gridH + 12;
-      this.infoTitle = this.add.text(cx, infoY, '', T(17, C.brownCss)).setOrigin(0.5, 0);
-      this.infoLine = this.add.text(cx, infoY + 24, '', T(12, C.soft, { align: 'center', wordWrap: { width: pw - 30, useAdvancedWrap: true } })).setOrigin(0.5, 0);
-      unlockInfo(this, cx, py + ph - 146, pw);
+      if (two) {
+        // ---------- パソコン（横長）：画面いっぱいの2段組 ----------
+        const M = Math.max(18, Math.round(w * 0.025));
+        // 上の帯：左にロゴ、右にメニューとスコア
+        const mbw = Phaser.Math.Clamp(Math.round(w * 0.12), 118, 168), mbh = Phaser.Math.Clamp(Math.round(h * 0.06), 40, 50);
+        const topH = Math.max(Phaser.Math.Clamp(Math.round(h * 0.15), 76, 130), M + mbh + 10 + 46);
+        const menuW = mbw * 3 + 20;
+        const logoMax = Math.min(h * 0.085, (w - menuW - M * 3) / 7.2);
+        const logoSz = Phaser.Math.Clamp(Math.round(logoMax), 30, 76);
+        const logo = this.add.text(M, topH * 0.46, 'モノノカタリ', TB(logoSz, '#f8e6bc', '#2a160a', logoSz / 9 + 3)).setOrigin(0, 0.5);
+        this.add.text(M + logo.width / 2, topH * 0.46 + logoSz * 0.62, '― 百鬼夜行 ―', TB(Math.max(15, logoSz * 0.34), '#e0c0ff', '#1a0a2a', 4)).setOrigin(0.5, 0);
+        menu.forEach(([label, fn, col, dark], i) => {
+          button(this, w - M - menuW + mbw / 2 + i * (mbw + 10), M + mbh / 2, mbw, mbh, label, fn, { color: col, dark, size: Math.min(18, mbh * 0.42) });
+        });
+        const stY = M + mbh + 10;
+        this.ptsText = this.add.text(w - M, stY, '', TR(16, '#7ae8ff', '#10182a', 4)).setOrigin(1, 0);
+        this.bestText = this.add.text(w - M, stY + 22, `ベストスコア  ${best.toLocaleString()}`, TR(16, '#ffe7a8', '#2a160a', 4)).setOrigin(1, 0);
+
+        const bodyTop = topH + 8, helpH = 30, bodyBot = h - M - helpH;
+        const LW = Math.min(620, Math.round(w * 0.47)), lx = M;
+        const lh = bodyBot - bodyTop;
+        parchment(lx, bodyTop, LW, lh);
+        // 名前
+        const rowY = bodyTop + 38;
+        this.add.text(lx + 24, rowY, 'なまえ', BR(22, '#5a3a1a')).setOrigin(0, 0.5);
+        nameInput(lx + 110, rowY, LW - 140, 44, 19);
+        // 妖怪をえらぶ（大きなアイコン）
+        const pickTitleY = rowY + 48;
+        this.add.text(lx + LW / 2, pickTitleY, '― 妖怪をえらぶ ―', BR(21, '#5a3a1a')).setOrigin(0.5);
+        const gridTop = pickTitleY + 22;
+        const unlockH = h < 560 ? 0 : 64; // 低い画面では解放ゲージを省く
+        const gridRoom = bodyBot - 16 - unlockH - gridTop;
+        const pw = LW - 30;
+        // 2段で収まるいちばん大きなアイコン
+        const maxSize = Math.max(40, Math.min(84, Math.floor((gridRoom - 12) / 2), Math.floor((pw - 10) / 7) - 8));
+        this.picker = monsterPicker(this, lx + LW / 2, gridTop + Math.max(0, (gridRoom - (maxSize * 2 + 12)) / 2), pw, this.sp, k => this.pick(k), { cols: 7, maxSize });
+        if (unlockH) unlockInfo(this, lx + LW / 2, bodyBot - 14 - unlockH, LW);
+
+        // 右：選んだ妖怪を大きく＋説明＋出撃ボタン
+        const rx0 = lx + LW + M, rw = w - M - rx0, rcx = rx0 + rw / 2;
+        const bh = Phaser.Math.Clamp(Math.round(h * 0.085), 52, 72);
+        const bw = Math.min(260, (rw - 30) / 2);
+        const by = bodyBot - 22 - bh / 2;
+        startButtons(rcx, by, bw, bh, Math.round(bh * 0.46));
+        // 説明の板
+        const infoH = Phaser.Math.Clamp(Math.round(h * 0.13), 74, 110);
+        const iy = by - bh / 2 - 16 - infoH;
+        const iw = Math.min(rw, 560);
+        const ig = this.add.graphics();
+        ig.fillStyle(0x140a1e, 0.72); ig.fillRoundedRect(rcx - iw / 2, iy, iw, infoH, 14);
+        ig.lineStyle(2, 0xc89a4a, 0.8); ig.strokeRoundedRect(rcx - iw / 2, iy, iw, infoH, 14);
+        this.infoTitle = this.add.text(rcx, iy - 6, '', TB(Math.min(40, h * 0.05), '#fbeccb', '#2a160a', 5)).setOrigin(0.5, 1);
+        this.infoLine = this.add.text(rcx, iy + infoH / 2, '', TR(Math.min(17, h * 0.022), '#fff6e0', null, 0, { align: 'center', lineSpacing: 6, wordWrap: { width: iw - 30, useAdvancedWrap: true } })).setOrigin(0.5);
+        this.infoMaxH = infoH - 14; this.infoMaxW = rw;
+        // 大きなモンスター
+        const titleH = Math.min(40, h * 0.05) * 1.5 + 8;
+        const pBot = iy - titleH - 10, pTop = bodyTop + 6;
+        this.previewH = pBot - pTop; this.previewW = rw * 0.9;
+        if (this.previewH >= 90) {
+        const glow = this.add.circle(rcx, pBot - this.previewH * 0.45, Math.min(this.previewH, rw) * 0.42, 0xb070ff, 0.18).setBlendMode('ADD');
+        this.tweens.add({ targets: glow, scale: 1.08, alpha: 0.28, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        this.add.image(rcx, pBot - 4, 'shadow').setDisplaySize(Math.min(300, rw * 0.5), 60).setAlpha(0.8);
+        this.preview = this.add.image(rcx, pBot, 'cr_' + this.sp).setOrigin(0.5, 1);
+        this.tweens.add({ targets: this.preview, y: pBot - 8, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        } else this.preview = null; // 低すぎる画面ではモンスターの絵を省く
+        this.msgText = this.add.text(rcx, pTop + 10, this.notice || '', TR(17, '#fff', '#2a160a', 5, { align: 'center' })).setOrigin(0.5, 0).setDepth(5);
+        // 操作説明（下の帯）
+        if (h >= 520) this.add.text(w / 2, h - M - helpH / 2, '移動: WASD / 矢印 / ドラッグ　　攻撃とスキルは自動！　　敵を倒してレベルアップ → Lv30で進化！　　他のプレイヤーには体当たり',
+          TR(14, '#fff8ea', '#1a1020', 4)).setOrigin(0.5);
+      } else {
+        // ---------- スマホ（縦長）：上から順に積む。高さを測って、重ならないように詰める ----------
+        const M = 12;
+        const menuH = 40, menuY = h - 10 - menuH / 2;       // 下：ランキング・ガチャ・装備
+        const pw = Math.min(560, w - M * 2), cx = w / 2;
+        const gw = pw - 24;
+        const cols = gw < 420 ? 5 : 7;
+        let iconMax = 58;
+        const pickerH = sz => { const n = Math.ceil(PICK_KEYS().length / cols), size = Math.min(sz, Math.floor((gw - 10) / cols) - 8); const gap = Math.floor((gw - cols * size) / (cols + 1)); return n * size + (n - 1) * gap; };
+        let logoSz = Phaser.Math.Clamp(Math.round(w * 0.11), 30, 56);
+        let showUnlock = true, showSub = true;
+        const infoH = 66, btnH = 54;
+        const need = () => (logoSz * 1.1 + (showSub ? logoSz * 0.5 : 0) + 26) + 14 +
+          (12 + 46 + 26 + pickerH(iconMax) + 10 + infoH + 10 + btnH + 26 + (showUnlock ? 60 : 0) + 10) + 10 + menuH + 10;
+        // 入りきらないときは、順に小さく・省く
+        if (need() > h) showSub = false;
+        if (need() > h) logoSz = 28;
+        if (need() > h) iconMax = 48;
+        if (need() > h) showUnlock = false;
+        if (need() > h) iconMax = 40;
+        let y = 8 + logoSz * 0.55;
+        const logo = this.add.text(cx, y, 'モノノカタリ', TB(logoSz, '#f8e6bc', '#2a160a', logoSz / 9 + 3)).setOrigin(0.5);
+        if (logo.width > w - 20) logo.setScale((w - 20) / logo.width);
+        y += logoSz * 0.55;
+        if (showSub) { this.add.text(cx, y + 2, '― 百鬼夜行 ―', TB(Math.max(14, logoSz * 0.36), '#e0c0ff', '#1a0a2a', 4)).setOrigin(0.5, 0); y += logoSz * 0.5; }
+        // スコアとポイント（ロゴの下に1行）
+        this.ptsText = this.add.text(cx + 6, y + 6, '', TR(14, '#7ae8ff', '#10182a', 4)).setOrigin(0, 0);
+        this.bestText = this.add.text(cx - 6, y + 6, `ベスト ${best.toLocaleString()}`, TR(14, '#ffe7a8', '#2a160a', 4)).setOrigin(1, 0);
+        y += 26 + 8;
+        // 紙のパネル
+        const py = y;
+        const panelBottom = menuY - menuH / 2 - 10;
+        const ph = panelBottom - py;
+        parchment(cx - pw / 2, py, pw, ph);
+        let iy = py + 12 + 20;
+        this.add.text(cx - pw / 2 + 16, iy, 'なまえ', BR(18, '#5a3a1a')).setOrigin(0, 0.5);
+        nameInput(cx - pw / 2 + 84, iy, pw - 100, 40, 17);
+        iy += 26 + 12;
+        this.add.text(cx, iy, '― 妖怪をえらぶ ―', BR(17, '#5a3a1a')).setOrigin(0.5);
+        iy += 14;
+        // 余った高さは、えらぶ欄と説明の間に配る
+        const spare = Math.max(0, panelBottom - (iy + pickerH(iconMax) + 10 + infoH + 10 + btnH + 26 + (showUnlock ? 60 : 0) + 6));
+        const extra = Math.min(spare / 3, 24);
+        this.picker = monsterPicker(this, cx, iy + extra, gw, this.sp, k => this.pick(k), { cols, maxSize: iconMax });
+        iy += extra + this.picker.height + 10 + extra;
+        this.infoTitle = this.add.text(cx, iy, '', TB(20, '#3a1e0a', '#f6ead0', 3)).setOrigin(0.5, 0);
+        this.infoTitle.setShadow(0, 0, 'rgba(0,0,0,0)', 0);
+        this.infoLine = this.add.text(cx, iy + 28 + (infoH - 28) / 2, '', TR(12.5, '#4a2e18', null, 0, { align: 'center', lineSpacing: 2, wordWrap: { width: gw, useAdvancedWrap: true } })).setOrigin(0.5);
+        this.infoMaxH = infoH - 28; this.infoMaxW = gw;
+        iy += infoH + 10 + extra;
+        const bw = Math.min(220, (pw - 50) / 2);
+        startButtons(cx, iy + btnH / 2, bw, btnH, 24);
+        for (const t of [this.contInfo, this.newInfo]) { t.setColor('#5a3a1a'); t.setStroke('#000', 0); t.setFontSize(12); }
+        iy += btnH + 26;
+        if (showUnlock) unlockInfo(this, cx, iy + 4, pw);
+        this.msgText = this.add.text(cx, py - 6, this.notice || '', TR(15, '#fff', '#2a160a', 5, { align: 'center', wordWrap: { width: w - 30 } })).setOrigin(0.5, 1).setDepth(5);
+        menu.forEach(([label, fn, col, dark], i) => {
+          const mw = (w - 24) / 3 - 6;
+          button(this, 12 + mw / 2 + i * (mw + 9), menuY, mw, menuH, label, fn, { color: col, dark, size: 15 });
+        });
+        this.previewH = 0; this.preview = null;
+      }
       this.goBtn = null;
-      // 続きから（オートセーブ）／初めから
-      const bw = Math.min(240, (pw - 50) / 2), by = py + ph - 60;
-      this.contBtn = button(this, cx - bw / 2 - 8, by, bw, 56, '続きから', () => this.go(true), { color: 0xd0503e, dark: 0x7a2418, size: 26, brush: true });
-      this.newBtn = button(this, cx + bw / 2 + 8, by, bw, 56, '初めから', () => this.goNew(), { color: 0x6a54b0, dark: 0x352668, size: 26, brush: true });
-      this.contInfo = this.add.text(cx - bw / 2 - 8, by + 36, '確認中…', T(12, C.soft)).setOrigin(0.5, 0);
-      this.add.text(cx + bw / 2 + 8, by + 36, '選んだモンスターでLv1から', T(12, C.soft)).setOrigin(0.5, 0);
       this.setSave(this.saveData === undefined ? null : this.saveData, this.saveData === undefined);
       if (this.saveData === undefined) {
         Net.saveInfo().then(d => { this.saveData = d; if (this.sys.isActive()) this.setSave(d); })
           .catch(() => { this.saveData = null; if (this.sys.isActive()) { this.setSave(null, false, true); this.showMaint(); } });
       }
       this.pick(this.sp);
-
-      this.msgText = this.add.text(cx, py + ph + 20, this.notice || '', TO(15, '#fff', '#4a3a2e', 4)).setOrigin(0.5);
-      const narrow = w < 500;
-      if (py + ph + 70 < h && !(narrow && py + ph + 120 > h)) {
-        const help = pw < 480
-          ? 'ドラッグで移動・攻撃とスキルは自動！\nレベルアップ → Lv30で進化！\n他のプレイヤーには体当たりで攻撃'
-          : '移動: WASD / 矢印 / ドラッグ　攻撃とスキルは自動！\n敵を倒してレベルアップ → Lv30で進化！ 他のプレイヤーには体当たりで攻撃';
-        this.add.text(cx, py + ph + (narrow ? 34 : 44), help, T(12, '#fff8ea', { align: 'center', stroke: '#2a1f18', strokeThickness: 3 })).setOrigin(0.5, 0);
-      }
-      const best = parseInt(store.get('best', '0'), 10) || 0;
-      this.add.text(w - 12, 10, `ベストスコア  ${best.toLocaleString()}`, TO(16, '#ffe7a8', '#4a3a2e', 4)).setOrigin(1, 0);
-      // ガチャポイント
-      this.ptsText = this.add.text(w - 12, 34, '', TO(15, '#7ae8ff', '#1a2a40', 4)).setOrigin(1, 0);
       this.refreshPts();
-      // ランキング・ガチャ・装備（スマホは画面の下に横並び、PCは左上に縦並び）
-      const menu = [
-        ['🏆 ランキング', () => this.showRanking(), 0xf0b030, 0xb07a18],
-        ['🎲 ガチャ', () => this.openShop('gacha'), 0xef7a6a, 0xb24a3e],
-        ['🛡 装備', () => this.openShop('equip'), 0x6fb6e8, 0x3f7fae],
-      ];
-      menu.forEach(([label, fn, col, dark], i) => {
-        if (narrow) {
-          const bw = (w - 24) / 3 - 6;
-          button(this, 12 + bw / 2 + i * (bw + 9), h - 30, bw, 38, label, fn, { color: col, dark, size: 15 });
-        } else {
-          button(this, 86, 30 + i * 52, 148, 42, label, fn, { color: col, dark, size: 18 });
-        }
-      });
       if (!window.__titleSeen && !this.notice) this.showSplash();
       if (this.notice && /メンテナンス/.test(this.notice)) this.showMaint();
       else Net.ping().then(r => { if (r && r.maint && this.sys.isActive()) this.showMaint(); }).catch(() => {});
