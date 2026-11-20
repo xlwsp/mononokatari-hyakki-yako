@@ -42,17 +42,22 @@
   // 選んだ妖怪の★と、次の★まで（ロビー・やられた画面で共通）
   function starInfo(scene, cx, y, width) {
     const head = scene.add.text(cx, y, '', TR(18, '#c8901a', '#3a1e0a', 4)).setOrigin(0.5, 0);
-    const sub = scene.add.text(cx, y + 26, '', TR(13, '#5a3a1a', null, 0, { align: 'center', wordWrap: { width: width - 30, useAdvancedWrap: true } })).setOrigin(0.5, 0);
+    const gw = Math.min(340, width - 60), gx = cx - gw / 2, gy = y + 28;
+    let gauge = [];
+    const sub = scene.add.text(cx, y + 52, '', TR(13, '#5a3a1a', null, 0, { align: 'center', wordWrap: { width: width - 30, useAdvancedWrap: true } })).setOrigin(0.5, 0);
     return {
       set(k) {
+        gauge.forEach(o => o.destroy()); gauge = [];
         if (!Unlock.ok(k)) {
           head.setText(`🔒 ガチャで手に入る（レア度 ${RARE_NAME[GD.CHARA_RARITY[k] || 0]}）`).setColor('#8a5a5a');
-          sub.setText('ガチャで同じ妖怪が出ると★が上がる（最大★5）');
+          sub.setText('ガチャで同じ妖怪が出ると★が上がる（最大★5）').setY(y + 30);
           return;
         }
-        const st = Unlock.star(k), nx = Unlock.toNext(k);
-        head.setText(`${starStr(st)}　${st >= 5 ? 'MAX！' : `★${st + 1}まであと${nx}体`}`).setColor(st >= 5 ? '#e0402a' : '#c8901a');
-        sub.setText(starLine(st));
+        const st = Unlock.star(k);
+        head.setText(`${starStr(st)}${st >= 5 ? '　MAX！' : ''}`).setColor(st >= 5 ? '#e0402a' : '#c8901a');
+        // ★レベルアップのゲージ
+        gauge = Shop.starGauge(scene, gx, gy, gw, 16, Unlock.dups(k));
+        sub.setText(starLine(st)).setY(y + 52);
       },
     };
   }
@@ -302,7 +307,7 @@
         const pickTitleY = rowY + 48;
         this.add.text(lx + LW / 2, pickTitleY, '― 妖怪をえらぶ ―', BR(21, '#5a3a1a')).setOrigin(0.5);
         const gridTop = pickTitleY + 22;
-        const unlockH = h < 560 ? 0 : 64; // 低い画面では解放ゲージを省く
+        const unlockH = h < 560 ? 0 : 82; // 低い画面では★の欄を省く
         const gridRoom = bodyBot - 16 - unlockH - gridTop;
         const pw = LW - 30;
         // 2段で収まるいちばん大きなアイコン
@@ -354,7 +359,7 @@
         let showUnlock = true, showSub = true;
         const infoH = 66, btnH = 54;
         const need = () => (logoSz * 1.1 + (showSub ? logoSz * 0.5 : 0) + 26) + 14 +
-          (12 + 46 + 26 + pickerH(iconMax) + 10 + infoH + 10 + btnH + 26 + (showUnlock ? 60 : 0) + 10) + 10 + menuH + 10;
+          (12 + 46 + 26 + pickerH(iconMax) + 10 + infoH + 10 + btnH + 26 + (showUnlock ? 82 : 0) + 10) + 10 + menuH + 10;
         // 入りきらないときは、順に小さく・省く
         if (need() > h) showSub = false;
         if (need() > h) logoSz = 28;
@@ -382,7 +387,7 @@
         this.add.text(cx, iy, '― 妖怪をえらぶ ―', BR(17, '#5a3a1a')).setOrigin(0.5);
         iy += 14;
         // 余った高さは、えらぶ欄と説明の間に配る
-        const spare = Math.max(0, panelBottom - (iy + pickerH(iconMax) + 10 + infoH + 10 + btnH + 26 + (showUnlock ? 60 : 0) + 6));
+        const spare = Math.max(0, panelBottom - (iy + pickerH(iconMax) + 10 + infoH + 10 + btnH + 26 + (showUnlock ? 82 : 0) + 6));
         const extra = Math.min(spare / 3, 24);
         this.picker = monsterPicker(this, cx, iy + extra, gw, this.sp, k => this.pick(k), { cols, maxSize: iconMax });
         iy += extra + this.picker.height + 10 + extra;
@@ -642,7 +647,7 @@
       const pw = Math.min(520, w - 20);
       const tmp = monsterPicker(this, w / 2, -9999, pw - 30, this.sp, () => {});
       const gridH = tmp.height; tmp.destroy();
-      const ph = 200 + gridH + 130 + 56;
+      const ph = 200 + gridH + 150 + 56;
       const x = w / 2 - pw / 2, y = Math.max(10, h / 2 - ph / 2);
       panel(this, x, y, pw, ph);
       const title = this.add.text(w / 2, y + 38, 'やられた…', TO(40, '#c8d8ff', '#3a2a40', 8)).setOrigin(0.5).setScale(0.3);
@@ -663,7 +668,7 @@
         if (!Unlock.ok(k)) { this.lockMsg.setText(`🔒 ${GD.SPECIES[k].name} はガチャで手に入ります`); return; }
         this.lockMsg.setText(''); this.sp = k; store.set('sp', k); this.picker.set(k); sb.set(k);
       });
-      const sb = starInfo(this, w / 2, y + ph - 168, pw);
+      const sb = starInfo(this, w / 2, y + ph - 186, pw);
       sb.set(this.sp);
       const b1 = button(this, w / 2, y + ph - 70, Math.min(300, pw - 40), 50, '再出撃！', () => this.respawn(), { color: C.orange, dark: C.orangeDark, size: 22 });
       const b2 = button(this, w / 2, y + ph - 22, 140, 32, 'タイトルへ', () => this.toTitle(), { color: C.gray, dark: C.grayDark, size: 14 });

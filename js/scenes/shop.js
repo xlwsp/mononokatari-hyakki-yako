@@ -12,6 +12,38 @@
   const TIER_NAME = ['★', '★★', '★★★', '★★★★'];
   const stars = st => '★'.repeat(st) + '☆'.repeat(5 - st);
 
+  // ★の進み具合（d＝重ねた数）→ {st, cur, need}（MAXなら need=0）
+  function starProg(d) {
+    let acc = 0, st = 1;
+    for (const n of GD.STAR_NEED) { if (d < acc + n) return { st, cur: d - acc, need: n }; acc += n; st++; }
+    return { st: 5, cur: 0, need: 0 };
+  }
+  // ★レベルアップのゲージ（区切り線つき）。from を渡すとそこから伸びるアニメ
+  function starGauge(scene, x, y, w, h, d, opt = {}) {
+    const g = scene.add.graphics();
+    const txt = opt.label === false ? null : scene.add.text(x + w / 2, y + h / 2, '', TR(Math.max(10, h * 0.78), '#fff', '#2a1408', 3)).setOrigin(0.5);
+    const draw = v => {
+      const pr = starProg(Math.floor(v)), frac = pr.need ? Math.min(1, (v - (Math.floor(v) - pr.cur)) / pr.need) : 1;
+      g.clear();
+      g.fillStyle(0x2a1408, 0.9); g.fillRoundedRect(x - 2, y - 2, w + 4, h + 4, (h + 4) / 2);
+      g.fillStyle(0x5a4030, 1); g.fillRoundedRect(x, y, w, h, h / 2);
+      const fw = Math.max(0, w * frac);
+      if (fw > 0) {
+        g.fillStyle(pr.need ? 0xffc030 : 0xff6a3a, 1); g.fillRoundedRect(x, y, Math.max(h, fw), h, h / 2);
+        g.fillStyle(0xffffff, 0.35); g.fillRoundedRect(x + 2, y + 1, Math.max(h, fw) - 4, h * 0.35, h * 0.2);
+      }
+      if (pr.need > 1) { g.lineStyle(2, 0x2a1408, 0.7); for (let i = 1; i < pr.need; i++) g.lineBetween(x + w * i / pr.need, y + 1, x + w * i / pr.need, y + h - 1); }
+      if (txt) txt.setText(pr.need ? `★${pr.st}→★${pr.st + 1}  ${Math.floor(v) - (Math.floor(v) - pr.cur)}/${pr.need}` : '★MAX');
+    };
+    if (opt.from != null && opt.from < d) {
+      // まず前の状態、少し待ってから新しい状態へ
+      draw(opt.from);
+      const o = { v: opt.from };
+      scene.tweens.add({ targets: o, v: d, delay: opt.delay || 300, duration: 600, ease: 'Quad.out', onUpdate: () => g.active && draw(o.v >= d - 0.001 ? d : o.v), onComplete: () => g.active && draw(d) });
+    } else draw(d);
+    return txt ? [g, txt] : [g];
+  }
+
   // アイテムの絵（レアリティ色のオーラつき）
   function itemIcon(scene, x, y, t, r, size) {
     const ra = GD.RARITIES[r];
@@ -175,9 +207,12 @@
             : g.rf ? [`★MAX！ ${g.rf}P もどってきた`, '#7ae8ff'] : [`+1体（★${g.st + 1}まであと${needLeft(g.d)}体）`, '#e8e0ff'];
           const mt = S(scene.add.text(cx, imgY + 78 * f, msg[0], TR((small ? 17 : 21) * f, msg[1], '#1a0a20', 5)).setOrigin(0.5, 0));
           if (g.new || g.up) scene.tweens.add({ targets: mt, scale: 1.08, duration: 400, yoyo: true, repeat: -1 });
+          // ★レベルアップのゲージ（伸びるアニメつき）
+          const gw = Math.min(300, pw - 100), gh = 16 * f;
+          starGauge(scene, cx - gw / 2, imgY + 112 * f, gw, gh, g.d, { from: g.new || g.rf ? null : g.d - 1, delay: 500 }).forEach(S);
         } else {
           const cols = 5, rows = 2, cw = (pw - 52) / cols, rh = (stageH - 16) / rows;
-          const size = Math.max(28, Math.min(cw - 12, rh - 48));
+          const size = Math.max(28, Math.min(cw - 12, rh - 60));
           got.forEach((g, i) => {
             const gx = x + 26 + cw * (i % cols) + cw / 2, gy = stageY + 8 + rh * Math.floor(i / cols) + size / 2 + 6;
             const parts = [];
@@ -188,6 +223,7 @@
             if (nm.width > cw - 4) nm.setScale((cw - 4) / nm.width);
             parts.push(nm);
             parts.push(S(scene.add.text(gx, gy + size / 2 + 24, '★'.repeat(g.st), TR(small ? 10 : 12, g.st >= 5 ? '#ff6a3a' : '#ffd23a', '#1a0a20', 3)).setOrigin(0.5, 0)));
+            starGauge(scene, gx - (cw - 18) / 2, gy + size / 2 + 42, cw - 18, 7, g.d, { label: false }).forEach(o => { S(o); parts.push(o); });
             const badge = g.new ? ['NEW', '#ffe07a'] : g.up ? ['UP!', '#ff7a5a'] : g.rf ? [`+${g.rf}P`, '#7ae8ff'] : null;
             if (badge) parts.push(S(scene.add.text(gx + size / 2, gy - size / 2, badge[0], TR(small ? 11 : 13, badge[1], '#1a0a20', 4)).setOrigin(0.8, 0.3).setAngle(12)));
             parts.forEach(o => { o.setAlpha(0); scene.tweens.add({ targets: o, alpha: 1, delay: i * 90, duration: 220 }); });
@@ -302,5 +338,5 @@
     ui.onClose = clearDyn;
   }
 
-  window.Shop = { openGacha, openEquip, itemIcon, overlay };
+  window.Shop = { openGacha, openEquip, itemIcon, overlay, starGauge, starProg };
 })();
