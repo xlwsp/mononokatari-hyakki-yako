@@ -156,10 +156,14 @@
     boss4:    { hp: 5200, spd: 88, dmg: 18, r: 70, xp: 42 },
   };
   // フィールドボス：段階ごとのボス。解放されるレベルと、たたきつけの大きさ
-  const FIELD_BOSSES = [[18, 8, 230], [21, 60, 270], [24, 140, 310], [25, 200, 350]];
+  const FIELD_BOSSES = [[18, 5, 230], [21, 30, 270], [24, 90, 310], [25, 150, 350]];
+  // 段階の解放レベル（雑魚・強敵）
+  const TIER2_LV = 15, TIER3_LV = 60;
+  // いちばん強い解放ずみの段階ボス
+  const bossFor = lv => { let t = 18; for (const f of FIELD_BOSSES) if (lv >= f[1]) t = f[0]; return t; };
   const FB_R = {}; for (const [t, , r] of FIELD_BOSSES) FB_R[t] = r;
   // 群れで出る雑魚
-  const PACK = { 9: 1, 10: 1, 11: 1, 12: 1, 13: 1, 14: 1, 16: 1, 17: 1, 19: 1, 20: 1 };
+  const PACK = { 16: 1, 17: 1 };
 
   // 強化カード。{skill} {trait} はモンスターごとのスキル名・特性名に置き換わる
   const UPGRADES = {
@@ -857,7 +861,14 @@
             const cx = p.x + Math.cos(a) * d, cy = p.y + Math.sin(a) * d;
             const n = randInt(3, 6) + (p.lv >= 60 ? 2 : 0) + (p.lv >= 150 ? 2 : 0);
             for (let k = 0; k < n; k++) this.spawnEnemy(ty, p, cx + rand(-60, 60), cy + rand(-60, 60));
-          } else this.spawnEnemy(ty, p, undefined, undefined, p.lv >= ELITE_LV && chance(Math.min(0.25, (p.lv - ELITE_LV + 1) * 0.012)));
+          } else if (ty === 7) this.spawnEnemy(ty, p);
+          else {
+            // 狐・狸・鬼・妖狸は2〜3匹の小さな組で。ときどき赤く光る強敵になる
+            const a = rand(0, Math.PI * 2), d = rand(680, 860);
+            const cx = p.x + Math.cos(a) * d, cy = p.y + Math.sin(a) * d;
+            const n = randInt(1, 3);
+            for (let k = 0; k < n; k++) this.spawnEnemy(ty, p, cx + rand(-50, 50), cy + rand(-50, 50), p.lv >= ELITE_LV && chance(Math.min(0.25, (p.lv - ELITE_LV + 1) * 0.012)));
+          }
         }
         // 群れ：一定時間ごとにまわりから敵がわらわら
         p.swarmT = (p.swarmT === undefined ? rand(5, SWARM_EVERY) : p.swarmT) - dt;
@@ -893,8 +904,9 @@
       if (this.bossT <= 0) {
         this.bossT = BOSS_EVERY;
         const p = alive[randInt(0, alive.length - 1)];
-        const e = this.spawnEnemy(4, p);
-        e.mhp = e.hp = ENEMIES.boss.hp * (1 + p.lv * 0.25);
+        // その人の段階のいちばん強いボスを、特別に硬くして出す
+        const e = this.spawnEnemy(bossFor(p.lv), p);
+        e.mhp = e.hp = e.hp * 3; e.xp *= 2;
         this.ev({ e: 'boss', x: r1(e.x), y: r1(e.y) });
       }
     }
@@ -931,17 +943,18 @@
         if (p.hyW <= 0) {
           p.hyW = 8;
           const n = p.evo ? 12 + Math.min(10, Math.floor(p.lv / 6)) : 7; // 進化前は少なめ
-          let ty = this.pickEnemyType(p.lv + 8, true);
-          while (PACK[ty] && !(ty >= 19 && p.lv >= 110)) ty = this.pickEnemyType(p.lv + 8, true); // 百鬼夜行は強い敵だけ
+          // 百鬼夜行は強い敵だけ（狐・狸、Lv60からは鬼・妖狸）
+          const strong = p.lv >= TIER3_LV ? [22, 23, 19] : [19, 20];
+          const ty = strong[randInt(0, strong.length - 1)];
           for (let i = 0; i < n; i++) {
             const a = (i / n) * Math.PI * 2;
-            this.spawnEnemy(i % 3 === 0 ? 3 : ty, p, p.x + Math.cos(a) * 640, p.y + Math.sin(a) * 640, true);
+            this.spawnEnemy(i % 3 === 0 ? strong[0] : ty, p, p.x + Math.cos(a) * 640, p.y + Math.sin(a) * 640, true);
           }
           // 途中で大妖怪（ボス）も
           if (!p.hyBoss && p.hyT < PARADE_TIME - 15) {
             p.hyBoss = true;
-            const e = this.spawnEnemy(4, p);
-            e.mhp = e.hp = ENEMIES.boss.hp * (1 + p.lv * 0.3);
+            const e = this.spawnEnemy(bossFor(p.lv), p);
+            e.mhp = e.hp = e.hp * 3.5; e.xp *= 2;
             e.dmg *= 1.3;
             this.ev({ e: 'boss', x: r1(e.x), y: r1(e.y) });
           }
@@ -1035,7 +1048,7 @@
       e.callT -= dt;
       if (e.callT <= 0 && td < 1200) {
         e.callT = 7;
-        const ty = [9, 12, 13][randInt(0, 2)];
+        const ty = [16, 17][randInt(0, 1)];
         for (let i = 0; i < 10; i++) {
           const a = i / 10 * Math.PI * 2;
           this.spawnEnemy(ty, t, e.x + Math.cos(a) * 200, e.y + Math.sin(a) * 200);
@@ -1054,19 +1067,17 @@
     }
 
     pickEnemyType(lv, swarm) {
-      // [番号, 重み]（レベルが上がるほど強い敵が混ざる。高レベルでは昔の敵は減って、新しい段階の妖怪が増える）
-      const f = lv >= 150 ? 0.3 : lv >= 80 ? 0.55 : 1;
-      const t3 = lv >= 200 ? 1.6 : 1;
-      const w = [[0, 1 * f], [9, 0.45 * f], [12, lv > 1 ? 0.35 * f : 0], [10, lv > 3 ? 0.35 * f : 0], [13, lv > 5 ? 0.35 * f : 0],
-        [11, lv > 8 ? 0.3 * f : 0], [14, lv > 12 ? 0.3 * f : 0], [1, lv > 2 ? 0.7 * f : 0], [5, lv > 4 ? 0.6 * f : 0], [2, lv > 7 ? 0.5 * f : 0], [6, lv > 10 ? 0.5 * f : 0],
-        [3, lv > 14 ? 0.35 * f : 0], [8, lv > 20 ? 0.25 * f : 0], [7, swarm ? 0 : 0.015],
-        [16, 0.8], [17, lv > 2 ? 0.6 : 0],
-        [19, lv >= 40 ? 0.7 : 0], [20, lv >= 40 ? 0.6 : 0],
-        [22, lv >= 110 ? 0.5 * t3 : 0], [23, lv >= 110 ? 0.6 * t3 : 0]];
+      // [番号, 重み]：用意された妖怪だけ。レベルが上がると次の段階が混ざり、雑魚は減るけどずっと多め
+      const f = lv >= 150 ? 0.45 : lv >= 60 ? 0.6 : 1;
+      const t3 = lv >= 150 ? 1.6 : 1;
+      const w = [[16, 1 * f], [17, lv > 2 ? 0.8 * f : 0],
+        [19, lv >= TIER2_LV ? 0.45 : 0], [20, lv >= TIER2_LV ? 0.4 : 0],
+        [22, lv >= TIER3_LV ? 0.3 * t3 : 0], [23, lv >= TIER3_LV ? 0.35 * t3 : 0],
+        [7, swarm ? 0 : 0.015]];
       const total = w.reduce((a, b) => a + b[1], 0);
       let x = Math.random() * total;
       for (const [ty, wt] of w) { x -= wt; if (x <= 0) return ty; }
-      return 0;
+      return 16;
     }
 
     spawnEnemy(ty, near, x, y, elite) {
@@ -1126,7 +1137,7 @@
         const dx = e.tgt.x - e.x, dy = e.tgt.y - e.y, d = Math.hypot(dx, dy) || 1;
         // ボスと大きな強敵は、予告のあとに地面をたたきつける範囲攻撃
         const fbr = FB_R[e.ty];
-        if (e.ty === 4 || fbr || (e.el && (e.ty === 3 || e.ty === 8 || e.ty === 22))) {
+        if (e.ty === 4 || fbr || (e.el && (e.ty === 20 || e.ty === 22))) {
           e.slamT -= dt;
           if (e.slamT <= 0 && d < 460 && e.tgt.lv >= 10) { // 低レベルの人には使わない
             const boss = e.ty === 4 || !!fbr;

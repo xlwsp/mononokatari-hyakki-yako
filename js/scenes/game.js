@@ -4,11 +4,12 @@
   const { TO } = UI;
   const lerp = (a, b, t) => a + (b - a) * t;
   const FX_DEPTH = 1000000;
-  const ENEMY_KEYS = ['en_slime', 'en_bat', 'en_wisp', 'en_brute', 'en_boss', 'en_shroom', 'en_beetle', 'en_gold', 'en_golem',
-    'en_kedama', 'en_kasa', 'en_chochin', 'en_nezumi', 'en_hitodama', 'en_daruma', 'bigboss',
+  // 0〜14は昔の番号（もう出てこない。念のため用意された画像で表示）。7は金色の笠おばけ（逃げ回るボーナス）
+  const OB = 'ek_obake';
+  const ENEMY_KEYS = [OB, OB, OB, OB, 'ek_boss1', OB, OB, OB, OB, OB, OB, OB, OB, OB, OB, 'bigboss',
     'ek_obake', 'ek_chochin', 'ek_boss1', 'ek_kitsune', 'ek_tanuki', 'ek_boss2', 'ek_oni', 'ek_mujina', 'ek_boss3', 'ek_boss4'];
   // 新しい妖怪の画像は大きめに書き出してあるので小さく表示（見た目の直径 ≒ 当たり判定の約3.4倍）
-  const ENEMY_SCALE = [0.8, 0.75, 0.78, 0.85, 0.9, 0.85, 0.75, 0.85, 1.0, 0.85, 0.85, 0.85, 0.85, 0.85, 0.85, 0.95,
+  const ENEMY_SCALE = [0.42, 0.42, 0.42, 0.42, 0.6, 0.42, 0.42, 0.46, 0.42, 0.42, 0.42, 0.42, 0.42, 0.42, 0.42, 0.95,
     0.42, 0.44, 0.6, 0.4, 0.44, 0.62, 0.45, 0.42, 0.62, 0.64];
   const ENEMY_BURST = [0xb48cff, 0x9a7ad0, 0x8fb8ff, 0xff9a7a, 0xff5a7e, 0xd8604a, 0x5a7ad0, 0xffd84f, 0x9a9288, 0xf0e2c4, 0xff6a7a, 0xffb050, 0xc0c0d0, 0x9ff0d8, 0xff4a3a, 0xb070ff,
     0xc08aff, 0xff5a4a, 0xff7a3a, 0xff6a6a, 0xd8a060, 0xb070ff, 0xff4a3a, 0xa060ff, 0xff4a8a, 0xffe07a];
@@ -630,6 +631,7 @@
           o = this.getEnemy(ty); this.eSprites.set(id, o);
           o.el = el;
           if (el) { o.img.setTint(0xff8a8a); o.shadow.setTint(0xff0000); } else o.shadow.clearTint();
+          if (ty === 7) o.img.setTint(0xffd84f); // 金色のおばけ
         }
         o.stamp = stamp;
         const j = am.get(id);
@@ -656,7 +658,7 @@
         if (ty === 15 && Math.random() < 0.3) this.burst(x + Phaser.Math.Between(-150, 150), y - Phaser.Math.Between(60, 300), 0x8a4aff, 1); // 妖気
         if (ty === 7 && Math.random() < 0.15) FX.twinkle(this, x + Phaser.Math.Between(-15, 15), y - 20, 1);
         if (o.el && Math.random() < 0.08) this.burst(x + Phaser.Math.Between(-20, 20), y - 30, 0xff3a3a, 1);
-        if (o.flash > 0) { o.flash -= dt; if (o.flash <= 0) { if (o.el) o.img.setTint(0xff8a8a); else o.img.clearTint(); } }
+        if (o.flash > 0) { o.flash -= dt; if (o.flash <= 0) { if (o.el) o.img.setTint(0xff8a8a); else if (o.ty === 7) o.img.setTint(0xffd84f); else o.img.clearTint(); } }
       }
       for (const [id, o] of this.eSprites) if (o.stamp !== stamp) this.freeEnemy(id);
       this.bossNear = bossNear; // ボスが近いとBGMが激しくなる
