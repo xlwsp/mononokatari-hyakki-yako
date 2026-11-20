@@ -118,8 +118,10 @@
   // ハイスコアランキング（{list, mine, total}）
   const highScores = () => ask('hs?', 'hs');
   // ガチャポイント・持ち物・装備（{pts, inv, eq, cost, got}）
-  const profile = () => ask('prof?', 'prof');
-  const gacha = n => ask('gacha', 'prof', { n: n || 1 });
+  // texp：前の「累計EXPで解放」の記録（サーバーが1回だけ妖怪を引きつぐ）
+  const legacy = () => { try { return parseInt(localStorage.getItem('nakama_texp') || '0', 10) || 0; } catch (e) { return 0; } };
+  const profile = () => ask('prof?', 'prof', { texp: legacy() });
+  const gacha = (n, k) => ask('gacha', 'prof', { n: n || 1, k: k || 'chara', texp: legacy() });
   const equip = (sp, key) => ask('equip', 'prof', { sp, key });
   // サーバーの様子（{maint: true/false}）
   const ping = () => ask('ping', 'pong');

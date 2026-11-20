@@ -704,7 +704,7 @@
       this.ev({ e: 'dd', p: p.id, by: killer ? killer.id : 0, x: r1(p.x), y: r1(p.y), lv: p.lv, sc: p.score, sp: p.sp });
     }
 
-    traitPow(p) { return 1 + 0.7 * (p.traitLv - 1) + (p.evo ? 0.6 : 0); }
+    traitPow(p) { return 1 + 0.7 * (p.traitLv - 1) + (p.evo ? 0.6 : 0) + ((p.star || 1) >= 5 ? 0.5 : 0); }
 
     // ---------- プレイヤー同士の体当たり（ぶつかるとお互いにダメージ） ----------
     updateBumps(dt) {
@@ -1232,6 +1232,7 @@
 
     // ---------- 戦闘 ----------
     hurtPlayer(p, dmg) {
+      dmg *= starBonus(p.star).def;
       if (p.shield > 0) {
         const a = Math.min(p.shield, dmg);
         p.shield -= a; dmg -= a;
@@ -1245,7 +1246,9 @@
     // 装備アイテム（体のまわりをくるくる回って、触れた敵にダメージ）
     setItem(p, item) {
       p.item = null;
-      if (!item) return;
+      // ★（ガチャで同じ妖怪を重ねた強さ。1〜5）
+      p.star = item && item.st ? clamp(item.st | 0, 1, 5) : 1;
+      if (!item || item.t === undefined || item.t === null) return;
       const t = item.t | 0, r = item.r | 0;
       if (t >= 0 && t < ITEMS.length && r >= 0 && r < RARITIES.length) p.item = { t, r };
     }
@@ -1255,7 +1258,7 @@
       const def = ITEMS[it.t], n = RARITIES[it.r].n;
       const R = this.radius(p) + 46, hitR = 24 + it.r * 2;
       // 装備も、カードで上げた攻撃力・スキル威力についていく
-      const dmg = def.dmg * RARITIES[it.r].pow * this.lvMul(p) * p.dmgMul * Math.sqrt(p.skillPow);
+      const dmg = def.dmg * RARITIES[it.r].pow * this.lvMul(p) * p.dmgMul * Math.sqrt(p.skillPow) * starBonus(p.star).atk;
       const cd = 0.35 * Math.sqrt(p.rateMul);
       const base = this.time * ORBIT_SPEED;
       for (let i = 0; i < n; i++) {
@@ -1294,7 +1297,7 @@
       // スキル
       p.scd -= dt;
       if (p.scd <= 0) {
-        if (this.useSkill(p, def)) p.scd = def.skill.cd * p.skillCd * (p.evo ? 0.6 : 1);
+        if (this.useSkill(p, def)) p.scd = def.skill.cd * p.skillCd * (p.evo ? 0.6 : 1) * starBonus(p.star).cd;
         else p.scd = 0.3;
       }
       // 通常攻撃（モンスターごとに違う）
@@ -1303,7 +1306,7 @@
       const a = def.atk;
       const t = this.nearestEnemy(p.x, p.y, 420);
       if (!t) { p.atkCd = 0.1; return; }
-      const dmg = a.dmg * p.dmgMul * this.lvMul(p);
+      const dmg = a.dmg * p.dmgMul * this.lvMul(p) * starBonus(p.star).atk;
       const base = Math.atan2(t.y - p.y, t.x - p.x);
       const n = (a.n || 1) + p.extra;
       for (let i = 0; i < n; i++) {
@@ -1318,7 +1321,7 @@
     // スキル発動。発動したら true
     useSkill(p, def) {
       const id = def.skill.id, evo = p.evo;
-      const pw = p.skillPow * this.lvMul(p) * (evo ? 1.3 : 1);
+      const pw = p.skillPow * this.lvMul(p) * (evo ? 1.3 : 1) * starBonus(p.star).skill;
       const area = p.areaMul;
       const fx = p.x, fy = p.y;
       const sk = (r, extra) => this.ev(Object.assign({ e: 'sk', k: id, p: p.id, sp: p.sp, x: r1(fx), y: r1(fy), r }, extra || {}));
@@ -1616,7 +1619,7 @@
       s.me = {
         xp: Math.floor(me.xp), xpn: me.xpn, tx: Math.floor(me.txp), k: me.kills, pk: me.pkills, ch: me.choices[0] || null,
         cht: me.choices[0] ? Math.max(0, Math.ceil(15 - me.chT)) : 0,
-        scd: Math.round(clamp(me.scd / (SPECIES[me.sp].skill.cd * me.skillCd * (me.evo ? 0.6 : 1)), 0, 1) * 100) / 100,
+        scd: Math.round(clamp(me.scd / (SPECIES[me.sp].skill.cd * me.skillCd * (me.evo ? 0.6 : 1) * starBonus(me.star).cd), 0, 1) * 100) / 100, st: me.star || 1,
         by: me.killedBy, dt: me.alive ? 0 : Math.round(me.deadT),
         hy: me.hyT ? Math.ceil(me.hyT) : 0, pt: Math.max(0, Math.ceil(this.paradeT)),
         cd: me.cardsV !== me.cardsSent || this.tick % 40 === 0 ? (me.cardsSent = me.cardsV, me.cards) : undefined,
@@ -1660,6 +1663,21 @@
   const SAVE_KEYS = ['lv', 'xp', 'txp', 'evo', 'hp', 'mhp', 'kills', 'score', 'bossKills', 'pkills', 'pkScore', 'spd',
     'hpCards', 'dmgMul', 'rateMul', 'extra', 'pierce', 'skillPow', 'skillCd', 'areaMul', 'magnet', 'regen', 'bumpMul', 'traitLv', 'revived', 'cards'];
 
+  // ---------- 妖怪ガチャと★（server.py と同じ内容） ----------
+  // はじめから持っている妖怪。ほかはガチャで手に入る
+  const STARTERS = ['gekomaru', 'maimai', 'suzune'];
+  // レア度（0:★ 1:★★ 2:★★★ 3:★★★★）と出る確率
+  const CHARA_RARITY = { gekomaru: 0, maimai: 0, suzune: 0, kodama: 0, kohaku: 0, rangyo: 1, uroko: 1, kuroro: 1, nejimaru: 2, hakua: 2, komori: 2, toosibi: 3, sinonome: 3 };
+  const CHARA_RATES = [50, 30, 15, 5];
+  // 同じ妖怪が出たら★が上がる：★1→2に1体、→3に2体、→4に4体、→5に8体（倍々）
+  const STAR_NEED = [1, 2, 4, 8];
+  const starOf = dups => { let st = 1, acc = 0; for (const n of STAR_NEED) { acc += n; if (dups >= acc) st++; } return st; };
+  // ★の強さ：攻撃・スキル威力・スキルの待ち時間・受けるダメージ。★5で特性も覚醒
+  function starBonus(st) {
+    const b = clamp((st || 1) - 1, 0, 4);
+    return { atk: 1 + 0.06 * b, skill: 1 + 0.15 * b + (b >= 4 ? 0.25 : 0), cd: 1 - 0.05 * b, def: 1 - 0.04 * b, awake: b >= 4 };
+  }
+
   // モンスターの解放：累計で獲得した経験値で順に解放（強いモンスターほど後ろ）
   const UNLOCKS = [
     ['gekomaru', 0], ['maimai', 0], ['suzune', 0],
@@ -1669,7 +1687,7 @@
   const UNLOCK_AT = {}; UNLOCKS.forEach(([k, v]) => { UNLOCK_AT[k] = v; });
 
   global.GD = {
-    UNLOCKS, UNLOCK_AT, ITEMS, RARITIES, ORBIT_SPEED,
+    UNLOCKS, UNLOCK_AT, ITEMS, RARITIES, ORBIT_SPEED, STARTERS, CHARA_RARITY, CHARA_RATES, STAR_NEED, starOf, starBonus,
     WORLD, TICK, EDGE, VIEW_R, RADAR_R, MAX_PLAYERS, EVOLVE_LV, PROTECT_TIME, NEWBIE_LV, generateMap, resolve, auraTier,
     SPECIES, SPECIES_KEYS, ENEMY_TYPES, ENEMIES, UPGRADES, COLORS, upgradeText,
     xpNeed, clamp,

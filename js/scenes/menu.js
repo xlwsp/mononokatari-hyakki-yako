@@ -9,55 +9,52 @@
   };
   window.Store = store;
 
-  // 累計獲得EXPとモンスターの解放（この端末に保存）
+  // 持っている妖怪と★（サーバーのプロフィールが正。すぐ表示できるようにこの端末にも覚えておく）
   const Unlock = {
-    total: parseInt(store.get('texp', '0'), 10) || 0,
-    lastTx: 0, saveAt: 0, dirty: false,
-    ok(k) { return this.total >= (GD.UNLOCK_AT[k] || 0); },
-    next() { return GD.UNLOCKS.find(([, v]) => v > this.total) || null; },
-    // サーバーから届く「今の命で稼いだEXP」を足していく。新しく解放されたモンスターを返す
-    track(tx) {
-      if (this.lastTx < 0) { this.lastTx = tx; return null; } // 続きから：セーブ済みの分は数えない
-      if (tx < this.lastTx) this.lastTx = 0; // 再出撃で0に戻った
-      const d = tx - this.lastTx;
-      this.lastTx = tx;
-      if (d <= 0) return null;
-      const before = this.total;
-      this.total += d; this.dirty = true;
-      const now = performance.now();
-      if (now - this.saveAt > 1000) { this.save(); this.saveAt = now; }
-      const got = GD.UNLOCKS.find(([, v]) => v > before && v <= this.total);
-      return got ? got[0] : null;
+    chars: (() => { try { return JSON.parse(store.get('chars', 'null')); } catch (e) { return null; } })(),
+    ok(k) { return GD.STARTERS.includes(k) || !!(this.chars && k in this.chars); },
+    dups(k) { return this.chars && this.chars[k] != null ? this.chars[k] : (GD.STARTERS.includes(k) ? 0 : -1); },
+    star(k) { const d = this.dups(k); return d < 0 ? 0 : GD.starOf(d); },
+    // 新しい情報が来たら覚える。変わったら true
+    set(chars) {
+      if (!chars) return false;
+      const a = JSON.stringify(chars), changed = a !== JSON.stringify(this.chars);
+      this.chars = chars; store.set('chars', a);
+      return changed;
     },
-    reset(cont) { this.lastTx = cont ? -1 : 0; },
-    save() {
-      if (!this.dirty) return; // 増えていないときは書かない（他のタブの値を消さないように）
-      this.dirty = false;
-      const saved = parseInt(store.get('texp', '0'), 10) || 0;
-      store.set('texp', String(Math.floor(Math.max(saved, this.total))));
+    // 次の★まであと何体（MAXなら0）
+    toNext(k) {
+      const d = this.dups(k); if (d < 0) return -1;
+      let acc = 0; for (const n of GD.STAR_NEED) { acc += n; if (d < acc) return acc - d; }
+      return 0;
     },
   };
   window.Unlock = Unlock;
-  window.addEventListener('beforeunload', () => Unlock.save());
 
-  // 解放状況の表示（累計EXPと、次のモンスターまで）
-  function unlockInfo(scene, cx, y, width) {
-    const nx = Unlock.next();
-    const tot = Math.floor(Unlock.total);
-    scene.add.text(cx, y, `累計獲得EXP  ${tot.toLocaleString()}`, TO(17, '#ffe07a', '#4a3a2e', 5)).setOrigin(0.5, 0);
-    const bw = Math.min(300, width - 40), bx = cx - bw / 2, by = y + 26;
-    const g = scene.add.graphics();
-    g.fillStyle(0x3a2a20, 0.85); g.fillRoundedRect(bx, by, bw, 12, 6);
-    if (nx) {
-      const prev = [...GD.UNLOCKS].reverse().find(([, v]) => v <= tot);
-      const p0 = prev ? prev[1] : 0, r = Phaser.Math.Clamp((tot - p0) / (nx[1] - p0), 0, 1);
-      if (r > 0) { g.fillStyle(0xffc94a, 1); g.fillRoundedRect(bx, by, Math.max(12, bw * r), 12, 6); }
-      scene.add.text(cx, by + 16, `あと ${(nx[1] - tot).toLocaleString()} EXP で「${GD.SPECIES[nx[0]].name}」解放（${nx[1].toLocaleString()} EXP）`, T(12, C.soft)).setOrigin(0.5, 0);
-    } else {
-      g.fillStyle(0xffc94a, 1); g.fillRoundedRect(bx, by, bw, 12, 6);
-      scene.add.text(cx, by + 16, '全モンスター解放済み！', T(12, C.soft)).setOrigin(0.5, 0);
-    }
-    return 50;
+  // ★の表示（★★★☆☆）
+  const starStr = st => '★'.repeat(st) + '☆'.repeat(5 - st);
+  const RARE_NAME = ['★', '★★', '★★★', '★★★★'];
+  function starLine(st) {
+    const b = GD.starBonus(st), pct = v => Math.round(v * 100);
+    if (st <= 1) return '★を上げると 攻撃・スキル・守りが強くなる（最大★5）';
+    return `攻撃+${pct(b.atk - 1)}%　スキル威力+${pct(b.skill - 1)}%　待ち時間-${pct(1 - b.cd)}%　被ダメ-${pct(1 - b.def)}%${b.awake ? '　特性覚醒！' : ''}`;
+  }
+  // 選んだ妖怪の★と、次の★まで（ロビー・やられた画面で共通）
+  function starInfo(scene, cx, y, width) {
+    const head = scene.add.text(cx, y, '', TR(18, '#c8901a', '#3a1e0a', 4)).setOrigin(0.5, 0);
+    const sub = scene.add.text(cx, y + 26, '', TR(13, '#5a3a1a', null, 0, { align: 'center', wordWrap: { width: width - 30, useAdvancedWrap: true } })).setOrigin(0.5, 0);
+    return {
+      set(k) {
+        if (!Unlock.ok(k)) {
+          head.setText(`🔒 ガチャで手に入る（レア度 ${RARE_NAME[GD.CHARA_RARITY[k] || 0]}）`).setColor('#8a5a5a');
+          sub.setText('ガチャで同じ妖怪が出ると★が上がる（最大★5）');
+          return;
+        }
+        const st = Unlock.star(k), nx = Unlock.toNext(k);
+        head.setText(`${starStr(st)}　${st >= 5 ? 'MAX！' : `★${st + 1}まであと${nx}体`}`).setColor(st >= 5 ? '#e0402a' : '#c8901a');
+        sub.setText(starLine(st));
+      },
+    };
   }
   // タイトル画面の背景：物置の絵。ロビーではツボに寄って暗くぼかし、妖気がただよう
   const TBG = { w: 1600, h: 900, potX: 770, potY: 610 };
@@ -115,12 +112,17 @@
       const zone = scene.add.zone(x, y, size + 6, size + 6).setInteractive({ useHandCursor: true });
       zone.on('pointerdown', () => { Sfx.init(); Sfx.play('click'); onPick(k); });
       objs.push(ring, bg, ic, zone);
-      if (!Unlock.ok(k)) { // まだ解放されていない：暗くしてカギ
+      if (!Unlock.ok(k)) { // まだ持っていない：暗くしてカギ（ガチャで手に入る）
         ic.setTint(0x222222);
         const dark = scene.add.circle(x, y, size / 2, 0x000000, 0.35);
         const lock = scene.add.text(x, y - 4, '🔒', { fontSize: Math.round(size * 0.36) + 'px' }).setOrigin(0.5);
-        const need = scene.add.text(x, y + size * 0.3, (GD.UNLOCK_AT[k] / 1000) + 'k', TO(11, '#ffe07a', '#2a1f18', 3)).setOrigin(0.5);
+        const need = scene.add.text(x, y + size * 0.32, 'ガチャ', TR(Math.max(10, size * 0.2), '#ffe07a', '#2a1f18', 3)).setOrigin(0.5);
         objs.push(dark, lock, need);
+      } else {
+        // ★の数（下に小さく）
+        const st = Unlock.star(k);
+        const sb = scene.add.text(x, y + size / 2 + 1, '★'.repeat(st), TR(Math.max(9, size * 0.19), st >= 5 ? '#ff6a3a' : '#ffd23a', '#3a1e0a', 3)).setOrigin(0.5, 0.5);
+        objs.push(sb);
       }
       return { k, ring, ic, x, y };
     });
@@ -144,8 +146,8 @@
 
   function speciesInfo(sp) {
     const d = GD.SPECIES[sp];
-    if (!Unlock.ok(sp)) return { title: `🔒 ${d.name}（${d.role}）`, line: `累計獲得EXP ${GD.UNLOCK_AT[sp].toLocaleString()} で解放\nスキル【${d.skill.name}】${d.skill.desc}` };
-    return { title: `${d.name}（${d.role}）`, line: `スキル【${d.skill.name}】${d.skill.desc}\n特性【${d.trait.name}】${d.trait.desc}` };
+    if (!Unlock.ok(sp)) return { title: `🔒 ${d.name}（${d.role}）`, line: `ガチャで手に入る妖怪\nスキル【${d.skill.name}】${d.skill.desc}` };
+    return { title: `${d.name}（${d.role}）${'★'.repeat(Unlock.star(sp))}`, line: `スキル【${d.skill.name}】${d.skill.desc}\n特性【${d.trait.name}】${d.trait.desc}` };
   }
 
   // ---------------- Boot ----------------
@@ -218,6 +220,7 @@
       this.sp = k;
       if (Unlock.ok(k)) store.set('sp', k);
       this.picker.set(k);
+      if (this.starBox) this.starBox.set(k);
       const info = speciesInfo(k);
       this.infoTitle.setText(info.title);
       this.infoLine.setText(info.line);
@@ -273,7 +276,7 @@
         // ---------- パソコン（横長）：画面いっぱいの2段組 ----------
         const M = Math.max(18, Math.round(w * 0.025));
         // 上の帯：左にロゴ、右にメニューとスコア
-        const mbw = Phaser.Math.Clamp(Math.round(w * 0.12), 118, 168), mbh = Phaser.Math.Clamp(Math.round(h * 0.06), 40, 50);
+        const mbw = Phaser.Math.Clamp(Math.round(w * 0.14), 140, 200), mbh = Phaser.Math.Clamp(Math.round(h * 0.075), 48, 62);
         const topH = Math.max(Phaser.Math.Clamp(Math.round(h * 0.15), 76, 130), M + mbh + 10 + 46);
         const menuW = mbw * 3 + 20;
         const logoMax = Math.min(h * 0.085, (w - menuW - M * 3) / 7.2);
@@ -281,7 +284,7 @@
         const logo = this.add.text(M, topH * 0.46, 'モノノカタリ', TB(logoSz, '#f8e6bc', '#2a160a', logoSz / 9 + 3)).setOrigin(0, 0.5);
         this.add.text(M + logo.width / 2, topH * 0.46 + logoSz * 0.62, '― 百鬼夜行 ―', TB(Math.max(15, logoSz * 0.34), '#e0c0ff', '#1a0a2a', 4)).setOrigin(0.5, 0);
         menu.forEach(([label, fn, col, dark], i) => {
-          button(this, w - M - menuW + mbw / 2 + i * (mbw + 10), M + mbh / 2, mbw, mbh, label, fn, { color: col, dark, size: Math.min(18, mbh * 0.42) });
+          button(this, w - M - menuW + mbw / 2 + i * (mbw + 10), M + mbh / 2, mbw, mbh, label, fn, { color: col, dark, size: Math.min(24, mbh * 0.42, mbw / 6), brush: true });
         });
         const stY = M + mbh + 10;
         this.ptsText = this.add.text(w - M, stY, '', TR(16, '#7ae8ff', '#10182a', 4)).setOrigin(1, 0);
@@ -305,7 +308,7 @@
         // 2段で収まるいちばん大きなアイコン
         const maxSize = Math.max(40, Math.min(84, Math.floor((gridRoom - 12) / 2), Math.floor((pw - 10) / 7) - 8));
         this.picker = monsterPicker(this, lx + LW / 2, gridTop + Math.max(0, (gridRoom - (maxSize * 2 + 12)) / 2), pw, this.sp, k => this.pick(k), { cols: 7, maxSize });
-        if (unlockH) unlockInfo(this, lx + LW / 2, bodyBot - 14 - unlockH, LW);
+        if (unlockH) this.starBox = starInfo(this, lx + LW / 2, bodyBot - 10 - unlockH, LW);
 
         // 右：選んだ妖怪を大きく＋説明＋出撃ボタン
         const rx0 = lx + LW + M, rw = w - M - rx0, rcx = rx0 + rw / 2;
@@ -341,7 +344,7 @@
       } else {
         // ---------- スマホ（縦長）：上から順に積む。高さを測って、重ならないように詰める ----------
         const M = 12;
-        const menuH = 40, menuY = h - 10 - menuH / 2;       // 下：ランキング・ガチャ・装備
+        const menuH = 52, menuY = h - 10 - menuH / 2;       // 下：ランキング・ガチャ・装備
         const pw = Math.min(560, w - M * 2), cx = w / 2;
         const gw = pw - 24;
         const cols = gw < 420 ? 5 : 7;
@@ -392,11 +395,11 @@
         startButtons(cx, iy + btnH / 2, bw, btnH, 24);
         for (const t of [this.contInfo, this.newInfo]) { t.setColor('#5a3a1a'); t.setStroke('#000', 0); t.setFontSize(12); }
         iy += btnH + 26;
-        if (showUnlock) unlockInfo(this, cx, iy + 4, pw);
+        if (showUnlock) this.starBox = starInfo(this, cx, iy + 4, pw);
         this.msgText = this.add.text(cx, py - 6, this.notice || '', TR(15, '#fff', '#2a160a', 5, { align: 'center', wordWrap: { width: w - 30 } })).setOrigin(0.5, 1).setDepth(5);
         menu.forEach(([label, fn, col, dark], i) => {
           const mw = (w - 24) / 3 - 6;
-          button(this, 12 + mw / 2 + i * (mw + 9), menuY, mw, menuH, label, fn, { color: col, dark, size: 15 });
+          button(this, 12 + mw / 2 + i * (mw + 9), menuY, mw, menuH, label, fn, { color: col, dark, size: Math.min(19, mw / 6.2), brush: true });
         });
         this.previewH = 0; this.preview = null;
       }
@@ -415,65 +418,56 @@
 
     // ハイスコアランキング（全期間・人のプレイヤーだけ・1人1つの自己ベスト）
     showRanking() {
-      if (this.rankBox || this.nameAsk || this.confirmBox || this.connecting) return;
-      const w = this.scale.width, h = this.scale.height;
-      const pw = Math.min(520, w - 20), ph = Math.min(h - 30, 660), x = w / 2 - pw / 2, y = h / 2 - ph / 2;
-      const objs = [];
-      const dim = this.add.rectangle(0, 0, w, h, 0x1d1020, 0.65).setOrigin(0).setInteractive().setDepth(60);
-      const box = this.add.container(0, 0).setDepth(61);
-      objs.push(dim, box);
-      box.add(panel(this, x, y, pw, ph, { alpha: 1 }));
-      box.add(this.add.text(w / 2, y + 32, '🏆 ハイスコアランキング', TO(w < 500 ? 22 : 28, '#ffe07a', '#4a3a2e', 6)).setOrigin(0.5));
-      const status = this.add.text(w / 2, y + ph / 2, '読み込み中…', T(16, C.soft)).setOrigin(0.5);
-      box.add(status);
-      this.hideInput(true);
-      const close = () => { objs.forEach(o => o.destroy()); this.rankBox = null; this.input.keyboard.off('keydown', onKey); this.hideInput(false); };
-      const onKey = e => { if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') close(); };
-      this.time.delayedCall(250, () => this.rankBox && this.input.keyboard.on('keydown', onKey));
-      const btn = button(this, w / 2, y + ph - 34, 160, 44, 'とじる', close, { color: C.gray, dark: C.grayDark, size: 18 }).setDepth(62);
-      objs.push(btn);
-      box.setScale(0.7).setAlpha(0);
-      this.tweens.add({ targets: box, scale: 1, alpha: 1, duration: 220, ease: 'Back.out' });
-      this.rankBox = { close };
-      const medal = ['#f7c948', '#c9d3dc', '#d99a5b'];
+      if (this.rankBox || this.shopBox || this.nameAsk || this.confirmBox || this.connecting) return;
+      const ui = Shop.overlay(this, '🏆 ランキング', 600, 760, { slot: 'rankBox' });
+      const { x, y, pw, ph, w, add } = ui;
+      const small = pw < 480;
+      add(this.add.text(w / 2, y + 46, 'ハイスコア（全期間・1人1つの自己ベスト）', TR(small ? 13 : 15, '#6a4a2a')).setOrigin(0.5).setDepth(62));
+      const status = add(this.add.text(w / 2, y + ph / 2, '読み込み中…', TR(18, '#6a4a2a')).setOrigin(0.5).setDepth(62));
+      const medal = ['#e8a810', '#8a9aa8', '#c0783a'];
       Net.highScores().then(d => {
-        if (!this.rankBox || !status.active) return;
+        if (ui.closed) return;
         const list = (d && d.list) || [];
         if (!list.length) { status.setText('まだ記録がありません\nいちばん乗りをめざそう！').setAlign('center'); return; }
         status.destroy();
-        const top = y + 64, bottom = y + ph - 100;
-        const rowH = Math.max(22, Math.min(30, Math.floor((bottom - top) / list.length)));
+        const top = y + 70, bottom = y + ph - 110;
+        const rowH = Math.max(26, Math.min(36, Math.floor((bottom - top) / list.length)));
         const n = Math.min(list.length, Math.floor((bottom - top) / rowH));
-        const fs = rowH >= 28 ? 16 : 14, isz = rowH - 4;
+        const fs = rowH >= 32 ? 18 : rowH >= 28 ? 16 : 14, isz = rowH - 4;
         for (let i = 0; i < n; i++) {
           const r = list[i], ry = top + i * rowH + rowH / 2;
-          if (r.me) box.add(this.add.rectangle(w / 2, ry, pw - 24, rowH - 2, 0xffe07a, 0.55));
-          else if (i % 2 === 0) box.add(this.add.rectangle(w / 2, ry, pw - 24, rowH - 2, 0x4a3a2e, 0.06));
-          const rc = i < 3 ? medal[i] : C.brownCss;
-          box.add(this.add.text(x + 34, ry, String(i + 1), i < 3 ? TO(fs + 2, rc, '#4a3a2e', 4) : T(fs, rc)).setOrigin(0.5));
+          if (r.me) add(this.add.rectangle(w / 2, ry, pw - 28, rowH - 2, 0xffd76a, 0.7).setDepth(62));
+          else if (i % 2 === 0) add(this.add.rectangle(w / 2, ry, pw - 28, rowH - 2, 0x4a3a2e, 0.08).setDepth(62));
+          const rc = i < 3 ? medal[i] : '#3a2414';
+          add(this.add.text(x + 36, ry, i < 3 ? ['🥇', '🥈', '🥉'][i] : String(i + 1), TR(i < 3 ? fs + 2 : fs, rc, i < 3 ? '#fff' : null, i < 3 ? 4 : 0)).setOrigin(0.5).setDepth(63));
           if (GD.SPECIES[r.sp]) {
             const key = 'ic_' + r.sp + (r.ev ? '_e' : '');
-            const ic = this.add.image(x + 66, ry, this.textures.exists(key) ? key : 'ic_' + r.sp);
+            const ic = add(this.add.image(x + 70, ry, this.textures.exists(key) ? key : 'ic_' + r.sp).setDepth(63));
             ic.setScale(isz / ic.height);
-            box.add(ic);
           }
-          const nm = this.add.text(x + 86, ry, r.n, T(fs, C.brownCss)).setOrigin(0, 0.5);
-          const room = pw - 150 - 86 - 8;
+          const nm = add(this.add.text(x + 92, ry, r.n, TR(fs, '#3a2414')).setOrigin(0, 0.5).setDepth(63));
+          const room = pw - (small ? 150 : 180) - 92;
           while (nm.width > room && nm.text.length > 1) nm.setText(nm.text.slice(0, -2) + '…');
-          box.add(nm);
-          box.add(this.add.text(x + pw - 150, ry, 'Lv' + r.lv, T(fs - 2, C.soft)).setOrigin(0, 0.5));
-          box.add(this.add.text(x + pw - 20, ry, Number(r.sc).toLocaleString(), T(fs, C.brownCss)).setOrigin(1, 0.5));
+          add(this.add.text(x + pw - (small ? 118 : 150), ry, 'Lv' + r.lv, TR(fs - 2, '#6a4a2a')).setOrigin(0, 0.5).setDepth(63));
+          add(this.add.text(x + pw - 22, ry, Number(r.sc).toLocaleString(), TR(fs, '#b0301a')).setOrigin(1, 0.5).setDepth(63));
         }
         const m = d.mine;
         const mine = m ? `あなたの自己ベスト：${m.rank}位 / ${d.total}人　${Number(m.sc).toLocaleString()}` : 'あなたの記録はまだありません';
-        box.add(this.add.text(w / 2, y + ph - 78, mine, T(14, C.brownCss)).setOrigin(0.5));
+        add(this.add.text(w / 2, y + ph - 84, mine, TR(small ? 14 : 16, '#3a2414')).setOrigin(0.5).setDepth(63));
       }).catch(() => { if (status.active) status.setText('サーバーにつながりません'); });
     }
 
     msg(s) { this.msgText.setText(s); }
 
     refreshPts() {
-      Net.profile().then(p => { if (this.ptsText && this.ptsText.active) this.ptsText.setText(`ガチャポイント  ${p.pts}P`); }).catch(() => {});
+      Net.profile().then(p => {
+        if (!this.ptsText || !this.ptsText.active) return;
+        this.ptsText.setText(`ガチャポイント  ${p.pts.toLocaleString()}P`);
+        // 持っている妖怪が変わっていたら（ガチャ・引きつぎ）画面を作り直す
+        if (Unlock.set(p.chars) && !this.shopBox && !this.rankBox && !this.nameAsk && !this.confirmBox && !this.connecting) {
+          this.saveName(); this.scene.restart({ msg: this.msgText && this.msgText.text, keep: true });
+        }
+      }).catch(() => {});
     }
     openShop(kind) {
       if (this.rankBox || this.confirmBox || this.nameAsk || this.connecting || this.shopBox || this.maintBox) return;
@@ -619,7 +613,7 @@
       if (cont === undefined) { if (this.saveData) cont = true; else { this.goNew(); return; } } // Enter キー
       this.goCont = cont;
       if (!this.nameAsked && !(this.input_ && this.input_.node.value.trim())) { this.askName(); return; }
-      if (!cont && !Unlock.ok(this.sp)) { this.msg(`🔒 ${GD.SPECIES[this.sp].name} は累計 ${GD.UNLOCK_AT[this.sp].toLocaleString()} EXP で解放されます`); Sfx.play('click'); return; }
+      if (!cont && !Unlock.ok(this.sp)) { this.msg(`🔒 ${GD.SPECIES[this.sp].name} はガチャで手に入ります`); Sfx.play('click'); return; }
       this.connecting = true;
       Sfx.init();
       UI.mobileEnter();
@@ -642,14 +636,13 @@
     init(data) { this.d = data; }
     create() {
       const d = this.d, w = this.scale.width, h = this.scale.height;
-      Unlock.save();
       this.sp = d.session.sp || store.get('sp', 'gekomaru');
       if (!Unlock.ok(this.sp)) this.sp = 'gekomaru';
       this.add.rectangle(0, 0, w, h, 0x1d1020, 0.55).setOrigin(0);
       const pw = Math.min(520, w - 20);
       const tmp = monsterPicker(this, w / 2, -9999, pw - 30, this.sp, () => {});
       const gridH = tmp.height; tmp.destroy();
-      const ph = 200 + gridH + 110 + 56;
+      const ph = 200 + gridH + 130 + 56;
       const x = w / 2 - pw / 2, y = Math.max(10, h / 2 - ph / 2);
       panel(this, x, y, pw, ph);
       const title = this.add.text(w / 2, y + 38, 'やられた…', TO(40, '#c8d8ff', '#3a2a40', 8)).setOrigin(0.5).setScale(0.3);
@@ -667,10 +660,11 @@
       this.add.text(w / 2, y + 172, '次のモンスターをえらんで再出撃！', T(14, C.soft)).setOrigin(0.5);
       this.lockMsg = this.add.text(w / 2, y + 192 + gridH + 10, '', T(12, '#c0392b')).setOrigin(0.5, 0);
       this.picker = monsterPicker(this, w / 2, y + 192, pw - 30, this.sp, k => {
-        if (!Unlock.ok(k)) { this.lockMsg.setText(`🔒 ${GD.SPECIES[k].name} は累計 ${GD.UNLOCK_AT[k].toLocaleString()} EXP で解放`); return; }
-        this.lockMsg.setText(''); this.sp = k; store.set('sp', k); this.picker.set(k);
+        if (!Unlock.ok(k)) { this.lockMsg.setText(`🔒 ${GD.SPECIES[k].name} はガチャで手に入ります`); return; }
+        this.lockMsg.setText(''); this.sp = k; store.set('sp', k); this.picker.set(k); sb.set(k);
       });
-      unlockInfo(this, w / 2, y + ph - 154, pw);
+      const sb = starInfo(this, w / 2, y + ph - 168, pw);
+      sb.set(this.sp);
       const b1 = button(this, w / 2, y + ph - 70, Math.min(300, pw - 40), 50, '再出撃！', () => this.respawn(), { color: C.orange, dark: C.orangeDark, size: 22 });
       const b2 = button(this, w / 2, y + ph - 22, 140, 32, 'タイトルへ', () => this.toTitle(), { color: C.gray, dark: C.grayDark, size: 14 });
       keyNav(this, [b1, b2], { delay: 600 });

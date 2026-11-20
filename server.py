@@ -131,6 +131,29 @@ PROFILE_FILE = os.path.join(ROOT, 'tools', 'profiles.json')
 ITEM_TYPES = 4                       # 小剣・勾玉・赤ファイア・青ファイア（js/sim.js の ITEMS と同じ順）
 RARITY_RATES = [50, 28, 15, 6, 1]    # コモン・アンコモン・レア・エピック・レジェンド（%）
 GACHA_COST = 100
+# 妖怪ガチャ（js/sim.js の STARTERS / CHARA_RARITY / CHARA_RATES / STAR_NEED と同じ内容）
+STARTERS = ['gekomaru', 'maimai', 'suzune']
+CHARA_TIERS = [
+    (50, ['gekomaru', 'maimai', 'suzune', 'kodama', 'kohaku']),   # ★
+    (30, ['rangyo', 'uroko', 'kuroro']),                          # ★★
+    (15, ['nejimaru', 'hakua', 'komori']),                        # ★★★
+    (5, ['toosibi', 'sinonome']),                                 # ★★★★
+]
+STAR_NEED = [1, 2, 4, 8]          # ★1→2 に1体、→3 に2体、→4 に4体、→5 に8体
+STAR_MAX_DUPS = sum(STAR_NEED)    # 15体重ねると★5（MAX）
+MAX_REFUND = 30                   # ★MAXの妖怪がまた出たらポイントを返す
+# 前の「累計EXPで解放」で手に入れていた妖怪は引きつぐ
+LEGACY_UNLOCK = {'kodama': 500, 'kohaku': 1200, 'rangyo': 2000, 'uroko': 3000, 'kuroro': 4500,
+                 'nejimaru': 6500, 'hakua': 9000, 'komori': 12000, 'toosibi': 16000, 'sinonome': 22000}
+
+
+def star_of(dups):
+    st, acc = 1, 0
+    for n in STAR_NEED:
+        acc += n
+        if dups >= acc:
+            st += 1
+    return st
 
 
 class Profiles:
@@ -149,11 +172,73 @@ class Profiles:
             p = {'pts': 0, 'inv': {}, 'eq': {}}
             if tok:
                 self.data[tok] = p
+        if 'chars' not in p:
+            p['chars'] = {k: 0 for k in STARTERS}   # 妖怪 → 重ねた数
         return p
+
+    def migrate(self, tok, texp):
+        # 前の累計EXPで解放していた妖怪をもらう（1回だけ）
+        if not tok:
+            return
+        p = self.get(tok)
+        if p.get('mig'):
+            return
+        try:
+            texp = float(texp or 0)
+        except (TypeError, ValueError):
+            texp = 0
+        for k, need in LEGACY_UNLOCK.items():
+            if texp >= need:
+                p['chars'].setdefault(k, 0)
+        p['mig'] = 1
+        self.dirty = True
+
+    def owns(self, tok, sp):
+        if sp in STARTERS:
+            return True
+        return bool(tok) and sp in self.data.get(tok, {}).get('chars', {})
 
     def view(self, tok):
         p = self.get(tok)
-        return {'pts': p['pts'], 'inv': p['inv'], 'eq': p['eq'], 'cost': GACHA_COST}
+        return {'pts': p['pts'], 'inv': p['inv'], 'eq': p['eq'], 'cost': GACHA_COST, 'chars': p['chars']}
+
+    def gacha_chara(self, tok, times=1):
+        p = self.get(tok)
+        if not tok or p['pts'] < GACHA_COST * times:
+            return None
+        got = []
+        total = sum(w for w, _ in CHARA_TIERS)
+        for i in range(times):
+            p['pts'] -= GACHA_COST
+            x = random.uniform(0, total)
+            tier = 0
+            for t, (w, _) in enumerate(CHARA_TIERS):
+                x -= w
+                if x <= 0:
+                    tier = t
+                    break
+            # 10連は最後の1回で★★以上を確定
+            if times == 10 and i == 9 and all(g['r'] == 0 for g in got) and tier == 0:
+                tier = random.choices([1, 2, 3], weights=[w for w, _ in CHARA_TIERS[1:]])[0]
+            sp = random.choice(CHARA_TIERS[tier][1])
+            ch = p['chars']
+            g = {'c': sp, 'r': tier}
+            if sp not in ch:
+                ch[sp] = 0
+                g['new'] = 1
+            elif ch[sp] >= STAR_MAX_DUPS:
+                p['pts'] += MAX_REFUND
+                g['rf'] = MAX_REFUND
+            else:
+                before = star_of(ch[sp])
+                ch[sp] += 1
+                if star_of(ch[sp]) > before:
+                    g['up'] = 1
+            g['st'] = star_of(ch[sp])
+            g['d'] = ch[sp]
+            got.append(g)
+        self.dirty = True
+        return got
 
     def add_pts(self, tok, n):
         if not tok:
@@ -193,13 +278,16 @@ class Profiles:
         self.dirty = True
 
     def item_for(self, tok, sp):
+        # 装備と★（ゲームの中の強さ）
         if not tok:
             return None
-        key = self.data.get(tok, {}).get('eq', {}).get(sp)
-        if not key:
-            return None
-        t, r = key.split('_')
-        return {'t': int(t), 'r': int(r)}
+        d = self.data.get(tok, {})
+        out = {'st': star_of(d.get('chars', {}).get(sp, 0))}
+        key = d.get('eq', {}).get(sp)
+        if key:
+            t, r = key.split('_')
+            out['t'], out['r'] = int(t), int(r)
+        return out
 
     def flush(self):
         if not self.dirty:
@@ -466,12 +554,16 @@ def handle_msg(c: Client, text: str):
         c.joined = True
         world.members.add(c.id)
         sp = state['sp'] if state else str(m.get('sp') or '')
+        if not state and not profiles.owns(tok, sp):
+            sp = 'gekomaru'  # 持っていない妖怪では始められない
         world.joins.append([c.id, c.name, sp, state, profiles.item_for(tok, sp)])
-        c.send({'t': 'joined', 'id': c.id, 'seed': world.seed, 'v': VERSION, 'cont': 1 if state else 0, 'sp': state['sp'] if state else None})
+        c.send({'t': 'joined', 'id': c.id, 'seed': world.seed, 'v': VERSION, 'cont': 1 if state else 0, 'sp': sp})
         log(c.name, 'joined', '(online %d)' % len(world.members))
     elif t == 'respawn':
         if c.joined:
             sp = str(m.get('sp') or '')
+            if not profiles.owns(c.tok, sp):
+                sp = 'gekomaru'
             world.respawns.append([c.id, sp, profiles.item_for(c.tok, sp)])
     elif t == 'leave':
         leave(c)
@@ -480,8 +572,11 @@ def handle_msg(c: Client, text: str):
         tok = m.get('tok')
         tok = tok if valid_tok(tok) else None
         got = None
+        if tok and 'texp' in m:
+            profiles.migrate(tok, m.get('texp'))
         if t == 'gacha':
-            got = profiles.gacha(tok, 10 if m.get('n') == 10 else 1)
+            n = 10 if m.get('n') == 10 else 1
+            got = profiles.gacha_chara(tok, n) if m.get('k') == 'chara' else profiles.gacha(tok, n)
         elif t == 'equip':
             profiles.equip(tok, m.get('sp'), m.get('key'))
         c.send({'t': 'prof', 'd': dict(profiles.view(tok), got=got)})

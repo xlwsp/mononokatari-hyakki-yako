@@ -30,7 +30,6 @@
     }
 
     create() {
-      Unlock.reset(this.session.cont);
       const W = GD.WORLD.w, H = GD.WORLD.h;
       this.map = GD.generateMap(this.session.seed);
       this.cameras.main.setBackgroundColor('#3f6b37');
@@ -296,10 +295,6 @@
       const mine = s.p.find(p => p.id === this.myId);
       if (mine) this.me = Object.assign({}, mine, s.me);
       if (mine && !this.warmed) this.warmUp(mine);
-      if (s.me && typeof s.me.tx === 'number') {
-        const got = Unlock.track(s.me.tx);
-        if (got && this.ui) { this.ui.banner(`🔓 ${GD.SPECIES[got].name} 解放！`, '#ffe07a'); Sfx.play('milestone'); }
-      }
     }
 
     pmap(s) {
