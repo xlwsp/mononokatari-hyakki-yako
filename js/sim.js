@@ -1590,7 +1590,7 @@
       if (half) { s.q = []; s.e = []; }
       for (const p of base.P) {
         if (p.id === id || inR(p.x, p.y, R + 200)) s.p.push(p);
-        else if (half && p.a && (inR(p.x, p.y, RADAR_R) || p.bn)) s.q.push([p.id, p.x, p.y, p.lv + (p.ev ? 10 : 0), p.bn ? 1 : 0]); // 賞金首はどこにいても映る
+        else if (half && p.a && (inR(p.x, p.y, RADAR_R) || p.bn)) s.q.push([p.id, p.x, p.y, p.lv + (p.ev ? 10 : 0), p.bn ? 1 : 0, p.b ? 0 : 1]); // 賞金首はどこにいても映る
       }
       if (half) {
         s.f = []; // レーダー用：遠くのボスとゴールドスライム

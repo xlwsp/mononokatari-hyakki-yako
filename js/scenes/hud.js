@@ -397,24 +397,30 @@
       // 他のプレイヤー（レベルで色分け：赤＝格上 / 黄＝同じくらい / 緑＝格下）。範囲外は端に矢印
       const myPow = me.lv + (me.ev ? 10 : 0);
       const others = [];
-      for (const p of s.p) if (p.id !== me.id && p.a) others.push([p.x, p.y, p.lv + (p.ev ? 10 : 0), p.bn]);
+      for (const p of s.p) if (p.id !== me.id && p.a) others.push([p.x, p.y, p.lv + (p.ev ? 10 : 0), p.bn, p.b ? 0 : 1]);
       const nearIds = new Set(s.p.map(p => p.id));
-      for (const q of this.gs.lastQ || []) if (!nearIds.has(q[0])) others.push([q[1], q[2], q[3], q[4]]);
+      for (const q of this.gs.lastQ || []) if (!nearIds.has(q[0])) others.push([q[1], q[2], q[3], q[4], q[5]]);
       let bountyPos = null;
-      for (const [ox, oy, opow, bn] of others) {
+      for (const [ox, oy, opow, bn, hu] of others) {
         if (bn) bountyPos = [ox, oy];
         const col = opow > myPow + 1 ? 0xff3a3a : opow < myPow - 1 ? 0x5aff7a : 0xffd84f;
         let [px, py] = toR(ox, oy);
         if (inside(px, py, 5)) {
-          g.fillStyle(0xffffff, 1); g.fillCircle(px, py, 6);
-          g.fillStyle(col, 1); g.fillCircle(px, py, 4.6);
+          if (hu) { // オンラインのプレイヤー：水色のふちで大きめ
+            g.fillStyle(0x0a2a3a, 1); g.fillCircle(px, py, 8.4);
+            g.fillStyle(0x3ad8ff, 1); g.fillCircle(px, py, 7.4);
+            g.fillStyle(col, 1); g.fillCircle(px, py, 4.2);
+          } else {
+            g.fillStyle(0xffffff, 1); g.fillCircle(px, py, 6);
+            g.fillStyle(col, 1); g.fillCircle(px, py, 4.6);
+          }
           if (bn) { g.lineStyle(2, 0xffd84f, blink); g.strokeCircle(px, py, 9); } // 賞金首
         } else {
           const dx = ox - meX, dy = oy - meY;
           const t = (S / 2 - 7) / Math.max(Math.abs(dx), Math.abs(dy));
           px = cx + dx * t; py = cy + dy * t;
           const a = Math.atan2(dy, dx);
-          g.fillStyle(col, 0.95);
+          g.fillStyle(hu ? 0x3ad8ff : col, 0.95);
           g.fillTriangle(px + Math.cos(a) * 6, py + Math.sin(a) * 6, px + Math.cos(a + 2.4) * 5, py + Math.sin(a + 2.4) * 5, px + Math.cos(a - 2.4) * 5, py + Math.sin(a - 2.4) * 5);
         }
       }
