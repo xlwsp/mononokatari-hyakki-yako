@@ -26,12 +26,15 @@
   const PARADE_LV = 20;        // 百鬼夜行に巻き込まれるレベル
   const PARADE_TIME = 45;      // 百鬼夜行を生き延びる時間
   const BOUNTY_LV = 15;        // 賞金首になるレベル
+  // 妖気の渦：Lv300以上の人の近くにときどき現れる。中にいると経験値が多くもらえて、敵がたくさんわく
+  const RIFT_LV = 300, RIFT_R = 340, RIFT_TIME = 45;
+  const riftMul = lv => Math.min(2.5, 1.5 + (lv - RIFT_LV) / 700); // Lv300で1.5倍 → Lv1000で2.5倍
   // ダッシュ：スタミナ満タンで3秒走れる。使い切ったら満タンに戻るまで（10秒）使えない。途中でやめた分はそのまま使える
   const DASH_TIME = 3, DASH_RECHARGE = 10, DASH_MUL = 1.7;
   const BIG_LVS = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]; // 大妖のレベル（出るたびにランダム）
   const BIG_LV = 200;          // 強さの基準になるレベル（HP・ごほうびはこのレベルを1倍として増減）
   const BIG_FIRST = 90;        // 世界ができてから大妖が現れるまで（秒）
-  const BIG_RESPAWN = 300;     // 倒されてから次の大妖が現れるまで（秒）＝5分
+  const BIG_RESPAWN = 180;     // 倒されてから次の大妖が現れるまで（秒）＝3分
   const BIG_HP = 600000;       // 大妖のHP（みんなで削る）
   const BIG_GEMS = 520;        // 倒すと中央に輪の形で並ぶ経験値の玉の数
 
@@ -204,7 +207,9 @@
     0xffb3b3, 0x9effff, 0xf0e68c, 0x87cefa, 0xffa07a, 0x98fb98, 0xdda0dd, 0xffdab9, 0x7fffd4, 0xe0b0ff];
 
   // 必要経験値：低レベルは少なめ、高レベルでも上がり続けるようゆるやかに
-  const xpNeed = lv => Math.floor(3 + lv * 2 + lv * lv * 0.2);
+  const xpNeed0 = lv => Math.floor(3 + lv * 2 + lv * lv * 0.2);
+  // Lv300から先は、敵の経験値の増え方に近いゆるやかな伸びにする（高レベルでもレベルが上がるように）
+  const xpNeed = lv => (lv <= 300 ? xpNeed0(lv) : Math.floor(xpNeed0(300) * Math.pow((1 + 0.06 * (lv - 1)) / (1 + 0.06 * 299), 1.5)));
   // 敵の攻撃の強さ（レベルが上がるほど痛い）
   // Lv150を超えたらゆるやかな直線に（Lv200〜300の人もちゃんと遊べるように）
   const dmgCurve0 = lv => 1 + (lv - 1) * 0.05 + (lv - 1) * (lv - 1) * 0.0015;
@@ -383,6 +388,7 @@
       this.bounty = null;
       this.bountyT = 0;
       this.big = null;
+      this.rifts = [];
       this.bigT = BIG_FIRST;
       this.slams = [];
       this.maxCP = 1;
@@ -575,6 +581,7 @@
       if (p.lv < 10) v *= 1 + 0.6 * (10 - p.lv) / 9; // 低レベルは経験値ボーナス（Lv1で+60%、Lv10で0）
       if (p.sp === 'rangyo') v *= 1.15; // 成長型
       if (p.itXp) v *= p.itXp; // 打ち出の小槌
+      v *= this.riftBonus(p); // 妖気の渦の中
       p.xp += v; p.txp += v;
       while (p.xp >= p.xpn) {
         p.xp -= p.xpn;
@@ -642,6 +649,7 @@
       this.updateParade(dt);
       this.updateBounty(dt);
       this.updateBig(dt);
+      this.updateRifts(dt);
       this.moveEnemies(dt);
       this.updateSlams();
       this.buildGrid();
@@ -1020,6 +1028,47 @@
         this.ev({ e: 'slx', x: r1(s.x), y: r1(s.y), r: s.r });
       }
       this.slams = keep;
+    }
+
+    // ---------- 妖気の渦（高レベルの人向け。中にいると経験値アップ＆敵がたくさん） ----------
+    updateRifts(dt) {
+      for (const p of this.players) {
+        if (!p.human || !p.alive || p.lv < RIFT_LV) continue;
+        if (p.riftT === undefined) p.riftT = rand(20, 40);
+        p.riftT -= dt;
+        if (p.riftT > 0) continue;
+        p.riftT = rand(60, 90);
+        if (this.rifts.some(r => Math.hypot(r.x - p.x, r.y - p.y) < 2200)) continue; // 近くにもうある
+        const a = rand(0, Math.PI * 2), d = rand(700, 1100);
+        const x = clamp(p.x + Math.cos(a) * d, EDGE + RIFT_R, WORLD.w - EDGE - RIFT_R), y = clamp(p.y + Math.sin(a) * d, EDGE + RIFT_R, WORLD.h - EDGE - RIFT_R);
+        const rf = { id: this.uid(), x, y, r: RIFT_R, t: RIFT_TIME, lv: p.lv, mul: riftMul(p.lv), spT: 0 };
+        this.rifts.push(rf);
+        this.ev({ e: 'rz', p: p.id, x: r1(x), y: r1(y), m: Math.round(rf.mul * 10) / 10 });
+      }
+      if (!this.rifts.length) return;
+      for (const rf of this.rifts) {
+        rf.t -= dt;
+        // 中にいる人のまわりに、敵がどんどんわく
+        rf.spT -= dt;
+        if (rf.spT <= 0) {
+          rf.spT = 0.6;
+          let tgt = null;
+          for (const q of this.players) if (q.alive && Math.hypot(q.x - rf.x, q.y - rf.y) < rf.r) { tgt = q; break; }
+          if (tgt && this.enemies.length < ENEMY_CAP) {
+            const ty = this.pickEnemyType(Math.max(tgt.lv, rf.lv), true), n = PACK[ty] ? 6 : 3;
+            for (let i = 0; i < n; i++) {
+              const a = rand(0, Math.PI * 2);
+              this.spawnEnemy(ty, tgt, rf.x + Math.cos(a) * (rf.r + 120), rf.y + Math.sin(a) * (rf.r + 120), !PACK[ty] && chance(0.3));
+            }
+          }
+        }
+      }
+      this.rifts = this.rifts.filter(r => r.t > 0);
+    }
+    riftBonus(p) {
+      if (!this.rifts.length || !p.human) return 1;
+      for (const rf of this.rifts) if ((p.x - rf.x) ** 2 + (p.y - rf.y) ** 2 < rf.r * rf.r) return rf.mul;
+      return 1;
     }
 
     // ---------- 大妖（ビッグボス）：世界の中央をのそのそ歩く大妖怪（Lv100〜1000のどれか）。みんなで倒すと中央に経験値がばらまかれる ----------
@@ -1791,6 +1840,8 @@
         const B = this.big;
         if (B && !B.dead) s.bb = [Math.round(B.x), Math.round(B.y), Math.ceil(B.hp / B.mhp * 1000), B.lv || BIG_LV];
         else s.bbt = Math.max(0, Math.ceil(this.bigT));
+        // 妖気の渦（まわりにあるもの）：[x, y, 半径, 残り秒, 倍率×10]
+        if (this.rifts.length) s.rz = this.rifts.filter(r => inR(r.x, r.y, RADAR_R)).map(r => [Math.round(r.x), Math.round(r.y), r.r, Math.ceil(r.t), Math.round(r.mul * 10)]);
       }
       for (const ev of base.ev) {
         if (ev.p === id || ev.a === id || ev.b === id || ev.by === id) { s.ev.push(ev); continue; }
@@ -1985,7 +2036,7 @@
   const UNLOCK_AT = {}; UNLOCKS.forEach(([k, v]) => { UNLOCK_AT[k] = v; });
 
   global.GD = {
-    UNLOCKS, UNLOCK_AT, ITEMS, RARITIES, ORBIT_SPEED, DASH_TIME, DASH_RECHARGE, DASH_MUL, itemCount, itemShow, itemInfo, isCombo, AWAKE_MAX, awakeCost, awakeBonus, AWAKE_COLORS, COSMETICS, COS_SLOTS, COS_SLOT_NAME, ACHIEVEMENTS, ACH_STAT_NAME, ITEM_PLUS_MAX, ITEM_PLUS_STEP, STARTERS, CHARA_RARITY, CHARA_RATES, STAR_NEED, starOf, starBonus,
+    UNLOCKS, UNLOCK_AT, ITEMS, RARITIES, ORBIT_SPEED, RIFT_LV, DASH_TIME, DASH_RECHARGE, DASH_MUL, itemCount, itemShow, itemInfo, isCombo, AWAKE_MAX, awakeCost, awakeBonus, AWAKE_COLORS, COSMETICS, COS_SLOTS, COS_SLOT_NAME, ACHIEVEMENTS, ACH_STAT_NAME, ITEM_PLUS_MAX, ITEM_PLUS_STEP, STARTERS, CHARA_RARITY, CHARA_RATES, STAR_NEED, starOf, starBonus,
     WORLD, TICK, EDGE, VIEW_R, RADAR_R, MAX_PLAYERS, EVOLVE_LV, PROTECT_TIME, NEWBIE_LV, generateMap, resolve, auraTier,
     SPECIES, SPECIES_KEYS, ENEMY_TYPES, ENEMIES, UPGRADES, COLORS, upgradeText,
     xpNeed, clamp,

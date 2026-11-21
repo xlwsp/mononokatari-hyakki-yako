@@ -1,7 +1,7 @@
 // ゲーム本編の描画シーン（サーバーから届くスナップショットを補間して表示する）
 (function () {
   'use strict';
-  const { TO } = UI;
+  const { TO, TR } = UI;
   const lerp = (a, b, t) => a + (b - a) * t;
   const FX_DEPTH = 1000000;
   // 0〜14は昔の番号（もう出てこない。念のため用意された画像で表示）。7は金色の笠おばけ（逃げ回るボーナス）
@@ -290,7 +290,7 @@
       if (s.e) { this.esnaps.push({ t: s.t, e: s.e }); if (this.esnaps.length > 20) this.esnaps.shift(); }
       if (s.q) this.lastQ = s.q;
       if (s.f) this.lastF = s.f;
-      if (s.e) { this.bb = s.bb || null; this.bbt = s.bbt || 0; } // 大妖の位置とHP
+      if (s.e) { this.bb = s.bb || null; this.bbt = s.bbt || 0; this.rz = s.rz || []; } // 大妖の位置とHP・妖気の渦
       if (s.me && s.me.cd) this.myCards = s.me.cd; // 持っているカードの枚数
       if (s.lb) { this.lastLb = s.lb; this.lastRk = s.rk; }
       this.latest = s;
@@ -340,6 +340,7 @@
 
       this.moveLocal(dt);
       this.overlay.clear();
+      this.renderRifts(time);
       this.renderGems();
       // 敵は別のバッファで補間（1秒10回なので少し長めに待つ）
       const ert = now + this.offset - Math.max(this.delay, 0.13);
@@ -359,7 +360,11 @@
         const w = this.scale.width, h = this.scale.height;
         const vis = monsterH(this.me.lv, this.me.ev) * BODY_K;
         const minZ = Math.max(w, h) / 2300 / this.baseZoom;
-        const want = Phaser.Math.Clamp(Math.min(w, h) * (h > w ? 0.28 : 0.2) / (vis * this.baseZoom), Math.min(1, minZ), 1.25); // 縦画面は短い辺がせまいので少し大きめ
+        // スマホ（画面の短い辺が小さい）：キャラは小さくてもいいので、まわりを広く見せる（短い辺で約800〜1000見える）
+        const phone = Math.min(w, h) < 560;
+        const want = phone
+          ? Phaser.Math.Clamp(Math.min(w, h) / (780 + vis * 1.2) / this.baseZoom, Math.min(1, minZ), 1.25)
+          : Phaser.Math.Clamp(Math.min(w, h) * 0.2 / (vis * this.baseZoom), Math.min(1, minZ), 1.25);
         this.zoomCur += (want - this.zoomCur) * Math.min(1, dt * 2);
         this.cameras.main.setZoom(this.baseZoom * this.zoomCur * this.punch);
       }
@@ -437,6 +442,33 @@
       if (Math.hypot(L.x - me.x, L.y - me.y) > 300) { L.x = me.x; L.y = me.y; }
       L.vx = (L.x - px) / dt; L.vy = (L.y - py) / dt;
       this.session.sendInput(L.x, L.y, this.dashing);
+    }
+
+    // ---------- 妖気の渦（地面に紫のうず。中にいると経験値アップ） ----------
+    renderRifts(time) {
+      if (!this.riftG) { this.riftG = this.add.graphics().setDepth(-900); this.riftTx = []; }
+      const g = this.riftG, list = this.rz || [];
+      g.clear();
+      const t = (time || 0) / 1000;
+      list.forEach((r, i) => {
+        const [x, y, R, left, m10] = r;
+        const pul = 0.5 + Math.sin(t * 3 + i) * 0.5;
+        g.fillStyle(0x7a2aff, 0.14 + pul * 0.06); g.fillCircle(x, y, R);
+        g.fillStyle(0xc070ff, 0.10); g.fillCircle(x, y, R * 0.55);
+        g.lineStyle(6, 0xc890ff, 0.75); g.strokeCircle(x, y, R);
+        // ぐるぐる回る渦の筋
+        for (let k = 0; k < 6; k++) {
+          const a0 = t * 1.4 + k * Math.PI / 3;
+          g.lineStyle(4, 0xe0b8ff, 0.5); g.beginPath();
+          for (let j = 0; j <= 12; j++) { const f = j / 12, a = a0 + f * 2.2, rr = R * (0.15 + 0.8 * f); const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr; if (j) g.lineTo(px, py); else g.moveTo(px, py); }
+          g.strokePath();
+        }
+        if (Math.random() < 0.3) this.burst(x + Phaser.Math.Between(-R, R) * 0.7, y + Phaser.Math.Between(-R, R) * 0.7, 0xc070ff, 2);
+        let tx = this.riftTx[i];
+        if (!tx) tx = this.riftTx[i] = this.add.text(0, 0, '', TR(22, '#f0d8ff', '#2a0a4a', 6)).setOrigin(0.5).setDepth(FX_DEPTH - 2);
+        tx.setVisible(true).setPosition(x, y - R - 26).setText(`🌀 妖気の渦　経験値×${(m10 / 10).toFixed(1)}　あと${left}秒`).setScale(1 / Math.max(0.4, this.cameras.main.zoom));
+      });
+      for (let i = list.length; i < this.riftTx.length; i++) this.riftTx[i].setVisible(false);
     }
 
     // ---------- プレイヤー（モンスター） ----------
@@ -656,6 +688,9 @@
         o.shadow.setDisplaySize(sw, sw * 0.35).setAlpha(0.8);
       }
       o.img.setVisible(true).clearTint(); o.shadow.setVisible(true);
+      // 出てくるときはふわっと（広く映すスマホで、急に現れたように見えないように）
+      this.tweens.killTweensOf(o.img);
+      o.img.setAlpha(0); this.tweens.add({ targets: o.img, alpha: 1, duration: 280 });
       o.flash = 0; o.lx = null;
       return o;
     }
@@ -854,6 +889,9 @@
             this.ui.feed(`<span style="color:${ev.ai === me ? '#fff07a' : '#ffb0a0'}">${esc(ev.a)}</span> ⚔ <span style="color:${ev.bi === me ? '#fff07a' : '#b8dcff'}">${esc(ev.b)}</span>`, mine ? '#4a1a10' : '#10141f');
             break;
           }
+          case 'rz':
+            if (ev.p === me) { this.ui.banner(`🌀 妖気の渦が現れた！ 中で経験値×${ev.m}`, '#e0b8ff'); Sfx.play('boss'); }
+            break;
           case 'cb':
             if (ev.p === me) { this.ui.banner('✨ 組み合わせ効果アップ！', '#ffe07a'); Sfx.play('lvlBig'); }
             break;

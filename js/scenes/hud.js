@@ -138,8 +138,15 @@
     drawDash(me) {
       const L = this.L, g = this.dashG;
       const R = L.compact ? 38 : 44;
-      // 置き場所：横画面はレーダーの左、縦画面は右の中ほど（親指が届くところ）
-      const cx = L.portrait ? L.w - R - 16 : L.mmX - R - 22, cy = L.portrait ? L.h * 0.64 : L.h - R - 26;
+      // 置き場所：パソコンはレーダーの左。スマホ横画面はレーダーの真上。
+      // スマホ縦画面は右はしで、スキル欄・カード一覧より上（重ならないように実際の位置を見て決める）
+      let cx, cy;
+      if (L.portrait) {
+        const stackTop = Math.min(this.skPos ? this.skPos.y : L.h, this.bagTop || L.h);
+        cx = L.w - R - 14; cy = Math.min(L.h * 0.6, stackTop - R - 18);
+      } else if (L.compact) {
+        cx = L.mmX + L.mm / 2; cy = L.mmY - R - 16;
+      } else { cx = L.mmX - R - 22; cy = L.h - R - 26; }
       this.dashZone.setPosition(cx, cy).setSize(R * 2 + 16, R * 2 + 16);
       if (this.dashZone.input) this.dashZone.input.hitArea.setTo(0, 0, R * 2 + 16, R * 2 + 16);
       const sta = me.sta === undefined ? 1 : me.sta, lock = !!me.sl, on = !!this.gs.dashing;
@@ -441,7 +448,7 @@
       this.cardBagKey = key;
       const g = this.cardBagG;
       g.clear();
-      if (!parts.length || !this.skPos) { this.cardBag.setText(''); return; }
+      if (!parts.length || !this.skPos) { this.cardBag.setText(''); this.bagTop = null; return; }
       const w = Math.min(L.portrait ? L.w - 20 : 330, L.w - 20);
       this.cardBag.setText(parts.join('  ')).setWordWrapWidth(w - 16, true).setFontSize(short ? 15 : 14);
       const h = this.cardBag.height + 10;
@@ -449,6 +456,7 @@
       g.fillStyle(0x161c30, 0.62); g.fillRoundedRect(x, y, Math.min(w, this.cardBag.width + 16), h, 8);
       g.lineStyle(1.5, 0xf0c35a, 0.6); g.strokeRoundedRect(x, y, Math.min(w, this.cardBag.width + 16), h, 8);
       this.cardBag.setPosition(x + 8, y + 5);
+      this.bagTop = y;
     }
 
     // 大妖：近くにいるときは画面上にHPバー。いないときは出現までの秒数（30秒前から）
@@ -561,6 +569,16 @@
         const boss = ty === 4 || ty === 18 || ty === 21 || ty === 24 || ty === 25, big = boss || el;
         g.fillStyle(0x200000, 0.9); g.fillCircle(px, py, boss ? 7.5 : el ? 5 : 3.4);
         g.fillStyle(boss ? 0xff2a5a : el ? 0xc040ff : 0xff4a3a, big ? blink : 1); g.fillCircle(px, py, boss ? 6 : el ? 3.8 : 2.4);
+      }
+      // 妖気の渦（紫の輪。範囲外は端に出す）
+      for (const r of this.gs.rz || []) {
+        let [px, py] = toR(r[0], r[1]);
+        if (!inside(px, py, 8)) {
+          const dx = r[0] - meX, dy = r[1] - meY, t = (S / 2 - 9) / Math.max(Math.abs(dx), Math.abs(dy));
+          px = cx + dx * t; py = cy + dy * t;
+        }
+        g.fillStyle(0x7a2aff, 0.5); g.fillCircle(px, py, Math.max(6, r[2] * k));
+        g.lineStyle(2.5, 0xe0b8ff, blink); g.strokeCircle(px, py, Math.max(7, r[2] * k));
       }
       // 遠くのボス・ゴールドスライム
       const fs = this.gs.lastF || [];
