@@ -31,10 +31,16 @@
   const riftMul = lv => Math.min(2.5, 1.5 + (lv - RIFT_LV) / 700); // Lv300で1.5倍 → Lv1000で2.5倍
   // ダッシュ：スタミナ満タンで3秒走れる。使い切ったら満タンに戻るまで（10秒）使えない。途中でやめた分はそのまま使える
   const DASH_TIME = 3, DASH_RECHARGE = 10, DASH_MUL = 1.7;
-  const BIG_LVS = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]; // 大妖のレベル（出るたびにランダム）
+  const BIG_LVS = [1000]; // 大妖のレベル（Lv1000で固定）
+  // ヌシ：マップの4か所にいる大きなボス（大妖と同じく突進・たたきつけ・呼び寄せ）。
+  // レベルは「出てきたときの、いちばん高いプレイヤーのレベル × 1.3」
+  const NUSHI_HOMES = [[28, 0.22, 0.22], [29, 0.78, 0.22], [29, 0.22, 0.78], [28, 0.78, 0.78]]; // [種類, 横, 縦]（マップに対する割合）
+  const NUSHI_FIRST = 45, NUSHI_RESPAWN = 120, NUSHI_LEASH = 900, NUSHI_HP = 1300000, NUSHI_GEMS = 160;
+  const NUSHI_NAME = { 28: '鬼のヌシ', 29: '化け狸のヌシ' };
   const BIG_LV = 200;          // 強さの基準になるレベル（HP・ごほうびはこのレベルを1倍として増減）
   const BIG_FIRST = 90;        // 世界ができてから大妖が現れるまで（秒）
   const BIG_RESPAWN = 180;     // 倒されてから次の大妖が現れるまで（秒）＝3分
+  const BIG_HP_1000 = 3e8;     // Lv1000の大妖のHP（高レベルの人がみんなで削る）
   const BIG_HP = 600000;       // 大妖のHP（みんなで削る）
   const BIG_GEMS = 520;        // 倒すと中央に輪の形で並ぶ経験値の玉の数
 
@@ -131,7 +137,8 @@
     'kitsune', 'tanuki', 'boss2',   // 第2段階（Lv40〜）：狐・狸 ／ ボス：大蛇（Lv60〜）
     'oni', 'mujina', 'boss3',       // 第3段階（Lv110〜）：鬼・妖狸 ／ ボス：獅子（Lv140〜）
     'boss4',                        // 第4段階（Lv200〜）：ボス：白獅子神
-    'onimen', 'karakasa'];          // 26〜27：第1段階の雑魚を追加（鬼面おばけ・からかさ）
+    'onimen', 'karakasa',           // 26〜27：第1段階の雑魚を追加（鬼面おばけ・からかさ）
+    'nushiOni', 'nushiTanuki'];     // 28〜29：ヌシ（マップの4か所にいる大きなボス）
   const ENEMIES = {
     slime:  { hp: 14, spd: 72, dmg: 6, r: 17, xp: 1 },
     bat:    { hp: 8, spd: 135, dmg: 5, r: 14, xp: 1 },
@@ -164,6 +171,8 @@
     boss4:    { hp: 5200, spd: 88, dmg: 18, r: 70, xp: 42 },
     onimen:   { hp: 14, spd: 86, dmg: 5, r: 16, xp: 2 },   // 少し硬い雑魚
     karakasa: { hp: 7, spd: 138, dmg: 4, r: 15, xp: 1 },   // すばしっこい雑魚
+    nushiOni:    { hp: NUSHI_HP, spd: 34, dmg: 26, r: 105, xp: 0 }, // HP・攻撃は出てきたときのレベルで決める
+    nushiTanuki: { hp: NUSHI_HP, spd: 38, dmg: 24, r: 100, xp: 0 },
   };
   // フィールドボス：段階ごとのボス。解放されるレベルと、たたきつけの大きさ
   const FIELD_BOSSES = [[18, 5, 230], [21, 30, 270], [24, 90, 310], [25, 150, 350]];
@@ -215,8 +224,10 @@
   const dmgCurve0 = lv => 1 + (lv - 1) * 0.05 + (lv - 1) * (lv - 1) * 0.0015;
   const dmgCurve = lv => (lv <= 150 ? dmgCurve0(lv) : dmgCurve0(150) + (lv - 150) * 0.22);
   // 高レベル向けに出た敵が低レベルの人に当たったときは、その人のレベル相当まで弱める
-  const isBoss = e => e.ty === 4 || e.ty === 15 || FB_R[e.ty] !== undefined; // 押し返し・気絶が効かない
-  const isWorldBoss = e => e.ty === 4 || e.ty === 15; // 誰もいなくても消えない
+  const isNushi = e => e.ty === 28 || e.ty === 29;
+  const isBigOne = e => e.ty === 15 || isNushi(e); // 大妖とヌシ（突進などの特別な動き）
+  const isBoss = e => e.ty === 4 || isBigOne(e) || FB_R[e.ty] !== undefined; // 押し返し・気絶が効かない
+  const isWorldBoss = e => e.ty === 4 || isBigOne(e); // 誰もいなくても消えない
   const dmgFor = (e, p) => (e.lvd > 1 ? e.dmg * Math.min(1, dmgCurve(p.lv) / e.lvd) : e.dmg);
   const rand = (a, b) => a + Math.random() * (b - a);
   const randInt = (a, b) => Math.floor(rand(a, b + 1));
@@ -389,6 +400,7 @@
       this.bountyT = 0;
       this.big = null;
       this.rifts = [];
+      this.nushi = NUSHI_HOMES.map(() => null); this.nushiT = NUSHI_HOMES.map((_, i) => NUSHI_FIRST + i * 8);
       this.bigT = BIG_FIRST;
       this.slams = [];
       this.maxCP = 1;
@@ -651,6 +663,7 @@
       this.updateBounty(dt);
       this.updateBig(dt);
       this.updateRifts(dt);
+      this.updateNushi(dt);
       this.moveEnemies(dt);
       this.updateSlams();
       this.buildGrid();
@@ -1031,6 +1044,41 @@
       this.slams = keep;
     }
 
+    // ---------- ヌシ（マップの4か所） ----------
+    updateNushi(dt) {
+      let mx = 0;
+      for (const p of this.players) if (p.alive && p.lv > mx) mx = p.lv;
+      NUSHI_HOMES.forEach(([ty, fx, fy], i) => {
+        const cur = this.nushi[i];
+        if (cur && !cur.dead) return;
+        if (cur && cur.dead) { this.nushi[i] = null; this.nushiT[i] = NUSHI_RESPAWN; return; }
+        this.nushiT[i] -= dt;
+        if (this.nushiT[i] > 0) return;
+        if (!mx) { this.nushiT[i] = 10; return; }
+        const hx = WORLD.w * fx, hy = WORLD.h * fy;
+        const lv = Math.max(30, Math.round(mx * 1.3)), k = lv / 100;
+        const e = this.spawnEnemy(ty, null, hx, hy);
+        const lvd = dmgCurve(lv);
+        e.lv = lv; e.rw = Math.pow(lv / BIG_LV, 0.7); e.home = [hx, hy];
+        // HP：いちばん高い人が一人で戦って40〜60秒くらい（高レベルほど攻撃がとても強いので、レベルの2.2乗で増やす）
+        e.mhp = e.hp = NUSHI_HP * Math.pow(Math.max(30, mx) / 100, 2.2); e.dmg = ENEMIES[ENEMY_TYPES[ty]].dmg * lvd; e.lvd = lvd;
+        e.wx = hx; e.wy = hy; e.callT = 8; e.slamT = 4; e.chgT = 5;
+        this.nushi[i] = e;
+        this.ev({ e: 'nss', g: 1, x: r1(hx), y: r1(hy), lv, ty });
+      });
+    }
+    // ヌシを倒した：持ち場のまわりに、輪の形で経験値の玉
+    nushiDefeated(e, owner) {
+      const rw = e.rw || 1, [hx, hy] = e.home || [e.x, e.y];
+      if (owner) { owner.bossKills += 3; owner.pkScore += Math.round(2000 * rw); if (owner.human) this.ev({ e: 'pt', p: owner.id, n: Math.max(10, Math.round(25 * rw)) }); }
+      const RINGS = [160, 340, 520], total = RINGS.reduce((a, r) => a + r, 0);
+      for (let k = 0; k < RINGS.length; k++) {
+        const R = RINGS[k], n = Math.round(NUSHI_GEMS * R / total);
+        for (let i = 0; i < n; i++) { const a = k * 0.4 + i / n * Math.PI * 2; this.dropGem(e.x + Math.cos(a) * R, e.y + Math.sin(a) * R, rand(40, 120) * rw); }
+      }
+      this.ev({ e: 'nsk', g: 1, n: owner ? owner.name : '', p: owner ? owner.id : 0, lv: e.lv, ty: e.ty, x: r1(e.x), y: r1(e.y) });
+    }
+
     // ---------- 妖気の渦（高レベルの人向け。中にいると経験値アップ＆敵がたくさん） ----------
     updateRifts(dt) {
       for (const p of this.players) {
@@ -1085,13 +1133,13 @@
       const lv = BIG_LVS[randInt(0, BIG_LVS.length - 1)], k = lv / BIG_LV;
       const lvd = dmgCurve(lv);
       e.lv = lv; e.rw = Math.pow(k, 0.7);
-      e.mhp = e.hp = BIG_HP * Math.pow(k, 0.8); e.dmg = ENEMIES.bigboss.dmg * lvd; e.lvd = lvd; e.spd = ENEMIES.bigboss.spd;
+      e.mhp = e.hp = lv >= 1000 ? BIG_HP_1000 : BIG_HP * Math.pow(k, 0.8); e.dmg = ENEMIES.bigboss.dmg * lvd; e.lvd = lvd; e.spd = ENEMIES.bigboss.spd;
       e.wx = cx; e.wy = cy; e.callT = 6; e.slamT = 3;
       this.big = e;
       this.ev({ e: 'bbs', g: 1, x: r1(cx), y: r1(cy), lv });
     }
     moveBig(e, dt) {
-      const cx = WORLD.w / 2, cy = WORLD.h / 2, LEASH = 1300;
+      const cx = e.home ? e.home[0] : WORLD.w / 2, cy = e.home ? e.home[1] : WORLD.h / 2, LEASH = e.home ? NUSHI_LEASH : 1300;
       const t = e.tgt && e.tgt.alive ? e.tgt : null;
       // 突進（体当たり）：予告のあと、まっすぐ猛スピードで突っ込む。当たると最大HPの大部分を持っていかれる
       if (e.chg) {
@@ -1254,7 +1302,7 @@
           // 誰も近くにいない敵は消える
           if (!bt && !isWorldBoss(e)) { e.dead = true; e.gone = true; continue; }
         }
-        if (e.ty === 15) { this.moveBig(e, dt); continue; }
+        if (isBigOne(e)) { this.moveBig(e, dt); continue; }
         if (!e.tgt) continue;
         if (e.stunT > 0) { e.stunT -= dt; continue; }
         if (e.ty === 7) {
@@ -1345,7 +1393,7 @@
             const d2 = dx * dx + dy * dy;
             if (d2 < min * min && d2 > 0.01) {
               const d = Math.sqrt(d2), push = (min - d) * 0.25;
-              const w1 = isBoss(e1) ? (e1.ty === 15 ? 0 : 0.1) : 1, w2 = isBoss(e2) ? (e2.ty === 15 ? 0 : 0.1) : 1;
+              const w1 = isBoss(e1) ? (isBigOne(e1) ? 0 : 0.1) : 1, w2 = isBoss(e2) ? (isBigOne(e2) ? 0 : 0.1) : 1;
               e1.x -= dx / d * push * w1; e1.y -= dy / d * push * w1;
               e2.x += dx / d * push * w2; e2.y += dy / d * push * w2;
             }
@@ -1544,13 +1592,15 @@
         let hitBy = null;
         const pr = this.radius(p) * 0.85;
         this.enemiesIn(p.x, p.y, pr, e => {
-          if (!hitBy && e.stunT <= 0 && e.dmg) hitBy = e;
+          if (e.stunT <= 0 && e.dmg && (!hitBy || (isBigOne(e) && !isBigOne(hitBy)))) hitBy = e; // 大妖・ヌシに重なっていたらそちらを優先
         });
         if (hitBy) {
           // Lv100以上：1回で受けるダメージは最大HPの6%（ボスは12%）まで。囲まれると危ないが一瞬では溶けない
           const raw = dmgFor(hitBy, p);
-          // 高レベルでも油断できないように：大妖は2割、ボスは1.4割、強敵（紫）は0.9割まで入る
-          this.hurtPlayer(p, p.lv >= 100 ? Math.min(raw, p.mhp * (hitBy.ty === 15 ? 0.2 : isBoss(hitBy) ? 0.14 : hitBy.el ? 0.09 : p.lv >= 200 ? 0.05 : 0.06)) : raw);
+          // 大妖・ヌシに重なると大ダメージ（体当たり）：最大HPの20〜45%（相手のレベルが上ほど痛い）。上限なし
+          if (isBigOne(hitBy)) this.hurtPlayer(p, Math.max(raw * 0.3, p.mhp * clamp(0.25 + ((hitBy.lv || BIG_LV) - p.lv) / 2000, 0.2, 0.45)));
+          // 高レベルでも油断できないように：ボスは1.4割、強敵（紫）は0.9割まで入る
+          else this.hurtPlayer(p, p.lv >= 100 ? Math.min(raw, p.mhp * (isBigOne(hitBy) ? 0.2 : isBoss(hitBy) ? 0.14 : hitBy.el ? 0.09 : p.lv >= 200 ? 0.05 : 0.06)) : raw);
           if (p.itRef) this.damage(hitBy, this.itemDmg(p) * p.itRef * 2.5, p, 0); // 八咫鏡：はね返す
           p.iframe = 0.5;
           this.ev({ e: 'hu', p: p.id, x: r1(p.x), y: r1(p.y) });
@@ -1716,6 +1766,7 @@
         this.ev({ e: 'ed', i: e.id, ty: e.ty, el: e.el, x: r1(e.x), y: r1(e.y), by: owner ? owner.id : 0 });
         if (e.el && !isBoss(e)) for (let i = 0; i < 5; i++) this.dropGem(e.x + rand(-50, 50), e.y + rand(-50, 50), e.xp / 5);
         if (e.ty === 15) this.bigDefeated(e, owner);
+        else if (isNushi(e)) this.nushiDefeated(e, owner);
         else if (e.ty === 4) {
           if (owner) owner.bossKills++;
           for (let i = 0; i < 24; i++) this.dropGem(e.x + rand(-90, 90), e.y + rand(-90, 90), 4 + Math.floor(e.xp));
@@ -1891,6 +1942,9 @@
         const B = this.big;
         if (B && !B.dead) s.bb = [Math.round(B.x), Math.round(B.y), Math.ceil(B.hp / B.mhp * 1000), B.lv || BIG_LV];
         else s.bbt = Math.max(0, Math.ceil(this.bigT));
+        // ヌシ（どこにいても）：[x, y, HP千分率, レベル, 種類]
+        const ns = this.nushi.filter(n => n && !n.dead);
+        if (ns.length) s.wb = ns.map(n => [Math.round(n.x), Math.round(n.y), Math.ceil(n.hp / n.mhp * 1000), n.lv, n.ty]);
         // 妖気の渦（まわりにあるもの）：[x, y, 半径, 残り秒, 倍率×10]
         if (this.rifts.length) s.rz = this.rifts.filter(r => inR(r.x, r.y, RADAR_R)).map(r => [Math.round(r.x), Math.round(r.y), r.r, Math.ceil(r.t), Math.round(r.mul * 10)]);
       }
@@ -2087,7 +2141,7 @@
   const UNLOCK_AT = {}; UNLOCKS.forEach(([k, v]) => { UNLOCK_AT[k] = v; });
 
   global.GD = {
-    UNLOCKS, UNLOCK_AT, ITEMS, RARITIES, ORBIT_SPEED, RIFT_LV, DASH_TIME, DASH_RECHARGE, DASH_MUL, itemCount, itemShow, itemInfo, isCombo, AWAKE_MAX, awakeCost, awakeBonus, AWAKE_COLORS, COSMETICS, COS_SLOTS, COS_SLOT_NAME, ACHIEVEMENTS, ACH_STAT_NAME, ITEM_PLUS_MAX, ITEM_PLUS_STEP, STARTERS, CHARA_RARITY, CHARA_RATES, STAR_NEED, starOf, starBonus,
+    UNLOCKS, UNLOCK_AT, ITEMS, RARITIES, ORBIT_SPEED, RIFT_LV, NUSHI_NAME, DASH_TIME, DASH_RECHARGE, DASH_MUL, itemCount, itemShow, itemInfo, isCombo, AWAKE_MAX, awakeCost, awakeBonus, AWAKE_COLORS, COSMETICS, COS_SLOTS, COS_SLOT_NAME, ACHIEVEMENTS, ACH_STAT_NAME, ITEM_PLUS_MAX, ITEM_PLUS_STEP, STARTERS, CHARA_RARITY, CHARA_RATES, STAR_NEED, starOf, starBonus,
     WORLD, TICK, EDGE, VIEW_R, RADAR_R, MAX_PLAYERS, EVOLVE_LV, PROTECT_TIME, NEWBIE_LV, generateMap, resolve, auraTier,
     SPECIES, SPECIES_KEYS, ENEMY_TYPES, ENEMIES, UPGRADES, COLORS, upgradeText,
     xpNeed, clamp,

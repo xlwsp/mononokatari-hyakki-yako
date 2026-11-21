@@ -517,6 +517,7 @@ NEW_ENEMIES = [
     ('lv3_kyouteki_01', 'ek_oni', 200), ('lv3_kyouteki_02', 'ek_mujina', 200), ('lv3_Boss', 'ek_boss3', 340),
     ('lv4_Boss', 'ek_boss4', 380),
     ('lv1_03', 'ek_onimen', 140), ('lv1_04', 'ek_karakasa', 140),
+    ('lv3_kyouteki_01', 'ek_nushioni', 400), ('lv3_kyouteki_02', 'ek_nushitanuki', 400),  # ヌシ（大きく表示する用）
 ]
 
 

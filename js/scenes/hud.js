@@ -570,6 +570,14 @@
         g.fillStyle(0x200000, 0.9); g.fillCircle(px, py, boss ? 7.5 : el ? 5 : 3.4);
         g.fillStyle(boss ? 0xff2a5a : el ? 0xc040ff : 0xff4a3a, big ? blink : 1); g.fillCircle(px, py, boss ? 6 : el ? 3.8 : 2.4);
       }
+      // ヌシ（どこにいても。オレンジの大きな印。範囲外は端に）
+      for (const n of this.gs.wb || []) {
+        let [px, py] = toR(n[0], n[1]);
+        if (!inside(px, py, 8)) { const dx = n[0] - meX, dy = n[1] - meY, t = (S / 2 - 9) / Math.max(Math.abs(dx), Math.abs(dy)); px = cx + dx * t; py = cy + dy * t; }
+        g.fillStyle(0x200000, 0.9); g.fillCircle(px, py, 8.5);
+        g.fillStyle(n[4] === 28 ? 0xff5a3a : 0xc070ff, blink); g.fillCircle(px, py, 7);
+        g.lineStyle(2, 0xffe0a0, 0.9); g.strokeCircle(px, py, 9.5);
+      }
       // 妖気の渦（紫の輪。範囲外は端に出す）
       for (const r of this.gs.rz || []) {
         let [px, py] = toR(r[0], r[1]);

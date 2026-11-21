@@ -7,12 +7,12 @@
   // 0〜14は昔の番号（もう出てこない。念のため用意された画像で表示）。7は金色の笠おばけ（逃げ回るボーナス）
   const OB = 'ek_obake';
   const ENEMY_KEYS = [OB, OB, OB, OB, 'ek_boss1', OB, OB, OB, OB, OB, OB, OB, OB, OB, OB, 'bigboss',
-    'ek_obake', 'ek_chochin', 'ek_boss1', 'ek_kitsune', 'ek_tanuki', 'ek_boss2', 'ek_oni', 'ek_mujina', 'ek_boss3', 'ek_boss4', 'ek_onimen', 'ek_karakasa'];
+    'ek_obake', 'ek_chochin', 'ek_boss1', 'ek_kitsune', 'ek_tanuki', 'ek_boss2', 'ek_oni', 'ek_mujina', 'ek_boss3', 'ek_boss4', 'ek_onimen', 'ek_karakasa', 'ek_nushioni', 'ek_nushitanuki'];
   // 新しい妖怪の画像は大きめに書き出してあるので小さく表示（見た目の直径 ≒ 当たり判定の約3.4倍）
   const ENEMY_SCALE = [0.42, 0.42, 0.42, 0.42, 0.6, 0.42, 0.42, 0.46, 0.42, 0.42, 0.42, 0.42, 0.42, 0.42, 0.42, 0.95,
-    0.42, 0.44, 0.6, 0.4, 0.44, 0.62, 0.45, 0.42, 0.62, 0.64, 0.42, 0.42];
+    0.42, 0.44, 0.6, 0.4, 0.44, 0.62, 0.45, 0.42, 0.62, 0.64, 0.42, 0.42, 0.9, 0.9]; // 28・29はヌシ（lv3強敵の絵を大きく書き出したもの）
   const ENEMY_BURST = [0xb48cff, 0x9a7ad0, 0x8fb8ff, 0xff9a7a, 0xff5a7e, 0xd8604a, 0x5a7ad0, 0xffd84f, 0x9a9288, 0xf0e2c4, 0xff6a7a, 0xffb050, 0xc0c0d0, 0x9ff0d8, 0xff4a3a, 0xb070ff,
-    0xc08aff, 0xff5a4a, 0xff7a3a, 0xff6a6a, 0xd8a060, 0xb070ff, 0xff4a3a, 0xa060ff, 0xff4a8a, 0xffe07a, 0xff5a5a, 0xd04a3a];
+    0xc08aff, 0xff5a4a, 0xff7a3a, 0xff6a6a, 0xd8a060, 0xb070ff, 0xff4a3a, 0xa060ff, 0xff4a8a, 0xffe07a, 0xff5a5a, 0xd04a3a, 0xff3a3a, 0xb070ff];
   const FIELD_BOSS = { 18: 1, 21: 2, 24: 3, 25: 4 }; // 段階ボス
   // オーラの色（レベルが上がるほど派手に）：Lv5 白 / 10 緑 / 15 水色 / 20 紫 / 30 金 / 40 虹
   const AURA = [0, 0xffffff, 0x7cff8a, 0x6fd8ff, 0xc58bff, 0xffd84f, 0xff7ad9];
@@ -290,7 +290,7 @@
       if (s.e) { this.esnaps.push({ t: s.t, e: s.e }); if (this.esnaps.length > 20) this.esnaps.shift(); }
       if (s.q) this.lastQ = s.q;
       if (s.f) this.lastF = s.f;
-      if (s.e) { this.bb = s.bb || null; this.bbt = s.bbt || 0; this.rz = s.rz || []; } // 大妖の位置とHP・妖気の渦
+      if (s.e) { this.bb = s.bb || null; this.bbt = s.bbt || 0; this.rz = s.rz || []; this.wb = s.wb || []; } // 大妖の位置とHP・妖気の渦
       if (s.me && s.me.cd) this.myCards = s.me.cd; // 持っているカードの枚数
       if (s.lb) { this.lastLb = s.lb; this.lastRk = s.rk; }
       this.latest = s;
@@ -341,6 +341,7 @@
       this.moveLocal(dt);
       this.overlay.clear();
       this.renderRifts(time);
+      this.renderNushiLabels();
       this.renderGems();
       // 敵は別のバッファで補間（1秒10回なので少し長めに待つ）
       const ert = now + this.offset - Math.max(this.delay, 0.13);
@@ -442,6 +443,26 @@
       if (Math.hypot(L.x - me.x, L.y - me.y) > 300) { L.x = me.x; L.y = me.y; }
       L.vx = (L.x - px) / dt; L.vy = (L.y - py) / dt;
       this.session.sendInput(L.x, L.y, this.dashing);
+    }
+
+    // ---------- ヌシの頭の上の名前とHPバー ----------
+    renderNushiLabels() {
+      if (!this.nushiTx) this.nushiTx = [];
+      const list = this.wb || [], v = this.cameras.main.worldView, z = Math.max(0.4, this.cameras.main.zoom);
+      list.forEach((n, i) => {
+        const [x, y, hp, lv, ty] = n;
+        let tx = this.nushiTx[i];
+        if (!tx) tx = this.nushiTx[i] = this.add.text(0, 0, '', TR(20, '#ffd0c0', '#3a0a0a', 6)).setOrigin(0.5, 1).setDepth(FX_DEPTH - 2);
+        const vis = x > v.x - 300 && x < v.right + 300 && y > v.y - 200 && y < v.bottom + 500;
+        tx.setVisible(vis);
+        if (!vis) return;
+        const top = y - 330;
+        tx.setText(`${GD.NUSHI_NAME[ty]}　Lv${lv}`).setPosition(x, top - 14 / z).setScale(1 / z);
+        const bw = 220, bh = 12;
+        this.overlay.fillStyle(0x140820, 0.9); this.overlay.fillRoundedRect(x - bw / 2 - 3, top - 3, bw + 6, bh + 6, 6);
+        this.overlay.fillStyle(0xff5a3a, 1); this.overlay.fillRoundedRect(x - bw / 2, top, bw * Phaser.Math.Clamp(hp / 1000, 0, 1), bh, 5);
+      });
+      for (let i = list.length; i < this.nushiTx.length; i++) this.nushiTx[i].setVisible(false);
     }
 
     // ---------- 妖気の渦（地面に紫のうず。中にいると経験値アップ） ----------
@@ -709,7 +730,7 @@
       let bossNear = false;
       for (let i = 0; i < be.length; i += 4) {
         const id = be[i], raw = be[i + 1], ty = raw & 63, el = raw >= 64; // 強敵は種類+64
-        if (ty === 4 || ty === 15 || FIELD_BOSS[ty]) bossNear = true;
+        if (ty === 4 || ty === 15 || ty >= 28 || FIELD_BOSS[ty]) bossNear = true;
         let o = this.eSprites.get(id);
         if (!o) {
           o = this.getEnemy(ty); this.eSprites.set(id, o);
@@ -728,7 +749,7 @@
         o.lx = x;
         const wob = Math.sin(this.time.now / 140 + id) * 0.06;
         const s = (ENEMY_SCALE[ty] || 0.8) * (o.el ? 1.4 : 1);
-        if (ty === 15) o.img.setScale(s * (1 + wob * 0.25), s * (1 - wob * 0.25)); // 大妖はゆっくり息をする
+        if (ty === 15 || ty === 28 || ty === 29) o.img.setScale(s * (1 + wob * 0.25), s * (1 - wob * 0.25)); // 大妖・ヌシはゆっくり息をする
         else if (ty === 0 || ty === 7 || ty === 9 || ty === 12 || ty === 20 || ty === 23) o.img.setScale(s * (1 + wob), s * (1 - wob));
         else if (ty === 17 || ty === 18) o.img.setScale(s).setRotation(wob * 1.6); // ちょうちんはぶらぶら
         else if (FIELD_BOSS[ty]) o.img.setScale(s * (1 + wob * 0.4), s * (1 - wob * 0.4)); // ボスは息づかい
@@ -739,6 +760,7 @@
         o.img.setPosition(x, y - lift).setDepth(y);
         o.shadow.setPosition(x, y + 2).setDepth(y - 1);
         if (FIELD_BOSS[ty] && Math.random() < 0.06 * FIELD_BOSS[ty]) this.burst(x + Phaser.Math.Between(-60, 60), y - Phaser.Math.Between(20, 140), ENEMY_BURST[ty], 1); // ボスの妖気
+        if ((ty === 28 || ty === 29) && Math.random() < 0.25) this.burst(x + Phaser.Math.Between(-110, 110), y - Phaser.Math.Between(40, 260), ENEMY_BURST[ty], 1); // ヌシの妖気
         if (ty === 15 && Math.random() < 0.3) this.burst(x + Phaser.Math.Between(-150, 150), y - Phaser.Math.Between(60, 300), 0x8a4aff, 1); // 妖気
         if (ty === 7 && Math.random() < 0.15) FX.twinkle(this, x + Phaser.Math.Between(-15, 15), y - 20, 1);
         if (o.el && Math.random() < 0.08) this.burst(x + Phaser.Math.Between(-20, 20), y - 30, 0xff3a3a, 1);
@@ -934,7 +956,7 @@
             break;
           }
           case 'ed': {
-            this.burst(ev.x, ev.y - 10, ENEMY_BURST[ev.ty] || 0xffffff, ev.ty === 15 ? 140 : ev.ty === 4 ? 60 : FIELD_BOSS[ev.ty] ? 30 + FIELD_BOSS[ev.ty] * 10 : ev.ty === 7 ? 30 : 8);
+            this.burst(ev.x, ev.y - 10, ENEMY_BURST[ev.ty] || 0xffffff, ev.ty === 15 ? 140 : ev.ty >= 28 ? 100 : ev.ty === 4 ? 60 : FIELD_BOSS[ev.ty] ? 30 + FIELD_BOSS[ev.ty] * 10 : ev.ty === 7 ? 30 : 8);
             this.freeEnemy(ev.i);
             if (ev.by === me) { this.ui.addCombo(); FX.twinkle(this, ev.x, ev.y - 20, 3); Sfx.pop(ev.ty, ev.el, this.ui.combo); } // 倒した！の音
             if (ev.ty === 7 && ev.by === me) { FX.confetti(this, ev.x, ev.y - 30, 60, 0xffd84f); this.ui.stampFx('GOLD!!', '#ffd84f'); Sfx.play('legend'); }
@@ -1036,6 +1058,23 @@
           }
           case 'spawn': this.burst(ev.x, ev.y - 30, 0xffffff, 20); break;
           // 大妖（ビッグボス）
+          case 'nss': {
+            const dir = (ev.y < GD.WORLD.h / 2 ? '北' : '南') + (ev.x < GD.WORLD.w / 2 ? '西' : '東');
+            this.ui.banner(`⚠ ${GD.NUSHI_NAME[ev.ty]}（Lv${ev.lv}）が${dir}に現れた！`, '#ffb0a0');
+            this.ui.feed(`⚠ <b style="color:#ffb0a0">${GD.NUSHI_NAME[ev.ty]} Lv${ev.lv}</b> が${dir}に現れた`, '#3a1010');
+            Sfx.play('boss');
+            break;
+          }
+          case 'nsk': {
+            const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+            const nm = `${GD.NUSHI_NAME[ev.ty]} Lv${ev.lv}`;
+            this.ui.feed(ev.n ? `👹 <b style="color:#fff07a">${esc(ev.n)}</b> が <b style="color:#ffb0a0">${nm}</b> を討伐！` : `👹 <b style="color:#ffb0a0">${nm}</b> が倒された！`, '#3a1010');
+            if (this.local && Math.hypot(this.local.x - ev.x, this.local.y - ev.y) < 2000) {
+              this.cameras.main.shake(500, 0.01); FX.confetti(this, ev.x, ev.y - 120, 100); FX.shockwave(this, ev.x, ev.y - 40, 0xffb0a0, 300);
+              this.ui.stampFx('ヌシ 討伐！', '#ffe07a'); Sfx.play(ev.p === me ? 'legend' : 'lvlBig');
+            }
+            break;
+          }
           case 'bbs':
             Sfx.play('boss'); this.cameras.main.shake(900, 0.008);
             this.ui.bigBossFx(true, '', ev.lv);

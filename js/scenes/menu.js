@@ -172,7 +172,7 @@
       for (const k of ['tree1', 'tree2', 'tree3', 'rock', 'bush', 'flower1', 'flower2', 'bigboss']) {
         this.load.image(k, 'assets/' + k + '.png' + V());
       }
-      for (const k of ['obake', 'chochin', 'boss1', 'kitsune', 'tanuki', 'boss2', 'oni', 'mujina', 'boss3', 'boss4', 'onimen', 'karakasa']) {
+      for (const k of ['obake', 'chochin', 'boss1', 'kitsune', 'tanuki', 'boss2', 'oni', 'mujina', 'boss3', 'boss4', 'onimen', 'karakasa', 'nushioni', 'nushitanuki']) {
         this.load.image('ek_' + k, 'assets/ek_' + k + '.png' + V());
       }
       this.load.image('title_bg', 'assets/title_bg.jpg' + V());
