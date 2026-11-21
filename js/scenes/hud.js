@@ -98,11 +98,71 @@
       this.bbG = this.add.graphics().setDepth(3);
       this.bbName = this.add.text(0, 0, '大妖 オオマガツ　Lv200', TB(16, '#e8d0ff', '#1a0a2a', 4)).setOrigin(0.5, 1).setDepth(4).setVisible(false);
       this.bbHint = this.add.text(0, 0, '', TO(12, '#e8d0ff', '#1a0a2a', 3)).setOrigin(0.5, 0).setDepth(4).setVisible(false);
+      this.setupChat();
       this.layout();
       this.onResize = () => { this.layout(); if (this.cards) { this.hideCards(); this.cardSeq = -1; } };
       this.scale.on('resize', this.onResize);
       this.events.once('shutdown', () => this.scale.off('resize', this.onResize));
       this.ready = true;
+    }
+
+    // ---------- 全体チャット（友達と遊ぶ間だけ。サーバーの CHAT_ON で切りかえ） ----------
+    setupChat() {
+      const ss = this.gs.session;
+      if (!ss || !ss.say) return;
+      const box = this.chatBox = document.createElement('div');
+      box.style.cssText = 'position:fixed;left:12px;top:150px;max-width:340px;z-index:20;pointer-events:none;font-family:"M PLUS Rounded 1c",sans-serif;font-weight:800;font-size:14px;line-height:1.35;';
+      document.body.appendChild(box);
+      const bar = this.chatBar = document.createElement('div');
+      bar.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);width:min(440px,calc(100vw - 32px));display:none;gap:6px;z-index:30;';
+      const inp = document.createElement('input');
+      inp.maxLength = 60; inp.placeholder = 'みんなにメッセージ（Enterで送信）';
+      inp.style.cssText = 'flex:1;min-width:0;font-size:16px;padding:10px 12px;border-radius:10px;border:3px solid #f0c35a;background:#1a1020ee;color:#fff8ea;font-family:inherit;outline:none;';
+      const send = document.createElement('button');
+      send.textContent = '送信';
+      send.style.cssText = 'font-size:16px;font-weight:900;padding:0 16px;border-radius:10px;border:3px solid #5a3a14;background:#f0a830;color:#2a1608;';
+      bar.append(inp, send); document.body.appendChild(bar);
+      const kb = this.game.input.keyboard;
+      const close = () => {
+        bar.style.display = 'none'; inp.blur(); this.chatOpen = false;
+        if (kb) { kb.enabled = true; }
+      };
+      const submit = () => { const v = inp.value.trim(); if (v) ss.say(v); inp.value = ''; close(); };
+      this.openChat = () => {
+        if (this.chatOpen) { submit(); return; }
+        this.chatOpen = true;
+        if (kb) { kb.enabled = false; this.gs.input.keyboard.resetKeys(); this.input.keyboard.resetKeys(); }
+        bar.style.display = 'flex';
+        setTimeout(() => inp.focus(), 0);
+      };
+      inp.addEventListener('keydown', e => {
+        e.stopPropagation();
+        if (e.isComposing || e.keyCode === 229) return; // 日本語の変換中のEnterは送らない
+        if (e.key === 'Enter') { e.preventDefault(); submit(); } else if (e.key === 'Escape') { inp.value = ''; close(); }
+      });
+      send.addEventListener('pointerdown', e => { e.preventDefault(); submit(); });
+      const onKey = e => { if (!this.chatOpen && e.key === 'Enter' && !this.cards && document.activeElement === document.body) { e.preventDefault(); this.openChat(); } };
+      window.addEventListener('keydown', onKey);
+      this.chatBtn = button(this, 0, 0, 74, 30, '💬 チャット', () => this.openChat(), { color: C.blue, dark: C.blueDark, size: 13 });
+      const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const add = rows => rows.forEach(r => {
+        const d = document.createElement('div');
+        const mine = r.id === this.gs.myId;
+        d.style.cssText = 'margin-top:3px;padding:3px 9px;border-radius:8px;background:#10141fb8;color:#fff8ea;text-shadow:0 1px 2px #000;transition:opacity 1s;word-break:break-all;';
+        d.innerHTML = `<span style="color:${mine ? '#fff07a' : '#7fdcff'}">${esc(r.n)}</span>：${esc(r.m)}`;
+        box.appendChild(d);
+        while (box.children.length > 7) box.removeChild(box.firstChild);
+        setTimeout(() => { d.style.opacity = '0'; }, 15000);
+        setTimeout(() => d.remove(), 16200);
+      });
+      add(ss.chat.slice(-5));
+      this.chatBtn.setVisible(!!ss.chatOn);
+      ss.onSay = rows => { this.chatBtn.setVisible(true); add(rows); if (rows.length === 1 && rows[0].id !== this.gs.myId && window.Sfx) Sfx.play('click'); };
+      this.events.once('shutdown', () => {
+        ss.onSay = null; window.removeEventListener('keydown', onKey);
+        if (kb) kb.enabled = true;
+        box.remove(); bar.remove();
+      });
     }
 
     layout() {
@@ -133,6 +193,12 @@
         this.protText.setPosition(w / 2, (compact ? 90 : 12) + 48);
         this.exitBtn.setPosition(L.hud.x + 37, L.hud.y + L.hud.h + 24).setScale(1);
         this.bgmBtn.setPosition(L.hud.x + 37 + 82, L.hud.y + L.hud.h + 24).setScale(1);
+      }
+      if (this.chatBtn) {
+        if (portrait) this.chatBtn.setPosition(40, h - 94).setScale(0.85);
+        else this.chatBtn.setPosition(L.hud.x + 37 + 164, L.hud.y + L.hud.h + 24).setScale(1);
+        this.chatBox.style.top = (portrait ? 150 : L.hud.y + L.hud.h + 50) + 'px';
+        this.chatBox.style.maxWidth = Math.min(340, w - 150) + 'px';
       }
       this.hurt.setSize(w, h);
       if (!this.mmLabel) this.mmLabel = this.add.text(0, 0, 'レーダー', TO(10, '#9fffb0', '#0f2418', 3)).setDepth(3);

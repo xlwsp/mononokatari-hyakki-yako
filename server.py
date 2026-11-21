@@ -26,6 +26,9 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get('PORT', 8000))
 GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 MAX_HUMANS = 50
+# 全体チャット（友達と遊ぶ間だけ。Falseにすると消える）
+CHAT_ON = True
+CHAT_LOG = []  # 最近のチャット（入ってきた人にも見せる）
 TICK = 0.05
 JSC = '/System/Library/Frameworks/JavaScriptCore.framework/Versions/Current/Helpers/jsc'
 DRIVER = os.path.join(ROOT, 'tools', 'sim_driver.js')
@@ -365,6 +368,7 @@ class Client:
         self.joined = False
         self.closed = False
         self.tok = None
+        self.last_say = 0
 
     def send_raw(self, text: str, droppable=False):
         if self.closed:
@@ -559,12 +563,27 @@ def handle_msg(c: Client, text: str):
         world.joins.append([c.id, c.name, sp, state, profiles.item_for(tok, sp)])
         c.send({'t': 'joined', 'id': c.id, 'seed': world.seed, 'v': VERSION, 'cont': 1 if state else 0, 'sp': sp})
         log(c.name, 'joined', '(online %d)' % len(world.members))
+        if CHAT_ON:
+            c.send({'t': 'say', 'h': CHAT_LOG[-15:]})
     elif t == 'respawn':
         if c.joined:
             sp = str(m.get('sp') or '')
             if not profiles.owns(c.tok, sp):
                 sp = 'gekomaru'
             world.respawns.append([c.id, sp, profiles.item_for(c.tok, sp)])
+    elif t == 'say':
+        # 全体チャット：1秒に1回まで・60文字まで
+        if CHAT_ON and c.joined and time.monotonic() - c.last_say > 1:
+            msg = ''.join(ch for ch in str(m.get('m') or '') if ch >= ' ').strip()[:60]
+            if msg:
+                c.last_say = time.monotonic()
+                row = {'n': c.name, 'm': msg, 'id': c.id}
+                CHAT_LOG.append(row)
+                del CHAT_LOG[:-30]
+                log('[chat]', c.name + ':', msg)
+                for o in list(clients.values()):
+                    if o.joined:
+                        o.send({'t': 'say', 'h': [row]})
     elif t == 'leave':
         leave(c)
     elif t in ('prof?', 'gacha', 'equip'):
