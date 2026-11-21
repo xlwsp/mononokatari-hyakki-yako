@@ -531,8 +531,8 @@
     // 体の大きさ（レベルと進化で大きくなる。見た目と当たり判定の両方に使う）
     // 最初は敵より小さく、強くなるほど大きくなる
     radius(p) { return GameSim.size(p.lv, p.evo) / 2; }
-    // 大きさ：Lv20までは1レベル4ずつ、そこから先は1レベル1.2ずつ（上限なし）
-    static size(lv, evo) { return (40 + 4 * Math.min(lv, 20) + 1.2 * Math.max(0, lv - 20)) * (evo ? 1.3 : 1); }
+    // 大きさ：Lv20までは1レベル4ずつ、Lv100までは0.8ずつ、その先は0.3ずつ（大きくなりすぎて画面が見えなくならないように）
+    static size(lv, evo) { return (40 + 4 * Math.min(lv, 20) + 0.8 * clamp(lv - 20, 0, 80) + 0.3 * Math.max(0, lv - 100)) * (evo ? 1.3 : 1); }
     // 体当たりのダメージ（レベル・進化・攻撃力・体当たり強化で上がる）
     bumpPower(p) { return 24 * this.lvMul(p) * p.bumpMul; }
 

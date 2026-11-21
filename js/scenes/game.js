@@ -20,6 +20,7 @@
 
   // コマの直径（最初は敵より小さく、強くなるほど大きく。サーバーの当たり判定と同じ式）
   const monsterH = (lv, evo) => GameSim.size(lv, evo);
+  const BODY_K = 1.2; // 全身の絵の長い辺 = 体の大きさ × これ
 
   class GameScene extends Phaser.Scene {
     constructor() { super('Game'); }
@@ -352,7 +353,12 @@
       }
       this.watchFps(dt);
       if (this.me) {
-        const want = Phaser.Math.Clamp(1.25 - (monsterH(this.me.lv, this.me.ev) - 40) / 420, 0.7, 1.25);
+        // 体が大きくなったらカメラを引く：キャラが画面の短い辺の約2割に収まるように。
+        // ただし引きすぎると周りの情報（サーバーが送る範囲）より外が映るので、そこで止める
+        const w = this.scale.width, h = this.scale.height;
+        const vis = monsterH(this.me.lv, this.me.ev) * BODY_K;
+        const minZ = Math.max(w, h) / 2300 / this.baseZoom;
+        const want = Phaser.Math.Clamp(Math.min(w, h) * (h > w ? 0.28 : 0.2) / (vis * this.baseZoom), Math.min(1, minZ), 1.25); // 縦画面は短い辺がせまいので少し大きめ
         this.zoomCur += (want - this.zoomCur) * Math.min(1, dt * 2);
         this.cameras.main.setZoom(this.baseZoom * this.zoomCur * this.punch);
       }
@@ -442,7 +448,7 @@
         key: null, lx: pb.x, ly: pb.y, walk: 0, flip: false, h: 60, twT: 0, base: 1,
       };
       this.pSprites.set(pb.id, o);
-      if (isMe) this.cameras.main.startFollow(o.body, false, 0.14, 0.14, 0, 40);
+      if (isMe) this.cameras.main.startFollow(o.body, false, 0.14, 0.14, 0, 30);
       return o;
     }
     destroyPlayer(id) {
@@ -478,7 +484,7 @@
           const changed = o.key && o.key !== key;
           o.key = key; o.h = H;
           o.body.setTexture(key);
-          o.base = D * 1.4 / Math.max(o.body.width, o.body.height);
+          o.base = D * BODY_K / Math.max(o.body.width, o.body.height);
           o.dh = o.body.height * o.base;
           o.body.setScale(o.base);
           if (changed) { o.body.setScale(o.base * 0.3); this.tweens.add({ targets: o.body, scale: o.base, duration: 500, ease: 'Back.out' }); }
@@ -540,6 +546,8 @@
           this.overlay.fillStyle(isMe ? 0x7cdc6a : 0xe8615a, 1); this.overlay.fillRoundedRect(bx, by, bw * Phaser.Math.Clamp(pb.hp / pb.mhp, 0, 1), 5, 2);
         }
         o.lyTop = cy;
+        // 自分のキャラは絵の真ん中が画面の中央に来るように
+        if (isMe) this.cameras.main.setFollowOffset(0, (o.dh || D) / 2);
         this.renderOrbit(o, pb.it, alive, x, cy, D, y);
       }
       for (const id of Array.from(this.pSprites.keys())) if (!seen.has(id)) this.destroyPlayer(id);
