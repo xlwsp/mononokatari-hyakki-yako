@@ -113,11 +113,58 @@
       this.bbHint = this.add.text(0, 0, '', TO(12, '#e8d0ff', '#1a0a2a', 3)).setOrigin(0.5, 0).setDepth(4).setVisible(false);
       this.setupChat();
       this.setupFeed();
+      this.setupDash();
       this.layout();
       this.onResize = () => { this.layout(); if (this.cards) { this.hideCards(); this.cardSeq = -1; } };
       this.scale.on('resize', this.onResize);
       this.events.once('shutdown', () => this.scale.off('resize', this.onResize));
       this.ready = true;
+    }
+
+    // ---------- ダッシュボタンとスタミナゲージ ----------
+    setupDash() {
+      this.dashG = this.add.graphics().setDepth(6);
+      this.dashTxt = this.add.text(0, 0, 'ダッシュ', TR(15, '#fff8ea', '#1a1020', 4)).setOrigin(0.5).setDepth(7);
+      this.dashSub = this.add.text(0, 0, '', TR(11, '#bfe8ff', '#1a1020', 3)).setOrigin(0.5).setDepth(7);
+      this.dashZone = this.add.zone(0, 0, 10, 10).setInteractive({ useHandCursor: true }).setDepth(8);
+      this.dashPid = null;
+      this.dashZone.on('pointerdown', p => { this.dashPid = p.id; this.gs.dashHold = true; });
+      const up = p => { if (p.id === this.dashPid) { this.dashPid = null; this.gs.dashHold = false; } };
+      this.input.on('pointerup', up);
+      this.input.on('pointerupoutside', up);
+      this.dashZone.on('pointerout', p => up(p));
+      this.dashShown = 1;
+    }
+    drawDash(me) {
+      const L = this.L, g = this.dashG;
+      const R = L.compact ? 38 : 44;
+      // 置き場所：横画面はレーダーの左、縦画面は右の中ほど（親指が届くところ）
+      const cx = L.portrait ? L.w - R - 16 : L.mmX - R - 22, cy = L.portrait ? L.h * 0.64 : L.h - R - 26;
+      this.dashZone.setPosition(cx, cy).setSize(R * 2 + 16, R * 2 + 16);
+      if (this.dashZone.input) this.dashZone.input.hitArea.setTo(0, 0, R * 2 + 16, R * 2 + 16);
+      const sta = me.sta === undefined ? 1 : me.sta, lock = !!me.sl, on = !!this.gs.dashing;
+      // ゲージの見た目を少しなめらかに
+      this.dashShown += (sta - this.dashShown) * 0.35;
+      const v = this.dashShown;
+      g.clear();
+      g.fillStyle(0x000000, 0.35); g.fillCircle(cx + 2, cy + 4, R + 6);
+      g.fillStyle(on ? 0x1f5a8a : 0x161c30, 0.88); g.fillCircle(cx, cy, R + 4);
+      // 外側の輪：スタミナ（金＝使える / 赤＝使い切って回復待ち / 水色＝ダッシュ中）
+      g.lineStyle(9, 0x0b0f1c, 1); g.strokeCircle(cx, cy, R - 2);
+      const col = lock ? 0xff5a4a : on ? 0x6fe0ff : v >= 0.999 ? 0xffd23a : 0xf0b030;
+      if (v > 0.005) {
+        g.lineStyle(7, col, 1); g.beginPath();
+        g.arc(cx, cy, R - 2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, v), false); g.strokePath();
+      }
+      // 3秒ぶんの目盛り
+      g.lineStyle(2, 0x0b0f1c, 0.9);
+      for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + i / 3 * Math.PI * 2; g.lineBetween(cx + Math.cos(a) * (R - 7), cy + Math.sin(a) * (R - 7), cx + Math.cos(a) * (R + 3), cy + Math.sin(a) * (R + 3)); }
+      g.lineStyle(2, on ? 0x9ff0ff : 0xd8a83a, 0.9); g.strokeCircle(cx, cy, R + 4);
+      if (on) { g.fillStyle(0x6fe0ff, 0.15 + Math.sin(this.time.now / 80) * 0.08); g.fillCircle(cx, cy, R - 7); }
+      this.dashTxt.setPosition(cx, cy - (L.compact ? 5 : 6)).setText(on ? '💨 GO!' : '💨 ダッシュ').setFontSize(L.compact ? 12 : 14).setColor(lock ? '#ff9a8a' : '#fff8ea');
+      const left = lock ? Math.ceil((1 - sta) * GD.DASH_RECHARGE) : 0;
+      this.dashSub.setPosition(cx, cy + (L.compact ? 11 : 13)).setText(lock ? `あと${left}秒` : L.compact ? `${(sta * GD.DASH_TIME).toFixed(1)}秒` : `Shift／Space`).setColor(lock ? '#ff9a8a' : '#bfe8ff');
+      this.dashG.setAlpha(me.a ? 1 : 0.4);
     }
 
     // ---------- 右側の記録（プレイヤー同士のキル・大妖の討伐・ドロップ） ----------
@@ -311,6 +358,7 @@
       this.drawCardBag();
       this.drawBigBoss(me);
       this.drawMinimap(s, me);
+      this.drawDash(me);
 
       // レベルアップカード
       const ch = me.a ? me.ch : null;

@@ -53,11 +53,11 @@
     }
     // 画面の準備中にたまった分は、新しい数個だけ渡す（一度に大量に処理して固まらないように）
     set onSnapshot(fn) { this._onSnap = fn; if (fn) { this.pending.slice(-3).forEach(fn); this.pending = []; } }
-    sendInput(x, y) {
+    sendInput(x, y, dash) {
       const now = performance.now();
-      if (now - this.lastSend < 45) return;
-      this.lastSend = now;
-      this.relay.send({ t: 'in', x: Math.round(x), y: Math.round(y) });
+      if (now - this.lastSend < 45 && !!dash === !!this.lastDash) return; // ダッシュの押し始め・終わりはすぐ送る
+      this.lastSend = now; this.lastDash = !!dash;
+      this.relay.send(dash ? { t: 'in', x: Math.round(x), y: Math.round(y), d: 1 } : { t: 'in', x: Math.round(x), y: Math.round(y) });
     }
     say(text) { this.relay.send({ t: 'say', m: String(text).slice(0, 60) }); }
     choose(seq, idx) { this.relay.send({ t: 'ch', s: seq, i: idx }); }

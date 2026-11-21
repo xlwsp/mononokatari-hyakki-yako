@@ -65,7 +65,8 @@
       this.wasAlive = true;
       this.leaving = false;
 
-      this.keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT');
+      this.keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT,SPACE');
+      this.dashHold = false; // スマホのダッシュボタン（HUDが押している間 true にする）
 
       this.session.onSnapshot = s => this.onSnap(s);
       this.session.onLost = msg => this.lost(msg);
@@ -409,6 +410,7 @@
       if (!me.a || me.bt) {
         L.vx = L.vy = 0;
         if (!me.a) { L.x = me.x; L.y = me.y; } else this.session.sendInput(L.x, L.y);
+        this.dashing = false;
         return;
       }
       let ix = 0, iy = 0;
@@ -421,7 +423,11 @@
       const len = Math.hypot(ix, iy);
       if (len > 1) { ix /= len; iy /= len; }
       const px = L.x, py = L.y;
-      const spd = me.spd || 200;
+      // ダッシュ：Shift・スペース・ダッシュボタンを押している間（スタミナがあれば）
+      const want = (k.SHIFT.isDown || k.SPACE.isDown || this.dashHold) && (ix || iy);
+      const can = (me.sta === undefined ? 1 : me.sta) > 0.01 && !me.sl;
+      this.dashing = !!(want && can);
+      const spd = (me.spd || 200) * (this.dashing ? GD.DASH_MUL : 1);
       L.x += ix * spd * dt;
       L.y += iy * spd * dt;
       L.x = Phaser.Math.Clamp(L.x, GD.EDGE, GD.WORLD.w - GD.EDGE);
@@ -430,7 +436,7 @@
       // サーバーとずれすぎたら合わせる
       if (Math.hypot(L.x - me.x, L.y - me.y) > 300) { L.x = me.x; L.y = me.y; }
       L.vx = (L.x - px) / dt; L.vy = (L.y - py) / dt;
-      this.session.sendInput(L.x, L.y);
+      this.session.sendInput(L.x, L.y, this.dashing);
     }
 
     // ---------- プレイヤー（モンスター） ----------
@@ -552,6 +558,17 @@
             .setDisplaySize(D * 1.9, D * 1.9).setAlpha(0.35 + Math.sin(time / 150) * 0.1);
         }
         if (pb.hs && alive && fxOk && Math.random() < 0.4) FX.twinkle(this, x - (o.flip ? 20 : -20), y - 10, 1);
+        // ダッシュ中：足もとに土けむり＋残像
+        if ((pb.ds || (isMe && this.dashing)) && alive && moving && fxOk) {
+          o.dsT = (o.dsT || 0) - dt;
+          if (o.dsT <= 0) {
+            o.dsT = 0.05;
+            const puff = this.add.image(x - vx * 2, y - 4, 'spark').setTint(0xe8dcc0).setAlpha(0.7).setDisplaySize(D * 0.35, D * 0.22).setDepth(y - 3);
+            this.tweens.add({ targets: puff, alpha: 0, scaleX: puff.scaleX * 2.2, scaleY: puff.scaleY * 1.6, duration: 380, onComplete: () => puff.destroy() });
+            const ghost = this.add.image(o.body.x, o.body.y, o.body.texture.key).setOrigin(0.5, 1).setFlipX(o.flip).setScale(o.body.scaleX, o.body.scaleY).setAlpha(0.35).setTintFill(0xbfe8ff).setDepth(y - 1);
+            this.tweens.add({ targets: ghost, alpha: 0, duration: 220, onComplete: () => ghost.destroy() });
+          }
+        }
         // 名前（自分より強い相手は赤、弱い相手は緑）
         const ny = Math.min(cy - D / 2, y + 2 - bob - (o.dh || D)) - 12;
         const pow = pb.lv + (pb.ev ? 10 : 0);
@@ -566,6 +583,12 @@
           const bw = Math.max(46, D * 0.9), bx = x - bw / 2, by = ny - 2;
           this.overlay.fillStyle(0x0b0f1c, 0.85); this.overlay.fillRoundedRect(bx - 2, by - 2, bw + 4, 9, 4);
           this.overlay.fillStyle(isMe ? 0x7cdc6a : 0xe8615a, 1); this.overlay.fillRoundedRect(bx, by, bw * Phaser.Math.Clamp(pb.hp / pb.mhp, 0, 1), 5, 2);
+          // 自分のスタミナ（減っているときだけ、HPバーの下に細く）
+          const sta = isMe && this.me ? (this.me.sta === undefined ? 1 : this.me.sta) : 1;
+          if (isMe && sta < 0.995) {
+            this.overlay.fillStyle(0x0b0f1c, 0.85); this.overlay.fillRoundedRect(bx - 2, by + 7, bw + 4, 6, 3);
+            this.overlay.fillStyle(this.me.sl ? 0xff5a4a : this.dashing ? 0x6fe0ff : 0xf0b030, 1); this.overlay.fillRoundedRect(bx, by + 8, Math.max(2, bw * sta), 3, 1.5);
+          }
         }
         o.lyTop = cy;
         // 自分のキャラは絵の真ん中が画面の中央に来るように

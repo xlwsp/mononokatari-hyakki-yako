@@ -26,6 +26,8 @@
   const PARADE_LV = 20;        // 百鬼夜行に巻き込まれるレベル
   const PARADE_TIME = 45;      // 百鬼夜行を生き延びる時間
   const BOUNTY_LV = 15;        // 賞金首になるレベル
+  // ダッシュ：スタミナ満タンで3秒走れる。使い切ったら満タンに戻るまで（10秒）使えない。途中でやめた分はそのまま使える
+  const DASH_TIME = 3, DASH_RECHARGE = 10, DASH_MUL = 1.7;
   const BIG_LVS = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]; // 大妖のレベル（出るたびにランダム）
   const BIG_LV = 200;          // 強さの基準になるレベル（HP・ごほうびはこのレベルを1倍として増減）
   const BIG_FIRST = 90;        // 世界ができてから大妖が現れるまで（秒）
@@ -537,11 +539,11 @@
     // 体当たりのダメージ（レベル・進化・攻撃力・体当たり強化で上がる）
     bumpPower(p) { return 24 * this.lvMul(p) * p.bumpMul; }
 
-    setInput(id, x, y) {
+    setInput(id, x, y, dash) {
       const p = this.pmap.get(id);
       if (!p || p.bot) return;
       if (typeof x !== 'number' || typeof y !== 'number' || !isFinite(x) || !isFinite(y)) return;
-      p.tx = x; p.ty = y;
+      p.tx = x; p.ty = y; p.dashIn = !!dash;
     }
 
     choose(id, seq, idx) {
@@ -618,6 +620,16 @@
           if (p.hp <= 0) { this.kill(p, p.poisonBy && p.poisonBy.alive ? p.poisonBy : null); continue; }
         }
         p.espd = p.spd * mul;
+        // ダッシュとスタミナ
+        if (p.sta === undefined) { p.sta = DASH_TIME; p.staLock = false; }
+        p.dashing = !!(p.dashIn && !p.staLock && p.sta > 0 && p.tpT <= 0);
+        if (p.dashing) {
+          p.sta -= dt;
+          if (p.sta <= 0) { p.sta = 0; p.staLock = true; p.dashing = false; }
+        } else {
+          p.sta = Math.min(DASH_TIME, p.sta + dt * DASH_TIME / DASH_RECHARGE);
+          if (p.staLock && p.sta >= DASH_TIME) p.staLock = false;
+        }
         if (p.shieldT > 0) { p.shieldT -= dt; if (p.shieldT <= 0) p.shield = 0; }
         if (p.protT > 0) p.protT -= dt;
         const rg = 0.005 * Math.min(20, (p.cards && p.cards.regen) || 0) + (p.evo ? 0.005 : 0);
@@ -659,7 +671,7 @@
         this.botThink(p, dt);
       } else if (p.tx !== null) {
         const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
-        const max = p.espd * dt * 1.8 + 4;
+        const max = p.espd * (p.dashing || p.staLock && p.sta < 0.3 ? DASH_MUL : 1) * dt * 1.8 + 4; // ダッシュ中（と終わった直後）は速く動ける
         if (d > max) { p.x += dx / d * max; p.y += dy / d * max; } else { p.x = p.tx; p.y = p.ty; }
       }
       p.x = clamp(p.x, EDGE, WORLD.w - EDGE);
@@ -1732,7 +1744,7 @@
         sh: p.shield > 0 ? 1 : 0, hs: p.hasteT > 0 ? 1 : 0, pr: isProtected(p) ? 1 : 0,
         bt: p.tpT > 0 ? 1 : 0, tp: p.tp, iv: p.iframe > 0 ? 1 : 0, bn: this.bounty === p ? 1 : 0,
         it: p.item ? p.item.t * 8 + p.item.r : -1,
-        aw: p.aw || undefined, cs: p.cs && p.cs.some(v => v) ? p.cs : undefined, tl: p.tl || undefined,
+        ds: p.dashing ? 1 : undefined, aw: p.aw || undefined, cs: p.cs && p.cs.some(v => v) ? p.cs : undefined, tl: p.tl || undefined,
       };
     }
 
@@ -1795,6 +1807,7 @@
       s.me = {
         xp: Math.floor(me.xp), xpn: me.xpn, tx: Math.floor(me.txp), k: me.kills, pk: me.pkills, ch: me.choices[0] || null,
         cht: me.choices[0] ? Math.max(0, Math.ceil(15 - me.chT)) : 0,
+        sta: Math.round((p => (p.sta === undefined ? DASH_TIME : p.sta) / DASH_TIME * 100)(me)) / 100, sl: me.staLock ? 1 : 0,
         scd: Math.round(clamp(me.scd / Math.max(SPECIES[me.sp].skill.minCd || 0, SPECIES[me.sp].skill.cd * me.skillCd * (me.evo ? 0.6 : 1) * starBonus(me.star).cd), 0, 1) * 100) / 100, st: me.star || 1,
         by: me.killedBy, dt: me.alive ? 0 : Math.round(me.deadT),
         hy: me.hyT ? Math.ceil(me.hyT) : 0, pt: Math.max(0, Math.ceil(this.paradeT)),
@@ -1972,7 +1985,7 @@
   const UNLOCK_AT = {}; UNLOCKS.forEach(([k, v]) => { UNLOCK_AT[k] = v; });
 
   global.GD = {
-    UNLOCKS, UNLOCK_AT, ITEMS, RARITIES, ORBIT_SPEED, itemCount, itemShow, itemInfo, isCombo, AWAKE_MAX, awakeCost, awakeBonus, AWAKE_COLORS, COSMETICS, COS_SLOTS, COS_SLOT_NAME, ACHIEVEMENTS, ACH_STAT_NAME, ITEM_PLUS_MAX, ITEM_PLUS_STEP, STARTERS, CHARA_RARITY, CHARA_RATES, STAR_NEED, starOf, starBonus,
+    UNLOCKS, UNLOCK_AT, ITEMS, RARITIES, ORBIT_SPEED, DASH_TIME, DASH_RECHARGE, DASH_MUL, itemCount, itemShow, itemInfo, isCombo, AWAKE_MAX, awakeCost, awakeBonus, AWAKE_COLORS, COSMETICS, COS_SLOTS, COS_SLOT_NAME, ACHIEVEMENTS, ACH_STAT_NAME, ITEM_PLUS_MAX, ITEM_PLUS_STEP, STARTERS, CHARA_RARITY, CHARA_RATES, STAR_NEED, starOf, starBonus,
     WORLD, TICK, EDGE, VIEW_R, RADAR_R, MAX_PLAYERS, EVOLVE_LV, PROTECT_TIME, NEWBIE_LV, generateMap, resolve, auraTier,
     SPECIES, SPECIES_KEYS, ENEMY_TYPES, ENEMIES, UPGRADES, COLORS, upgradeText,
     xpNeed, clamp,

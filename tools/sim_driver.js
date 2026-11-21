@@ -34,7 +34,7 @@ for (;;) {
     if (cmd.join) cmd.join.forEach(function (j) { sim.join(j[0], j[1], j[2], j[3] || null, j[4] || null); if (humans.indexOf(j[0]) < 0) humans.push(j[0]); });
     if (cmd.leave) cmd.leave.forEach(function (id) { saveLine(id); sim.remove(id); humans = humans.filter(function (h) { return h !== id; }); });
     if (cmd.respawn) cmd.respawn.forEach(function (r) { sim.respawn(r[0], r[1], r[2] || null); });
-    if (cmd.in) for (var id in cmd.in) sim.setInput(id, cmd.in[id][0], cmd.in[id][1]);
+    if (cmd.in) for (var id in cmd.in) sim.setInput(id, cmd.in[id][0], cmd.in[id][1], cmd.in[id][2]);
     if (cmd.ch) cmd.ch.forEach(function (c) { sim.choose(c[0], c[1], c[2]); });
     sim.step(GD.TICK);
     if (sim.tick % 40 === 0) humans.forEach(saveLine);

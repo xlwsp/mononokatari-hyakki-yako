@@ -831,7 +831,7 @@ def handle_msg(c: Client, text: str):
     if t == 'in':
         if c.joined:
             try:
-                world.inputs[c.id] = [float(m['x']), float(m['y'])]
+                world.inputs[c.id] = [float(m['x']), float(m['y']), 1 if m.get('d') else 0]  # d=ダッシュ中
             except Exception:
                 pass
     elif t == 'ch':
