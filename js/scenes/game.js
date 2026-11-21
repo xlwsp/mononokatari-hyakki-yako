@@ -7,12 +7,12 @@
   // 0〜14は昔の番号（もう出てこない。念のため用意された画像で表示）。7は金色の笠おばけ（逃げ回るボーナス）
   const OB = 'ek_obake';
   const ENEMY_KEYS = [OB, OB, OB, OB, 'ek_boss1', OB, OB, OB, OB, OB, OB, OB, OB, OB, OB, 'bigboss',
-    'ek_obake', 'ek_chochin', 'ek_boss1', 'ek_kitsune', 'ek_tanuki', 'ek_boss2', 'ek_oni', 'ek_mujina', 'ek_boss3', 'ek_boss4'];
+    'ek_obake', 'ek_chochin', 'ek_boss1', 'ek_kitsune', 'ek_tanuki', 'ek_boss2', 'ek_oni', 'ek_mujina', 'ek_boss3', 'ek_boss4', 'ek_onimen', 'ek_karakasa'];
   // 新しい妖怪の画像は大きめに書き出してあるので小さく表示（見た目の直径 ≒ 当たり判定の約3.4倍）
   const ENEMY_SCALE = [0.42, 0.42, 0.42, 0.42, 0.6, 0.42, 0.42, 0.46, 0.42, 0.42, 0.42, 0.42, 0.42, 0.42, 0.42, 0.95,
-    0.42, 0.44, 0.6, 0.4, 0.44, 0.62, 0.45, 0.42, 0.62, 0.64];
+    0.42, 0.44, 0.6, 0.4, 0.44, 0.62, 0.45, 0.42, 0.62, 0.64, 0.42, 0.42];
   const ENEMY_BURST = [0xb48cff, 0x9a7ad0, 0x8fb8ff, 0xff9a7a, 0xff5a7e, 0xd8604a, 0x5a7ad0, 0xffd84f, 0x9a9288, 0xf0e2c4, 0xff6a7a, 0xffb050, 0xc0c0d0, 0x9ff0d8, 0xff4a3a, 0xb070ff,
-    0xc08aff, 0xff5a4a, 0xff7a3a, 0xff6a6a, 0xd8a060, 0xb070ff, 0xff4a3a, 0xa060ff, 0xff4a8a, 0xffe07a];
+    0xc08aff, 0xff5a4a, 0xff7a3a, 0xff6a6a, 0xd8a060, 0xb070ff, 0xff4a3a, 0xa060ff, 0xff4a8a, 0xffe07a, 0xff5a5a, 0xd04a3a];
   const FIELD_BOSS = { 18: 1, 21: 2, 24: 3, 25: 4 }; // 段階ボス
   // オーラの色（レベルが上がるほど派手に）：Lv5 白 / 10 緑 / 15 水色 / 20 紫 / 30 金 / 40 虹
   const AURA = [0, 0xffffff, 0x7cff8a, 0x6fd8ff, 0xc58bff, 0xffd84f, 0xff7ad9];
@@ -436,7 +436,7 @@
         rays: this.add.image(0, 0, 'fx_rays').setBlendMode(Phaser.BlendModes.ADD).setVisible(false),
         shadow: this.add.image(0, 0, 'shadow'),
         ring: this.add.image(0, 0, 'ring').setTint(isMe ? 0xffffff : col).setAlpha(isMe ? 1 : 0.85),
-        body: this.add.image(0, 0, 'ic_' + pb.sp).setOrigin(0.5, 0.5),
+        body: this.add.image(0, 0, 'cr_' + pb.sp).setOrigin(0.5, 1),
         bubble: this.add.image(0, 0, 'spark').setBlendMode(Phaser.BlendModes.ADD).setVisible(false),
         name: this.add.text(0, 0, '', TO(14, isMe ? '#fff8a8' : '#ffffff', '#2a1a20', 4)).setOrigin(0.5, 1).setDepth(FX_DEPTH),
         key: null, lx: pb.x, ly: pb.y, walk: 0, flip: false, h: 60, twT: 0, base: 1,
@@ -471,14 +471,15 @@
         o.lx = x; o.ly = y;
         const moving = Math.hypot(vx, vy) > 0.4;
         if (moving) { o.walk += dt * 12; if (Math.abs(vx) > 0.3) o.flip = vx > 0; } else o.walk = 0;
-        // 見た目：丸いコマ。進化したら絵が変わり、レベルで大きくなる
-        const key = 'ic_' + pb.sp + (pb.ev ? '_e' : '');
-        const H = monsterH(pb.lv, pb.ev), D = H; // コマの直径
+        // 見た目：全身の絵。進化したら絵が変わり、レベルで大きくなる（絵の長い辺をそろえて、全員同じ大きさに）
+        const key = 'cr_' + pb.sp + (pb.ev ? '_e' : '');
+        const H = monsterH(pb.lv, pb.ev), D = H; // 体の大きさの基準
         if (o.key !== key || Math.abs(o.h - H) > 0.5) {
           const changed = o.key && o.key !== key;
           o.key = key; o.h = H;
           o.body.setTexture(key);
-          o.base = D / o.body.height;
+          o.base = D * 1.4 / Math.max(o.body.width, o.body.height);
+          o.dh = o.body.height * o.base;
           o.body.setScale(o.base);
           if (changed) { o.body.setScale(o.base * 0.3); this.tweens.add({ targets: o.body, scale: o.base, duration: 500, ease: 'Back.out' }); }
         }
@@ -486,17 +487,17 @@
         const bob = moving ? Math.abs(Math.sin(o.walk)) * 6 : Math.sin(time / 380) * 1.5;
         const squash = moving ? 1 + Math.sin(o.walk * 2) * 0.05 : 1;
         const cy = y - D / 2 - 4 - bob;
-        o.body.setFlipX(o.flip).setPosition(x, cy).setDepth(y).setRotation(moving ? Math.sin(o.walk) * 0.08 : 0);
+        o.body.setFlipX(o.flip).setPosition(x, y + 2 - bob).setDepth(y).setRotation(moving ? Math.sin(o.walk) * 0.08 : 0);
         if (!this.tweens.isTweening(o.body)) o.body.setScale(o.base * squash, o.base / squash);
         o.body.setAlpha(alive ? (pb.iv ? (Math.floor(time / 80) % 2 ? 0.55 : 1) : 1) : 0.25);
         const sw = D * 0.95;
         o.shadow.setPosition(x, y - 2).setDisplaySize(sw, sw * 0.3).setDepth(y - 2);
         o.ring.setVisible(false);
-        // コマのまわりの縁（自分は金、他の人はチームの色）
+        // 足もとの輪（自分は金、他の人はチームの色）
         if (alive) {
           const col = isMe ? 0xffd84f : GD.COLORS[pb.cl % GD.COLORS.length];
-          this.overlay.lineStyle(isMe ? 5 : 4, col, 1); this.overlay.strokeCircle(x, cy, D / 2 + 2);
-          if (pb.ps) { this.overlay.lineStyle(3, 0xa04aff, 0.9); this.overlay.strokeCircle(x, cy, D / 2 + 7); }
+          this.overlay.lineStyle(isMe ? 4 : 3, col, 0.95); this.overlay.strokeEllipse(x, y - 2, D * 1.05, D * 0.34);
+          if (pb.ps) { this.overlay.lineStyle(3, 0xa04aff, 0.9); this.overlay.strokeEllipse(x, y - 2, D * 1.2, D * 0.42); }
         }
         // オーラ（レベルが上がるほど強そうに）
         const tier = pb.au || 0;
@@ -527,7 +528,7 @@
         }
         if (pb.hs && alive && fxOk && Math.random() < 0.4) FX.twinkle(this, x - (o.flip ? 20 : -20), y - 10, 1);
         // 名前（自分より強い相手は赤、弱い相手は緑）
-        const ny = cy - D / 2 - 12;
+        const ny = Math.min(cy - D / 2, y + 2 - bob - (o.dh || D)) - 12;
         const pow = pb.lv + (pb.ev ? 10 : 0);
         const ncol = isMe ? '#fff8a8' : pow > myPow + 1 ? '#ff9a8a' : pow < myPow - 1 ? '#a8ff9a' : '#ffffff';
         o.name.setPosition(x, ny - 6).setText(`${pb.bn ? '💰' : ''}${pb.n}${pb.b ? ' 🤖' : ''}${pb.pr ? ' 🛡' : ''}`).setColor(pb.bn ? '#ffd84f' : ncol);
@@ -646,7 +647,7 @@
         else if (ty === 14) o.img.setScale(s).setRotation(wob * 2.5); // だるまはゆらゆら
         else if (ty === 1) o.img.setScale(s, s * (1 + wob * 1.5));
         else o.img.setScale(s);
-        const lift = ty === 1 || ty === 2 || ty === 13 || ty === 16 || ty === 17 ? 14 + wob * 40 : ty === 19 ? Math.abs(wob) * 90 : ty === 10 ? Math.abs(wob) * 140 : ty === 11 ? 6 + wob * 30 : 0; // 浮く・跳ねる
+        const lift = ty === 1 || ty === 2 || ty === 13 || ty === 16 || ty === 17 ? 14 + wob * 40 : ty === 19 ? Math.abs(wob) * 90 : ty === 10 || ty === 27 ? Math.abs(wob) * 140 : ty === 26 ? 10 + wob * 30 : ty === 11 ? 6 + wob * 30 : 0; // 浮く・跳ねる
         o.img.setPosition(x, y - lift).setDepth(y);
         o.shadow.setPosition(x, y + 2).setDepth(y - 1);
         if (FIELD_BOSS[ty] && Math.random() < 0.06 * FIELD_BOSS[ty]) this.burst(x + Phaser.Math.Between(-60, 60), y - Phaser.Math.Between(20, 140), ENEMY_BURST[ty], 1); // ボスの妖気

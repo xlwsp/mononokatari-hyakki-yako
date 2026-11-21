@@ -35,43 +35,43 @@
   // atk: 自動で撃つ通常攻撃 / skill: 自動で発動するスキル / trait: プレイヤー同士のバトルで効く特性
   const SPECIES = {
     gekomaru: {
-      name: 'ゲコまる', evoName: 'ガマまる', color: 0x9ccf5a, hp: 130, spd: 200, role: 'バランス型',
+      name: 'ゲコまる', evoName: 'ガマベルガ', color: 0x9ccf5a, hp: 130, spd: 200, role: 'バランス型',
       atk: { pattern: 'single', dmg: 11, cd: 0.7, speed: 500, life: 0.9, r: 8 },
       skill: { id: 'tongue', name: 'ベロ伸ばし', cd: 4, desc: '長いベロで一直線に貫く', area: false },
       trait: { id: 'gulp', name: '丸のみ', desc: '体当たりで与えたダメージの一部を回復' },
     },
     suzune: {
-      name: 'スズネ', evoName: 'めだまスズネ', color: 0xc89a6a, hp: 95, spd: 245, role: 'スピード型',
+      name: 'スズネ', evoName: 'スズリオン', color: 0xc89a6a, hp: 95, spd: 245, role: 'スピード型',
       atk: { pattern: 'single', dmg: 5, cd: 0.3, speed: 680, life: 0.7, r: 6 },
       skill: { id: 'wind', name: '追い風', cd: 8, desc: 'しばらく足がとても速くなる', area: false },
       trait: { id: 'alarm', name: '身代わりの鈴', desc: 'HPが減ると鈴が鳴り、猛ダッシュで逃げる' },
     },
     maimai: {
-      name: 'マイマイ', evoName: 'オオマイマイ', color: 0xc8d27a, hp: 165, spd: 175, role: 'タフ型',
+      name: 'マイマイ', evoName: 'モクリュウ', color: 0xc8d27a, hp: 165, spd: 175, role: 'タフ型',
       atk: { pattern: 'single', dmg: 17, cd: 1.1, speed: 320, life: 1.3, r: 10 },
       skill: { id: 'heal', name: 'ぬめぬめ回復', cd: 7, minCd: 5, desc: 'HPを回復', area: false },
       trait: { id: 'underdog', name: '根性', desc: '格上が相手だと体当たりが強くなる' },
     },
     rangyo: {
-      name: 'ランギョ', evoName: 'らんちゅう大王', color: 0xff8a4a, hp: 135, spd: 215, role: '成長型',
+      name: 'ランギョ', evoName: 'リュウラン', color: 0xff8a4a, hp: 135, spd: 215, role: '成長型',
       atk: { pattern: 'spread', n: 3, spread: 0.25, dmg: 8, cd: 0.75, speed: 480, life: 0.85, r: 8 },
       skill: { id: 'lucky', name: '招き金魚', cd: 10, desc: '経験値をばらまく（いつでも経験値+15%）', area: false },
       trait: { id: 'luck', name: '強運', desc: 'よく会心の一撃（2倍ダメージ）' },
     },
     kodama: {
-      name: 'コダマ', evoName: '紅コダマ', color: 0xff6a5a, hp: 110, spd: 225, role: '近接型',
+      name: 'コダマ', evoName: 'ネコマタ', color: 0xff6a5a, hp: 110, spd: 225, role: '近接型',
       atk: { pattern: 'spread', n: 3, spread: 0.35, dmg: 10, cd: 0.6, speed: 540, life: 0.38, r: 8 },
       skill: { id: 'frenzy', name: 'ひっかき乱舞', cd: 6, desc: '全方位をひっかく', area: false },
       trait: { id: 'first', name: '先制', desc: '久しぶりの体当たりは2倍ダメージ' },
     },
     kohaku: {
-      name: 'コハク', evoName: '炎コハク', color: 0xffa07a, hp: 105, spd: 235, role: '撹乱型',
+      name: 'コハク', evoName: 'シラヌイ', color: 0xffa07a, hp: 105, spd: 235, role: '撹乱型',
       atk: { pattern: 'single', dmg: 12, cd: 0.6, speed: 640, life: 0.8, r: 8 },
       skill: { id: 'moon', name: '月跳び', cd: 7, desc: 'まわりの敵をはじき飛ばす', area: true },
       trait: { id: 'hop', name: 'すりぬけ', desc: 'ときどき体当たりをひらりとよける' },
     },
     kuroro: {
-      name: 'クロロ', evoName: '黒羽クロロ', color: 0x6a6a86, hp: 100, spd: 220, role: '狙撃型',
+      name: 'クロロ', evoName: 'ヤタガラス', color: 0x6a6a86, hp: 100, spd: 220, role: '狙撃型',
       atk: { pattern: 'single', dmg: 11, cd: 0.7, speed: 660, life: 0.9, r: 8, pierce: 1 },
       skill: { id: 'flock', name: 'カラスの群れ', cd: 6, desc: '何体もの敵を同時に狙う', area: false },
       trait: { id: 'steal', name: '横取り', desc: '倒した相手の経験値を多めに奪う' },
@@ -83,7 +83,7 @@
       trait: { id: 'poison', name: '毒牙', desc: '体当たりした相手を毒にする' },
     },
     komori: {
-      name: 'コモリ', evoName: '森亀コモリ', color: 0x7aaa5a, hp: 185, spd: 165, role: '守り型',
+      name: 'コモリ', evoName: 'モリガルド', color: 0x7aaa5a, hp: 185, spd: 165, role: '守り型',
       atk: { pattern: 'single', dmg: 19, cd: 1.2, speed: 360, life: 1.2, r: 11 },
       skill: { id: 'shell', name: '甲羅バリア', cd: 9, minCd: 7, desc: 'ダメージを防ぐバリア', area: false },
       trait: { id: 'guard', name: '鉄壁', desc: '受ける体当たりダメージを軽減' },
@@ -101,13 +101,13 @@
       trait: { id: 'bomb', name: '自爆装置', desc: 'やられたとき大爆発してまわりにダメージ' },
     },
     hakua: {
-      name: 'ハクア', evoName: '白狼ハクア', color: 0xe8f0ff, hp: 130, spd: 215, role: '威圧型',
+      name: 'ハクア', evoName: 'ハクオウガ', color: 0xe8f0ff, hp: 130, spd: 215, role: '威圧型',
       atk: { pattern: 'spread', n: 3, spread: 0.2, dmg: 10, cd: 0.85, speed: 620, life: 0.9, r: 8, pierce: 1 },
       skill: { id: 'roar', name: '白狼の咆哮', cd: 8, desc: 'まわりの敵を気絶させる', area: true },
       trait: { id: 'awe', name: '威圧', desc: '体当たりした相手をしばらく遅くする' },
     },
     sinonome: {
-      name: 'シノノメ', evoName: '鈴鹿シノノメ', color: 0xf0a050, hp: 120, spd: 210, role: '不死型',
+      name: 'シノノメ', evoName: 'カグラジカ', color: 0xf0a050, hp: 120, spd: 210, role: '不死型',
       atk: { pattern: 'radial', n: 8, dmg: 9, cd: 1.4, speed: 480, life: 0.9, r: 8 },
       skill: { id: 'bless', name: '鈴の祝福', cd: 10, desc: '大きく回復', area: true },
       trait: { id: 'revive', name: 'よみがえりの鈴', desc: 'やられても一度だけ復活することがある' },
@@ -123,7 +123,8 @@
     'obake', 'chochin2', 'boss1',   // 第1段階（Lv1〜）：笠おばけ・ちょうちん ／ ボス：化け提灯
     'kitsune', 'tanuki', 'boss2',   // 第2段階（Lv40〜）：狐・狸 ／ ボス：大蛇（Lv60〜）
     'oni', 'mujina', 'boss3',       // 第3段階（Lv110〜）：鬼・妖狸 ／ ボス：獅子（Lv140〜）
-    'boss4'];                       // 第4段階（Lv200〜）：ボス：白獅子神
+    'boss4',                        // 第4段階（Lv200〜）：ボス：白獅子神
+    'onimen', 'karakasa'];          // 26〜27：第1段階の雑魚を追加（鬼面おばけ・からかさ）
   const ENEMIES = {
     slime:  { hp: 14, spd: 72, dmg: 6, r: 17, xp: 1 },
     bat:    { hp: 8, spd: 135, dmg: 5, r: 14, xp: 1 },
@@ -154,6 +155,8 @@
     mujina:   { hp: 200, spd: 124, dmg: 9, r: 24, xp: 7 },
     boss3:    { hp: 3300, spd: 82, dmg: 16, r: 62, xp: 26 },
     boss4:    { hp: 5200, spd: 88, dmg: 18, r: 70, xp: 42 },
+    onimen:   { hp: 14, spd: 86, dmg: 5, r: 16, xp: 2 },   // 少し硬い雑魚
+    karakasa: { hp: 7, spd: 138, dmg: 4, r: 15, xp: 1 },   // すばしっこい雑魚
   };
   // フィールドボス：段階ごとのボス。解放されるレベルと、たたきつけの大きさ
   const FIELD_BOSSES = [[18, 5, 230], [21, 30, 270], [24, 90, 310], [25, 150, 350]];
@@ -163,7 +166,7 @@
   const bossFor = lv => { let t = 18; for (const f of FIELD_BOSSES) if (lv >= f[1]) t = f[0]; return t; };
   const FB_R = {}; for (const [t, , r] of FIELD_BOSSES) FB_R[t] = r;
   // 群れで出る雑魚
-  const PACK = { 16: 1, 17: 1 };
+  const PACK = { 16: 1, 17: 1, 26: 1, 27: 1 };
 
   // 強化カード。{skill} {trait} はモンスターごとのスキル名・特性名に置き換わる
   const UPGRADES = {
@@ -1076,7 +1079,7 @@
       // [番号, 重み]：用意された妖怪だけ。レベルが上がると次の段階が混ざり、雑魚は減るけどずっと多め
       const f = lv >= 150 ? 0.45 : lv >= 60 ? 0.6 : 1;
       const t3 = lv >= 150 ? 1.6 : 1;
-      const w = [[16, 1 * f], [17, lv > 2 ? 0.8 * f : 0],
+      const w = [[16, 1 * f], [17, lv > 2 ? 0.8 * f : 0], [27, lv > 3 ? 0.7 * f : 0], [26, lv > 6 ? 0.6 * f : 0],
         [19, lv >= TIER2_LV ? 0.45 : 0], [20, lv >= TIER2_LV ? 0.4 : 0],
         [22, lv >= TIER3_LV ? 0.3 * t3 : 0], [23, lv >= TIER3_LV ? 0.35 * t3 : 0],
         [7, swarm ? 0 : 0.015]];

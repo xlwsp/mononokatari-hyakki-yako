@@ -516,6 +516,7 @@ NEW_ENEMIES = [
     ('lv2_01', 'ek_kitsune', 160), ('lv2_02', 'ek_tanuki', 160), ('lv2_Boss', 'ek_boss2', 300),
     ('lv3_kyouteki_01', 'ek_oni', 200), ('lv3_kyouteki_02', 'ek_mujina', 200), ('lv3_Boss', 'ek_boss3', 340),
     ('lv4_Boss', 'ek_boss4', 380),
+    ('lv1_03', 'ek_onimen', 140), ('lv1_04', 'ek_karakasa', 140),
 ]
 
 
@@ -533,6 +534,48 @@ def make_new_enemies():
         print('wrote', key, im.size)
 
 
+
+# ---------------- キャラの新しい絵（images/〇〇02.png・1枚に1体・透過PNG） ----------------
+# 妖怪のキー → (進化前の画像, 進化後の画像)
+CREATURES_V2 = {
+    'gekomaru': ('gokemoaru02', 'gamaberuga02'), 'suzune': ('suzune02', 'suzurion02'),
+    'maimai': ('maimai02', 'mokuryuu02'), 'rangyo': ('rangyo02', 'ryuuran02'),
+    'kodama': ('kodama02', 'nekomata02'), 'kohaku': ('kohaku02', 'siranui02'),
+    'kuroro': ('kuroro02', 'yatagarasu02'), 'komori': ('komori02', 'morigarudo02'),
+    'hakua': ('hakua02', 'hakuouga02'), 'sinonome': ('sinonome02', 'kagurajika02'),
+}
+# コマ（丸アイコン）に入れる顔の位置と大きさ（新しい絵用）
+TOKEN_FOCUS_V2 = {
+    'gekomaru': (0.42, 0.45, 0.78), 'gekomaru_e': (0.40, 0.45, 0.72),
+    'suzune': (0.30, 0.42, 0.62), 'suzune_e': (0.28, 0.45, 0.60),
+    'maimai': (0.26, 0.46, 0.66), 'maimai_e': (0.22, 0.42, 0.62),
+    'rangyo': (0.24, 0.45, 0.60), 'rangyo_e': (0.30, 0.50, 0.62),
+    'kodama': (0.28, 0.42, 0.62), 'kodama_e': (0.20, 0.30, 0.52),
+    'kohaku': (0.34, 0.42, 0.66), 'kohaku_e': (0.22, 0.36, 0.50),
+    'kuroro': (0.30, 0.32, 0.62), 'kuroro_e': (0.20, 0.30, 0.52),
+    'komori': (0.30, 0.46, 0.64), 'komori_e': (0.24, 0.56, 0.62),
+    'hakua': (0.30, 0.36, 0.62), 'hakua_e': (0.30, 0.36, 0.62),
+    'sinonome': (0.22, 0.46, 0.56), 'sinonome_e': (0.22, 0.46, 0.56),
+}
+
+
+def process_creatures_v2():
+    TOKEN_FOCUS.update(TOKEN_FOCUS_V2)
+    for name, files in CREATURES_V2.items():
+        for side, src in zip(('pre', 'evo'), files):
+            path = os.path.join(SRC, src + '.png')
+            if not os.path.exists(path):
+                print('skip (not found):', src); continue
+            im = Image.open(path).convert('RGBA')
+            im = im.crop(im.getchannel('A').point(lambda a: 255 if a > 20 else 0).getbbox())
+            if im.height > 640:
+                im = im.resize((round(im.width * 640 / im.height), 640), Image.LANCZOS)
+            suf = '' if side == 'pre' else '_e'
+            soften(im, 180 if side == 'pre' else 230).save(os.path.join(OUT, 'cr_' + name + suf + '.png'), optimize=True)
+            make_token(im, key=name + suf).save(os.path.join(OUT, 'ic_' + name + suf + '.png'), optimize=True)
+            print('wrote', name + suf, 'from', src)
+
+
 if __name__ == '__main__':
     import sys as _sys
     args = _sys.argv[1:]
@@ -540,6 +583,8 @@ if __name__ == '__main__':
         make_bigboss_and_title()
     elif 'enemies' in args:  # 新しい敵だけ作り直す
         make_new_enemies()
+    elif 'v2' in args:  # キャラの新しい絵（〇〇02）だけ
+        process_creatures_v2()
     else:
         if 'creatures' not in args:
             main()
