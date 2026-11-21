@@ -29,9 +29,9 @@
   const BIG_LVS = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]; // 大妖のレベル（出るたびにランダム）
   const BIG_LV = 200;          // 強さの基準になるレベル（HP・ごほうびはこのレベルを1倍として増減）
   const BIG_FIRST = 90;        // 世界ができてから大妖が現れるまで（秒）
-  const BIG_RESPAWN = 420;     // 倒されてから次の大妖が現れるまで（秒）
+  const BIG_RESPAWN = 300;     // 倒されてから次の大妖が現れるまで（秒）＝5分
   const BIG_HP = 600000;       // 大妖のHP（みんなで削る）
-  const BIG_GEMS = 320;        // 倒すと中央にばらまかれる経験値の玉の数
+  const BIG_GEMS = 520;        // 倒すと中央に輪の形で並ぶ経験値の玉の数
 
   // プレイヤーが選べるモンスター（性能はだいたい同じ強さ。得意なことが違う）
   // atk: 自動で撃つ通常攻撃 / skill: 自動で発動するスキル / trait: プレイヤー同士のバトルで効く特性
@@ -1075,9 +1075,15 @@
       const cx = WORLD.w / 2, cy = WORLD.h / 2;
       const rw = e.rw || 1;
       if (owner) { owner.bossKills += 5; owner.pkScore += Math.round(5000 * rw); if (owner.human) this.ev({ e: 'pt', p: owner.id, n: Math.round(50 * rw) }); }
-      for (let i = 0; i < BIG_GEMS; i++) {
-        const a = rand(0, Math.PI * 2), d = Math.sqrt(Math.random()) * 1300 + 60;
-        this.dropGem(cx + Math.cos(a) * d, cy + Math.sin(a) * d, rand(60, 180) * rw, e.x, e.y);
+      // 世界の中央に、何重もの輪の形で経験値の玉を並べる（外の輪ほど玉が多い）
+      const RINGS = [220, 480, 760, 1040, 1320];
+      const total = RINGS.reduce((a, r) => a + r, 0);
+      for (let k = 0; k < RINGS.length; k++) {
+        const R = RINGS[k], n = Math.round(BIG_GEMS * R / total), off = k * 0.37;
+        for (let i = 0; i < n; i++) {
+          const a = off + i / n * Math.PI * 2;
+          this.dropGem(cx + Math.cos(a) * R, cy + Math.sin(a) * R, rand(50, 150) * rw);
+        }
       }
       this.ev({ e: 'bbk', g: 1, lv: e.lv || BIG_LV, n: owner ? owner.name : '', p: owner ? owner.id : 0, x: r1(e.x), y: r1(e.y) });
     }

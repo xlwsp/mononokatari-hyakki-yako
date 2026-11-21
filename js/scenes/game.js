@@ -490,6 +490,7 @@
           if (changed) { o.body.setScale(o.base * 0.3); this.tweens.add({ targets: o.body, scale: o.base, duration: 500, ease: 'Back.out' }); }
         }
         const alive = !!pb.a;
+        const cs = pb.cs || []; // 着せ替え [色, 輪, 倒したときの演出, 名前の色]
         const bob = moving ? Math.abs(Math.sin(o.walk)) * 6 : Math.sin(time / 380) * 1.5;
         const squash = moving ? 1 + Math.sin(o.walk * 2) * 0.05 : 1;
         const cy = y - D / 2 - 4 - bob;
@@ -555,7 +556,7 @@
         const ny = Math.min(cy - D / 2, y + 2 - bob - (o.dh || D)) - 12;
         const pow = pb.lv + (pb.ev ? 10 : 0);
         const ncol = isMe ? '#fff8a8' : pow > myPow + 1 ? '#ff9a8a' : pow < myPow - 1 ? '#a8ff9a' : '#ffffff';
-        const ach = pb.tl ? GD.ACHIEVEMENTS[pb.tl - 1] : null, cs = pb.cs || [];
+        const ach = pb.tl ? GD.ACHIEVEMENTS[pb.tl - 1] : null;
         const nmC = cs[3] ? GD.COSMETICS.nm[cs[3] - 1] : null;
         const nameCol = pb.bn ? '#ffd84f' : nmC ? (nmC.css || (c => Phaser.Display.Color.RGBToString(c.r, c.g, c.b))(Phaser.Display.Color.HSVToRGB((time / 1500) % 1, 0.55, 1))) : ncol;
         o.name.setPosition(x, ny - 6).setText(`${ach ? '【' + ach.title + '】' : ''}${pb.bn ? '💰' : ''}${pb.n}${pb.aw ? ' ✦' + pb.aw : ''}${pb.b ? ' 🤖' : ''}${pb.pr ? ' 🛡' : ''}`).setColor(nameCol);
