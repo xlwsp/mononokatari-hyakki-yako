@@ -608,7 +608,7 @@
         const ach = pb.tl ? GD.ACHIEVEMENTS[pb.tl - 1] : null;
         const nmC = cs[3] ? GD.COSMETICS.nm[cs[3] - 1] : null;
         const nameCol = pb.bn ? '#ffd84f' : nmC ? (nmC.css || (c => Phaser.Display.Color.RGBToString(c.r, c.g, c.b))(Phaser.Display.Color.HSVToRGB((time / 1500) % 1, 0.55, 1))) : ncol;
-        o.name.setPosition(x, ny - 6).setText(`${ach ? '【' + ach.title + '】' : ''}${pb.bn ? '💰' : ''}${pb.n}${pb.aw ? ' ✦' + pb.aw : ''}${pb.b ? ' 🤖' : ''}${pb.pr ? ' 🛡' : ''}`).setColor(nameCol);
+        o.name.setPosition(x, ny - 6).setText(`${ach ? '【' + ach.title + '】' : ''}${pb.bn ? '💰' : ''}${pb.n}${pb.aw ? ' ✦' + pb.aw : ''}${pb.wd ? ' 💔' : ''}${pb.b ? ' 🤖' : ''}${pb.pr ? ' 🛡' : ''}`).setColor(nameCol);
         o.name.setVisible(alive);
         // HPバー
         if (alive) {
@@ -1092,6 +1092,35 @@
             if (ev.p === me && this.local) { this.floatText(this.local.x, this.local.y - 140, `+${ev.n} ガチャポイント`, '#7ae8ff', 20); Sfx.play('milestone'); }
             break;
           // 予告：赤い円が広がり、時間がたつと地面がたたきつけられる
+          case 'bch': {
+            // 大妖の突進の予告：進む道に赤い帯。ためている間にだんだん濃くなる
+            const dx = ev.x2 - ev.x, dy = ev.y2 - ev.y, len = Math.hypot(dx, dy) || 1, nx = -dy / len * ev.w / 2, ny = dx / len * ev.w / 2;
+            const pts = [new Phaser.Math.Vector2(ev.x + nx, ev.y + ny), new Phaser.Math.Vector2(ev.x2 + nx, ev.y2 + ny), new Phaser.Math.Vector2(ev.x2 - nx, ev.y2 - ny), new Phaser.Math.Vector2(ev.x - nx, ev.y - ny)];
+            const g = this.add.graphics().setDepth(-4);
+            const o = { k: 0 };
+            const drawB = () => {
+              g.clear();
+              g.fillStyle(0xff2020, 0.12 + o.k * 0.25); g.fillPoints(pts, true);
+              g.lineStyle(4, 0xff3030, 0.6 + o.k * 0.4); g.strokePoints(pts, true);
+              // 矢印
+              for (let i = 1; i <= 4; i++) {
+                const f = i / 5, ax = ev.x + dx * f, ay = ev.y + dy * f, ux = dx / len * 40, uy = dy / len * 40;
+                g.lineStyle(6, 0xffe0e0, 0.4 + o.k * 0.5); g.beginPath(); g.moveTo(ax - ux + nx * 0.4, ay - uy + ny * 0.4); g.lineTo(ax, ay); g.lineTo(ax - ux - nx * 0.4, ay - uy - ny * 0.4); g.strokePath();
+              }
+            };
+            drawB();
+            this.tweens.add({ targets: o, k: 1, duration: ev.d * 1000, onUpdate: drawB, onComplete: () => { this.tweens.add({ targets: g, alpha: 0, duration: 500, onComplete: () => g.destroy() }); } });
+            if (this.local && Math.hypot(this.local.x - ev.x, this.local.y - ev.y) < 1500) { this.ui.banner('⚠ 大妖の突進！ よけろ！', '#ff8a7a'); Sfx.play('boss'); }
+            break;
+          }
+          case 'bh': {
+            // 突進に当たった
+            const pos = this.posOf(ev.p) || { x: ev.x, y: ev.y };
+            this.floatText(pos.x, pos.y - 90, String(ev.d), '#ff3a3a', 34);
+            this.burst(pos.x, pos.y - 30, 0xff5a5a, 30);
+            if (ev.p === me) { this.cameras.main.shake(400, 0.02); this.ui.hurtFlash(); Sfx.play('stamp'); }
+            break;
+          }
           case 'tg': {
             const ring = this.add.circle(ev.x, ev.y, ev.r, 0xff2020, 0.12).setStrokeStyle(4, 0xff3030, 0.9).setDepth(-5);
             const fill = this.add.circle(ev.x, ev.y, ev.r, 0xff2020, 0.3).setDepth(-4).setScale(0);

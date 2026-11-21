@@ -640,7 +640,8 @@
         if (p.shieldT > 0) { p.shieldT -= dt; if (p.shieldT <= 0) p.shield = 0; }
         if (p.protT > 0) p.protT -= dt;
         const rg = 0.005 * Math.min(20, (p.cards && p.cards.regen) || 0) + (p.evo ? 0.005 : 0);
-        if (rg > 0) p.hp = Math.min(p.mhp, p.hp + p.mhp * rg * dt);
+        if (p.woundT > 0) p.woundT -= dt; // 妖気の傷：自然回復しない
+        else if (rg > 0) p.hp = Math.min(p.mhp, p.hp + p.mhp * rg * dt);
       }
 
       for (const p of this.players) this.movePlayer(p, dt);
@@ -1019,7 +1020,7 @@
           if (!p.alive || p.iframe > 0) continue;
           const rr = s.r + this.radius(p) * 0.6;
           if ((p.x - s.x) ** 2 + (p.y - s.y) ** 2 > rr * rr) continue;
-          const dmg = Math.min(dmgFor(s, p), p.mhp * (p.lv >= 100 ? 0.25 : 0.4)); // 1発で最大HPの4割（Lv100以上は2.5割）まで
+          const dmg = Math.min(dmgFor(s, p), p.mhp * (s.cap || (p.lv >= 100 ? 0.25 : 0.4))); // 1発で最大HPの4割（Lv100以上は2.5割、大妖は4割）まで
           this.hurtPlayer(p, dmg);
           p.iframe = Math.max(p.iframe, 0.4);
           this.ev({ e: 'sl', p: p.id, d: Math.round(dmg), x: r1(p.x), y: r1(p.y) });
@@ -1092,6 +1093,55 @@
     moveBig(e, dt) {
       const cx = WORLD.w / 2, cy = WORLD.h / 2, LEASH = 1300;
       const t = e.tgt && e.tgt.alive ? e.tgt : null;
+      // 突進（体当たり）：予告のあと、まっすぐ猛スピードで突っ込む。当たると最大HPの大部分を持っていかれる
+      if (e.chg) {
+        const c = e.chg;
+        if (this.time < c.at) return; // ためている（予告中）
+        const step = Math.min(c.left, 1600 * dt);
+        e.x = clamp(e.x + c.dx * step, EDGE, WORLD.w - EDGE); e.y = clamp(e.y + c.dy * step, EDGE, WORLD.h - EDGE);
+        c.left -= step;
+        for (const q of this.players) {
+          if (!q.alive || c.hit.has(q.id) || isProtected(q)) continue;
+          const rr = e.r + this.radius(q) * 0.8;
+          if ((q.x - e.x) ** 2 + (q.y - e.y) ** 2 > rr * rr) continue;
+          c.hit.add(q.id);
+          // 防御の軽減は効かない（バリアだけは効く）。当たると「妖気の傷」で6秒間 回復できなくなる
+          const pct = clamp(0.55 + ((e.lv || BIG_LV) - q.lv) / 1500, 0.5, 0.85);
+          const before = q.hp;
+          let dmg = q.mhp * pct;
+          if (q.shield > 0) { const a = Math.min(q.shield, dmg); q.shield -= a; dmg -= a; }
+          q.hp -= dmg;
+          q.woundT = 8;
+          // はじき飛ばして、少しだけ動けなくする
+          const sx = -c.dy, sy = c.dx, side = (q.x - e.x) * sx + (q.y - e.y) * sy >= 0 ? 1 : -1;
+          q.x = clamp(q.x + (sx * side * 0.8 + c.dx * 0.6) * 260, EDGE, WORLD.w - EDGE); q.y = clamp(q.y + (sy * side * 0.8 + c.dy * 0.6) * 260, EDGE, WORLD.h - EDGE);
+          resolve(this.map, q, 16); q.tx = q.x; q.ty = q.y; q.tp++; q.tpT = 0.45; q.iframe = Math.max(q.iframe, 0.3);
+          this.ev({ e: 'bh', p: q.id, d: Math.round(before - Math.max(0, q.hp)), x: r1(q.x), y: r1(q.y) });
+          if (q.hp <= 0) this.kill(q, null);
+        }
+        if (c.left <= 0) {
+          e.chg = null;
+          // 着地の衝撃：突進の終わりに、まわりへたたきつけ（予告つき）
+          const r = 320, delay = 0.6;
+          this.slams.push({ x: e.x, y: e.y, r, at: this.time + delay, dmg: e.dmg * 3, lvd: e.lvd, cap: 0.4 });
+          this.ev({ e: 'tg', x: r1(e.x), y: r1(e.y), r, d: delay });
+        }
+        return;
+      }
+      if (e.chgT === undefined) e.chgT = 6;
+      e.chgT -= dt;
+      if (t && e.chgT <= 0) {
+        const td0 = Math.hypot(t.x - e.x, t.y - e.y);
+        if (td0 > 150 && td0 < 1100 && t.lv >= 30) {
+          const dx = (t.x - e.x) / td0, dy = (t.y - e.y) / td0, len = Math.min(1400, td0 + 350);
+          const delay = 1.1;
+          e.chg = { dx, dy, left: len, at: this.time + delay, hit: new Set() };
+          e.chgT = e.hp < e.mhp * 0.5 ? rand(4, 5) : rand(6, 8); // HPが半分を切ると突進の間隔が短く
+          this.ev({ e: 'bch', x: r1(e.x), y: r1(e.y), x2: r1(e.x + dx * len), y2: r1(e.y + dy * len), w: Math.round(e.r * 2), d: delay });
+          return;
+        }
+        e.chgT = 1;
+      }
       // 近くの人をゆっくり追いかける。ただし中央からは離れすぎない
       let gx = e.wx, gy = e.wy;
       if (t && Math.hypot(t.x - cx, t.y - cy) < LEASH + 300) { gx = t.x; gy = t.y; }
@@ -1109,13 +1159,13 @@
       if (e.slamT <= 0 && td < 650 && t.lv >= 10) {
         e.slamT = 3.2;
         const r = 330, delay = 1.2;
-        this.slams.push({ x: t.x, y: t.y, r, at: this.time + delay, dmg: e.dmg * 3, lvd: e.lvd });
+        this.slams.push({ x: t.x, y: t.y, r, at: this.time + delay, dmg: e.dmg * 3, lvd: e.lvd, cap: 0.4 });
         this.ev({ e: 'tg', x: r1(t.x), y: r1(t.y), r, d: delay });
         // HPが半分を切ったら、まわりにも追加でたたきつける
         if (e.hp < e.mhp * 0.5) {
           for (let i = 0; i < 3; i++) {
             const a = rand(0, Math.PI * 2), x = t.x + Math.cos(a) * 420, y = t.y + Math.sin(a) * 420;
-            this.slams.push({ x, y, r: 240, at: this.time + delay + 0.5, dmg: e.dmg * 2.2, lvd: e.lvd });
+            this.slams.push({ x, y, r: 240, at: this.time + delay + 0.5, dmg: e.dmg * 2.2, lvd: e.lvd, cap: 0.3 });
             this.ev({ e: 'tg', x: r1(x), y: r1(y), r: 240, d: delay + 0.5 });
           }
         }
@@ -1499,7 +1549,8 @@
         if (hitBy) {
           // Lv100以上：1回で受けるダメージは最大HPの6%（ボスは12%）まで。囲まれると危ないが一瞬では溶けない
           const raw = dmgFor(hitBy, p);
-          this.hurtPlayer(p, p.lv >= 100 ? Math.min(raw, p.mhp * (isBoss(hitBy) ? 0.1 : p.lv >= 200 ? 0.05 : 0.06)) : raw);
+          // 高レベルでも油断できないように：大妖は2割、ボスは1.4割、強敵（紫）は0.9割まで入る
+          this.hurtPlayer(p, p.lv >= 100 ? Math.min(raw, p.mhp * (hitBy.ty === 15 ? 0.2 : isBoss(hitBy) ? 0.14 : hitBy.el ? 0.09 : p.lv >= 200 ? 0.05 : 0.06)) : raw);
           if (p.itRef) this.damage(hitBy, this.itemDmg(p) * p.itRef * 2.5, p, 0); // 八咫鏡：はね返す
           p.iframe = 0.5;
           this.ev({ e: 'hu', p: p.id, x: r1(p.x), y: r1(p.y) });
@@ -1563,7 +1614,7 @@
         case 'heal':
           if (p.hp >= p.mhp * 0.9) return false;
           // 回復量は最大HPの11%（進化15%）。強化カードの伸びはゆるやか
-          p.hp = Math.min(p.mhp, p.hp + p.mhp * (evo ? 0.15 : 0.11) * (1 + Math.min(1, (p.skillPow - 1) * 0.3)) * starBonus(p.star).skill ** 0.5);
+          p.hp = Math.min(p.mhp, p.hp + (p.woundT > 0 ? 0.5 : 1) * p.mhp * (evo ? 0.15 : 0.11) * (1 + Math.min(1, (p.skillPow - 1) * 0.3)) * starBonus(p.star).skill ** 0.5);
           sk(0);
           return true;
         case 'lucky': {
@@ -1793,7 +1844,7 @@
         sh: p.shield > 0 ? 1 : 0, hs: p.hasteT > 0 ? 1 : 0, pr: isProtected(p) ? 1 : 0,
         bt: p.tpT > 0 ? 1 : 0, tp: p.tp, iv: p.iframe > 0 ? 1 : 0, bn: this.bounty === p ? 1 : 0,
         it: p.item ? p.item.t * 8 + p.item.r : -1,
-        ds: p.dashing ? 1 : undefined, aw: p.aw || undefined, cs: p.cs && p.cs.some(v => v) ? p.cs : undefined, tl: p.tl || undefined,
+        ds: p.dashing ? 1 : undefined, wd: p.woundT > 0 ? 1 : undefined, aw: p.aw || undefined, cs: p.cs && p.cs.some(v => v) ? p.cs : undefined, tl: p.tl || undefined,
       };
     }
 
