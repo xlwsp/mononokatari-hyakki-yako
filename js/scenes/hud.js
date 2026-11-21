@@ -57,6 +57,16 @@
       this.exitBtn = button(this, 0, 0, 74, 30, '退出', () => this.exit(), { color: C.gray, dark: C.grayDark, size: 14 });
       const bgmLabel = v => (v >= 1 ? '♪ 大' : v > 0 ? '♪ 小' : '♪ OFF');
       this.bgmBtn = button(this, 0, 0, 74, 30, bgmLabel(Bgm.vol), () => this.bgmBtn.setLabel(bgmLabel(Bgm.toggle())), { color: C.blue, dark: C.blueDark, size: 14 });
+      // カードの自動選択（ONにするとAIがいちばん良さそうなカードを選ぶ。初心者向け）
+      try { this.autoCard = localStorage.getItem('nakama_autocard') === '1'; } catch (e) { this.autoCard = false; }
+      const autoLabel = () => (this.autoCard ? '🤖 自動ON' : '🤖 自動OFF');
+      this.autoBtn = button(this, 0, 0, 84, 30, autoLabel(), () => {
+        this.autoCard = !this.autoCard;
+        try { localStorage.setItem('nakama_autocard', this.autoCard ? '1' : '0'); } catch (e) { /* noop */ }
+        this.autoBtn.setLabel(autoLabel());
+        this.banner(this.autoCard ? '🤖 カード自動選択 ON' : 'カード自動選択 OFF', '#bfe8ff');
+        if (this.autoCard && this.cards) this.autoPick();
+      }, { color: this.autoCard ? 0x3aa86a : C.gray, dark: C.grayDark, size: 13 });
 
       // レベルアップカード
       this.cards = null; this.cardSeq = -1; this.chosen = -1;
@@ -125,6 +135,15 @@
           this.banner(`💰 ${ra.name} ${it.name}${plus ? ' +' + plus : ''} を手に入れた！`, ra.css);
           this.feed(`💰 賞金首から <b style="color:${ra.css}">${ra.name} ${it.name}</b>${plus ? ' (+' + plus + ')' : ''} をゲット`, '#3a2a08');
           if (window.Sfx) Sfx.play('legend');
+        } else if (m.k === 'box' && m.b) {
+          const b = m.b;
+          if (b.k === 'ach') {
+            const a = GD.ACHIEVEMENTS[b.i - 1];
+            if (!a) return;
+            this.banner(`🏅 実績達成！ 称号【${a.title}】`, '#ffe07a');
+            this.feed(`🏅 実績達成：称号【${a.title}】${b.pts ? ` <b style="color:#ffe07a">+${b.pts}P</b>` : ''}`, '#3a2a08');
+            if (window.Sfx) Sfx.play('legend');
+          } else if (b.m) { this.banner(b.m, '#ffe07a'); this.feed(b.m, '#3a2a08'); }
         } else if (m.k === 'mis' && m.m) {
           this.banner(`📅 お題クリア！ +${m.m.pt}P`, '#9aff7a');
           this.feed(`📅 お題クリア：${missionText(m.m)}　<b style="color:#9aff7a">+${m.m.pt}P</b>`, '#14301a');
@@ -232,6 +251,8 @@
         this.exitBtn.setPosition(L.hud.x + 37, L.hud.y + L.hud.h + 24).setScale(1);
         this.bgmBtn.setPosition(L.hud.x + 37 + 82, L.hud.y + L.hud.h + 24).setScale(1);
       }
+      if (portrait) this.autoBtn.setPosition(44, h - 126).setScale(0.85);
+      else this.autoBtn.setPosition(L.hud.x + 37 + 164 + 87, L.hud.y + L.hud.h + 24).setScale(1);
       if (this.chatBtn) {
         if (portrait) this.chatBtn.setPosition(40, h - 94).setScale(0.85);
         else this.chatBtn.setPosition(L.hud.x + 37 + 164, L.hud.y + L.hud.h + 24).setScale(1);
@@ -293,7 +314,7 @@
 
       // レベルアップカード
       const ch = me.a ? me.ch : null;
-      if (ch && ch.s !== this.cardSeq && ch.s !== this.chosen && this.time.now >= (this.cardsHoldUntil || 0)) this.showCards(ch, me.sp);
+      if (ch && ch.s !== this.cardSeq && ch.s !== this.chosen && this.time.now >= (this.cardsHoldUntil || 0)) { this.showCards(ch, me.sp); this.lastCh = ch; this.lastMe = me; if (this.autoCard) this.autoPick(); }
       if (this.cards && (!ch || ch.s !== this.cardSeq)) this.hideCards();
       if (this.cards) this.cards.timer.setText(`あと ${me.cht} 秒で自動選択`);
 
@@ -390,6 +411,8 @@
       const y0 = this.protText.y + (this.protText.visible ? 26 : 4);
       if (bb && Math.hypot(bb[0] - meX, bb[1] - meY) < 2600) {
         const w = Math.min(420, L.w - (L.portrait ? 150 : 40)), x = L.cx - w / 2, y = y0 + 22;
+        const bt = `大妖 オオマガツ　Lv${bb[3] || 200}`;
+        if (this.bbName.text !== bt) this.bbName.setText(bt);
         this.bbName.setVisible(true).setPosition(L.cx, y - 2);
         this.bar(g, x, y, w, 14, bb[2] / 1000, 0xa050ff, 0x140820);
         this.bbHint.setVisible(true).setPosition(L.cx, y + 16).setText(`${(bb[2] / 10).toFixed(1)}%　倒すと世界の中央に経験値がばらまかれる！`);
@@ -398,12 +421,12 @@
         this.bbHint.setVisible(true).setPosition(L.cx, y0).setText(`👹 大妖が世界の中央に現れるまで ${this.gs.bbt}秒`);
       } else { this.bbName.setVisible(false); this.bbHint.setVisible(false); }
     }
-    bigBossFx(spawn, name) {
+    bigBossFx(spawn, name, lv) {
       if (!this.ready) return;
       if (spawn) {
         FX.flash(this, 0x5a2090, 0.5, 400);
         FX.stamp(this, '大妖 出現', '#d8a8ff', this.L.h * 0.28, this.L.compact ? 46 : 64);
-        this.time.delayedCall(900, () => this.banner('世界の中央に Lv200 の大妖が現れた！', '#e8d0ff'));
+        this.time.delayedCall(900, () => this.banner(`世界の中央に Lv${lv || 200} の大妖が現れた！`, '#e8d0ff'));
       } else {
         FX.flash(this, 0xffffff, 0.7, 400);
         this.stampFx('大妖 討伐！', '#ffe07a');
@@ -666,6 +689,34 @@
       this.cards.cards.forEach(cd => this.tweens.killTweensOf(cd.c));
       this.cards.objs.forEach(o => o.destroy());
       this.cards = null;
+    }
+    // ---------- カードの自動選択：今の状態からいちばん良さそうなカードを選ぶ ----------
+    bestCard(opts, me) {
+      const have = this.gs.myCards || {}, sp = GD.SPECIES[me.sp] || {}, sk = (sp.skill || {}).id;
+      const hpr = me.mhp ? Math.max(0, me.hp) / me.mhp : 1, lv = me.lv || 1;
+      // 基本の点数（攻撃系を重く）と、同じカードを重ねたときの減り方
+      const BASE = { dmg: 10, rate: 9, extra: 9.5, pierce: 6, skillPow: 7, skillCd: 7, area: 5, hp: 7, regen: 6, magnet: 4, bump: 2, trait: 6.5 };
+      const DIM = { dmg: 0.1, rate: 0.25, extra: 0.35, pierce: 0.4, skillPow: 0.15, skillCd: 0.3, area: 0.4, hp: 0.12, regen: 0.15, magnet: 0.9, bump: 0.3, trait: 0.25 };
+      const score = k => {
+        let v = (BASE[k] || 3) / (1 + (DIM[k] || 0.2) * (have[k] || 0));
+        if (k === 'hp') v *= 1 + 1.8 * (1 - hpr);            // HPが減っているほどタフネス（全回復つき）
+        if (k === 'regen') v *= 1 + 0.8 * (1 - hpr);
+        if (lv < 10 && (k === 'extra' || k === 'rate')) v += 2; // 序盤は手数を増やす
+        if (lv < 10 && k === 'magnet' && !have.magnet) v += 2;  // 序盤は経験値を集めやすく
+        if ((sk === 'heal' || sk === 'shell' || sk === 'bless') && k === 'skillCd') v += 2; // 回復・バリア系はスキル連発
+        if ((sk === 'nova' || sk === 'roar' || sk === 'venom' || sk === 'moon') && (k === 'area' || k === 'skillPow')) v += 1.5; // 範囲スキル
+        return v;
+      };
+      let best = 0, bs = -1;
+      opts.forEach((k, i) => { const v = score(k); if (v > bs) { bs = v; best = i; } });
+      return best;
+    }
+    autoPick() {
+      if (!this.cards || !this.lastCh || this.autoT) return;
+      const seq = this.cardSeq, i = this.bestCard(this.lastCh.o, this.lastMe || {});
+      this.select(i);
+      // 少し見せてから決定（何を選んだか分かるように）
+      this.autoT = this.time.delayedCall(750, () => { this.autoT = null; if (this.cards && this.cardSeq === seq && this.autoCard) this.pick(i); });
     }
     pick(i) {
       if (!this.cards || i < 0 || i >= this.cards.n) return;

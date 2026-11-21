@@ -83,6 +83,22 @@ saves = Saves()
 HS_FILE = os.path.join(ROOT, 'tools', 'highscores.json')
 
 
+WEEK_FILE = os.path.join(ROOT, 'tools', 'weekly.json')
+WEEK_REWARDS = [3000, 2000, 1500, 800, 800, 500, 500, 500, 500, 500]   # 週間1〜10位のごほうび（1位は称号「週間王者」も）
+
+
+def week_id():
+    return time.strftime('%G-W%V')  # 月曜はじまりの週
+
+
+def week_left():
+    # 次の月曜0時までの秒数
+    lt = time.localtime()
+    days = (7 - lt.tm_wday) % 7 or 7
+    midnight = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
+    return int(midnight + days * 86400 - time.time())
+
+
 class HighScores:
     def __init__(self):
         self.data = {}
@@ -93,6 +109,32 @@ class HighScores:
         except Exception:
             self.data = {}
 
+    # ---------- 週間ランキング（月曜0時にリセット。上位にごほうび） ----------
+    def _wk_load(self):
+        if hasattr(self, 'wk'):
+            return
+        try:
+            with open(WEEK_FILE, encoding='utf-8') as f:
+                self.wk = json.load(f)
+        except Exception:
+            self.wk = {'w': week_id(), 'd': {}}
+
+    def roll_week(self):
+        # 週が変わっていたら、先週の順位でごほうびを配ってリセット
+        self._wk_load()
+        now = week_id()
+        if self.wk.get('w') == now:
+            return
+        rows = sorted(self.wk.get('d', {}).items(), key=lambda kv: -kv[1]['sc'])
+        for i, (tok, rec) in enumerate(rows[:len(WEEK_REWARDS)]):
+            try:
+                profiles.reward(tok, WEEK_REWARDS[i], '🏆 週間ランキング %d位！ +%dP' % (i + 1, WEEK_REWARDS[i]), stat='w1' if i == 0 else None)
+            except Exception as e:
+                log('weekly reward error:', repr(e))
+        log('weekly reset', self.wk.get('w'), '->', now, 'players', len(rows))
+        self.wk = {'w': now, 'd': {}}
+        self.wk_dirty = True
+
     def put(self, tok, name, d):
         if not tok:
             return
@@ -100,23 +142,41 @@ class HighScores:
             sc = int(d['sc'])
         except Exception:
             return
+        self.roll_week()
+        wcur = self.wk['d'].get(tok)
+        if not wcur or wcur['sc'] < sc:
+            self.wk['d'][tok] = {'n': name, 'sc': sc, 'sp': str(d.get('sp', '')), 'lv': int(d.get('lv', 1)), 'ev': 1 if d.get('ev') else 0}
+            self.wk_dirty = True
         cur = self.data.get(tok)
         if cur and cur['sc'] >= sc:
             return
         self.data[tok] = {'n': name, 'sc': sc, 'sp': str(d.get('sp', '')), 'lv': int(d.get('lv', 1)), 'ev': 1 if d.get('ev') else 0, 't': int(time.time())}
         self.dirty = True
 
-    def top(self, tok, n=30):
-        rows = sorted(self.data.items(), key=lambda kv: -kv[1]['sc'])
+    def top(self, tok, n=30, weekly=False):
+        if weekly:
+            self.roll_week()
+        rows = sorted((self.wk['d'] if weekly else self.data).items(), key=lambda kv: -kv[1]['sc'])
         out = [dict(r[1], me=1 if r[0] == tok else 0) for r in rows[:n]]
         mine = None
         for i, (k, v) in enumerate(rows):
             if k == tok:
                 mine = dict(v, rank=i + 1)
                 break
-        return {'list': [{k: v for k, v in r.items() if k != 't'} for r in out], 'mine': mine, 'total': len(rows)}
+        res = {'list': [{k: v for k, v in r.items() if k != 't'} for r in out], 'mine': mine, 'total': len(rows)}
+        if weekly:
+            res['left'] = week_left()
+            res['rw'] = WEEK_REWARDS
+        return res
 
     def flush(self):
+        self.roll_week()
+        if getattr(self, 'wk_dirty', False):
+            self.wk_dirty = False
+            tmp = WEEK_FILE + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(self.wk, f, ensure_ascii=False, separators=(',', ':'))
+            os.replace(tmp, WEEK_FILE)
         if not self.dirty:
             return
         self.dirty = False
@@ -144,7 +204,19 @@ MISSIONS = {
     'lv': ('1回のプレイでレベル到達', [25, 50, 80]),
     't': ('あそぶ（秒）', [600, 1200, 1800]),
 }
-MISSION_PTS = [150, 250, 400]        # むずかしさごとのごほうび
+MISSION_PTS = [150, 250, 400]
+AWAKE_MAX = 100                      # 覚醒の上限（js/sim.js と同じ）
+# 着せ替えの値段（js/sim.js の COSMETICS と同じ順）
+COSMETICS = {'tint': [3000, 2000, 2000, 2000, 8000], 'ring': [1500, 1500, 1500, 3000], 'kfx': [2000, 2000, 2000], 'nm': [500, 500, 2000, 5000]}
+COS_SLOTS = ['tint', 'ring', 'kfx', 'nm']
+# 実績（js/sim.js の ACHIEVEMENTS と同じ順）：(id, 数えるもの, 目標, ごほうび)
+ACHIEVEMENTS = [
+    ('k1', 'k', 1000, 300), ('k2', 'k', 10000, 1000), ('k3', 'k', 100000, 3000),
+    ('b1', 'b', 10, 500), ('b2', 'b', 100, 2000), ('p1', 'pk', 10, 500), ('p2', 'pk', 100, 2000),
+    ('bb', 'bb', 1, 1500), ('bt', 'bt', 5, 1000), ('l1', 'lv', 100, 800), ('l2', 'lv', 200, 2000),
+    ('t1', 't', 36000, 1000), ('c1', 'ch', 13, 1500), ('c2', 's5', 5, 2000),
+    ('i1', 'it', 25, 1000), ('i2', 'it', 50, 3000), ('a1', 'aw', 10, 1000), ('a2', 'aw', 50, 3000), ('w1', 'w1', 1, 0),
+]        # むずかしさごとのごほうび
 LOGIN_BASE, LOGIN_STEP = 100, 50     # ログインボーナス：1日目100P、連続で+50P（7日目以降400P）
 # 妖怪ガチャ（js/sim.js の STARTERS / CHARA_RARITY / CHARA_RATES / STAR_NEED と同じ内容）
 STARTERS = ['gekomaru', 'maimai', 'suzune']
@@ -213,9 +285,112 @@ class Profiles:
             return True
         return bool(tok) and sp in self.data.get(tok, {}).get('chars', {})
 
+    # ---------- 覚醒（★5の妖怪にポイントを使う） ----------
+    def awaken(self, tok, sp):
+        p = self.get(tok)
+        if not tok or not isinstance(sp, str) or p['chars'].get(sp, -1) < STAR_MAX_DUPS:
+            return 'ng'
+        aw = p.setdefault('aw', {})
+        n = aw.get(sp, 0)
+        cost = 500 + 250 * n  # js/sim.js の awakeCost と同じ
+        if n >= AWAKE_MAX or p['pts'] < cost:
+            return 'ng'
+        p['pts'] -= cost
+        aw[sp] = n + 1
+        self.dirty = True
+        self.check_ach(tok)
+        return 'ok'
+
+    # ---------- 着せ替え ----------
+    def cos_buy(self, tok, slot, idx):
+        p = self.get(tok)
+        if not tok or slot not in COSMETICS or not isinstance(idx, int) or not (1 <= idx <= len(COSMETICS[slot])):
+            return
+        key = '%s:%d' % (slot, idx)
+        own = p.setdefault('cos', [])
+        price = COSMETICS[slot][idx - 1]
+        if key in own or p['pts'] < price:
+            return
+        p['pts'] -= price
+        own.append(key)
+        p.setdefault('cse', {})[slot] = idx  # 買ったらすぐ着る
+        self.dirty = True
+
+    def cos_equip(self, tok, slot, idx):
+        p = self.get(tok)
+        if not tok or slot not in COSMETICS or not isinstance(idx, int):
+            return
+        cse = p.setdefault('cse', {})
+        if idx == 0:
+            cse.pop(slot, None)
+        elif '%s:%d' % (slot, idx) in p.get('cos', []):
+            cse[slot] = idx
+        self.dirty = True
+
+    def set_title(self, tok, idx):
+        p = self.get(tok)
+        if not tok or not isinstance(idx, int):
+            return
+        if idx == 0:
+            p['tl'] = 0
+        elif 1 <= idx <= len(ACHIEVEMENTS) and ACHIEVEMENTS[idx - 1][0] in p.get('ach', []):
+            p['tl'] = idx
+        self.dirty = True
+
+    # ---------- 実績 ----------
+    def stats(self, tok):
+        p = self.get(tok)
+        st = dict(p.get('st', {}))
+        st['ch'] = len(p['chars'])
+        st['s5'] = sum(1 for v in p['chars'].values() if v >= STAR_MAX_DUPS)
+        st['it'] = sum(1 for v in p['inv'].values() if v > 0)
+        st['aw'] = sum(p.get('aw', {}).values())
+        return st
+
+    def add_stat(self, tok, key, v, mx=False):
+        if not tok:
+            return
+        st = self.get(tok).setdefault('st', {})
+        st[key] = max(st.get(key, 0), v) if mx else st.get(key, 0) + v
+        self.dirty = True
+
+    def check_ach(self, tok):
+        # 新しく達成した実績：ポイントを入れて、お知らせ箱へ
+        if not tok:
+            return
+        p = self.get(tok)
+        have = p.setdefault('ach', [])
+        st = self.stats(tok)
+        for i, (aid, stat, goal, pts) in enumerate(ACHIEVEMENTS):
+            if aid not in have and st.get(stat, 0) >= goal:
+                have.append(aid)
+                p['pts'] += pts
+                p.setdefault('inbox', []).append({'k': 'ach', 'i': i + 1, 'pts': pts})
+                self.dirty = True
+
+    def reward(self, tok, pts, msg, stat=None):
+        p = self.get(tok)
+        p['pts'] += pts
+        p.setdefault('inbox', []).append({'k': 'msg', 'm': msg})
+        if stat:
+            self.add_stat(tok, stat, 1)
+            self.check_ach(tok)
+        self.dirty = True
+
+    def pop_inbox(self, tok):
+        if not tok:
+            return []
+        p = self.get(tok)
+        box = p.pop('inbox', [])
+        if box:
+            self.dirty = True
+        return box
+
     def view(self, tok):
         p = self.get(tok)
-        out = {'pts': p['pts'], 'inv': p['inv'], 'eq': p['eq'], 'cost': GACHA_COST, 'chars': p['chars']}
+        out = {'pts': p['pts'], 'inv': p['inv'], 'eq': p['eq'], 'cost': GACHA_COST, 'chars': p['chars'],
+               'aw': p.get('aw', {}), 'cos': p.get('cos', []), 'cse': p.get('cse', {}), 'tl': p.get('tl', 0),
+               'ach': p.get('ach', []), 'st': self.stats(tok) if tok else {}}
         if tok:
             dy = self.daily(tok)
             out['dy'] = {'st': dy['st'], 'm': dy['m'], 'lbn': LOGIN_BASE + LOGIN_STEP * (min(dy['st'], 7) - 1)}
@@ -373,6 +548,10 @@ class Profiles:
             t, r = key.split('_')
             out['t'], out['r'] = int(t), int(r)
             out['p'] = max(0, min(ITEM_PLUS_MAX, d.get('inv', {}).get(key, 1) - 1))  # ＋強化
+        out['aw'] = d.get('aw', {}).get(sp, 0)  # 覚醒
+        cse = d.get('cse', {})
+        out['cs'] = [cse.get(k, 0) for k in COS_SLOTS]  # 着せ替え
+        out['tl'] = d.get('tl', 0)  # 称号
         return out
 
     def flush(self):
@@ -542,10 +721,15 @@ class World:
                     continue
                 if line.startswith('!B\t'):
                     _, pid = line.split('\t', 1)
+                    profiles.add_stat(world.toks.get(pid), 'bt', 1)
                     got = profiles.drop_item(world.toks.get(pid))
                     c = clients.get(pid)
                     if got and c:
                         c.send({'t': 'note', 'k': 'drop', 'it': got})
+                    continue
+                if line.startswith('!K\t'):  # 大妖を倒した
+                    _, pid = line.split('\t', 1)
+                    profiles.add_stat(world.toks.get(pid), 'bb', 1)
                     continue
                 if line.startswith('!M\t'):
                     _, pid, js = line.split('\t', 2)
@@ -563,9 +747,19 @@ class World:
                         if cur.get('a') and last:
                             dl['t'] = 5
                         c = clients.get(pid)
-                        for m in profiles.mission_progress(world.toks.get(pid), dl):
+                        tok = world.toks.get(pid)
+                        for m in profiles.mission_progress(tok, dl):
                             if c:
                                 c.send({'t': 'note', 'k': 'mis', 'm': m})
+                        if tok:
+                            for key in ('k', 'b', 'pk', 't'):
+                                if dl.get(key):
+                                    profiles.add_stat(tok, key, dl[key])
+                            profiles.add_stat(tok, 'lv', dl['lv'], mx=True)
+                            profiles.check_ach(tok)
+                            for n in profiles.pop_inbox(tok):
+                                if c:
+                                    c.send({'t': 'note', 'k': 'box', 'b': n})
                     except Exception as e:
                         log('mission error:', repr(e))
                     continue
@@ -699,7 +893,7 @@ def handle_msg(c: Client, text: str):
                         o.send({'t': 'say', 'h': [row]})
     elif t == 'leave':
         leave(c)
-    elif t in ('prof?', 'gacha', 'equip'):
+    elif t in ('prof?', 'gacha', 'equip', 'awake', 'cos', 'title'):
         # ガチャ・装備（ロビーから）
         tok = m.get('tok')
         tok = tok if valid_tok(tok) else None
@@ -711,14 +905,26 @@ def handle_msg(c: Client, text: str):
             got = profiles.gacha_chara(tok, n) if m.get('k') == 'chara' else profiles.gacha(tok, n)
         elif t == 'equip':
             profiles.equip(tok, m.get('sp'), m.get('key'))
+        elif t == 'awake':
+            got = profiles.awaken(tok, m.get('sp'))
+        elif t == 'cos':
+            if m.get('buy'):
+                profiles.cos_buy(tok, m.get('slot'), m.get('i'))
+            else:
+                profiles.cos_equip(tok, m.get('slot'), m.get('i'))
+        elif t == 'title':
+            profiles.set_title(tok, m.get('i'))
         lb = profiles.login_bonus(tok) if t == 'prof?' else None
-        c.send({'t': 'prof', 'd': dict(profiles.view(tok), got=got, lb=lb)})
+        if tok:
+            profiles.check_ach(tok)
+        box = profiles.pop_inbox(tok)
+        c.send({'t': 'prof', 'd': dict(profiles.view(tok), got=got, lb=lb, box=box)})
     elif t == 'ping':
         c.send({'t': 'pong', 'd': {'maint': world.maint}})
     elif t == 'hs?':
         # ハイスコアランキング
         tok = m.get('tok')
-        c.send({'t': 'hs', 'd': highscores.top(tok if valid_tok(tok) else None)})
+        c.send({'t': 'hs', 'd': highscores.top(tok if valid_tok(tok) else None, weekly=bool(m.get('w')))})
     elif t == 'save?':
         # タイトル画面用：続きからのデータがあるか
         tok = m.get('tok')

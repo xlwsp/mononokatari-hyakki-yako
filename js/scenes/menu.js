@@ -250,9 +250,10 @@
       const best = parseInt(store.get('best', '0'), 10) || 0;
       const narrow = !two;
       const menu = [
-        ['🏆 ランキング', () => this.showRanking(), 0xf0b030, 0xb07a18],
+        [w < 560 ? '🏆順位' : '🏆 ランキング', () => this.showRanking(), 0xf0b030, 0xb07a18],
         ['🎲 ガチャ', () => this.openShop('gacha'), 0xef7a6a, 0xb24a3e],
         ['🛡 装備', () => this.openShop('equip'), 0x6fb6e8, 0x3f7fae],
+        [w < 560 ? '🏯やりこみ' : '🏯 やりこみ', () => this.openShop('extra'), 0xc06ad8, 0x7a3a8a],
         ['📅 お題', () => this.showDaily(), 0x7ac85a, 0x4a8a34],
       ];
       const parchment = (x, y, pw, ph) => {
@@ -282,7 +283,7 @@
         // ---------- パソコン（横長）：画面いっぱいの2段組 ----------
         const M = Math.max(18, Math.round(w * 0.025));
         // 上の帯：左にロゴ、右にメニューとスコア
-        const mbw = Phaser.Math.Clamp(Math.round(w * 0.12), 120, 180), mbh = Phaser.Math.Clamp(Math.round(h * 0.075), 48, 62);
+        const mbw = Phaser.Math.Clamp(Math.round(w * 0.105), 112, 165), mbh = Phaser.Math.Clamp(Math.round(h * 0.075), 48, 62);
         const topH = Math.max(Phaser.Math.Clamp(Math.round(h * 0.15), 76, 130), M + mbh + 10 + 46);
         const menuW = mbw * menu.length + 10 * (menu.length - 1);
         const logoMax = Math.min(h * 0.085, (w - menuW - M * 3) / 7.2);
@@ -425,43 +426,74 @@
     // ハイスコアランキング（全期間・人のプレイヤーだけ・1人1つの自己ベスト）
     showRanking() {
       if (this.rankBox || this.shopBox || this.nameAsk || this.confirmBox || this.connecting) return;
-      const ui = Shop.overlay(this, '🏆 ランキング', 600, 760, { slot: 'rankBox' });
+      const ui = Shop.overlay(this, '🏆 ランキング', 600, 780, { slot: 'rankBox' });
       const { x, y, pw, ph, w, add } = ui;
       const small = pw < 480;
-      add(this.add.text(w / 2, y + 46, 'ハイスコア（全期間・1人1つの自己ベスト）', TR(small ? 13 : 15, '#6a4a2a')).setOrigin(0.5).setDepth(62));
-      const status = add(this.add.text(w / 2, y + ph / 2, '読み込み中…', TR(18, '#6a4a2a')).setOrigin(0.5).setDepth(62));
       const medal = ['#e8a810', '#8a9aa8', '#c0783a'];
-      Net.highScores().then(d => {
-        if (ui.closed) return;
-        const list = (d && d.list) || [];
-        if (!list.length) { status.setText('まだ記録がありません\nいちばん乗りをめざそう！').setAlign('center'); return; }
-        status.destroy();
-        const top = y + 70, bottom = y + ph - 110;
-        const rowH = Math.max(26, Math.min(36, Math.floor((bottom - top) / list.length)));
-        const n = Math.min(list.length, Math.floor((bottom - top) / rowH));
-        const fs = rowH >= 32 ? 18 : rowH >= 28 ? 16 : 14, isz = rowH - 4;
-        for (let i = 0; i < n; i++) {
-          const r = list[i], ry = top + i * rowH + rowH / 2;
-          if (r.me) add(this.add.rectangle(w / 2, ry, pw - 28, rowH - 2, 0xffd76a, 0.7).setDepth(62));
-          else if (i % 2 === 0) add(this.add.rectangle(w / 2, ry, pw - 28, rowH - 2, 0x4a3a2e, 0.08).setDepth(62));
-          const rc = i < 3 ? medal[i] : '#3a2414';
-          add(this.add.text(x + 36, ry, i < 3 ? ['🥇', '🥈', '🥉'][i] : String(i + 1), TR(i < 3 ? fs + 2 : fs, rc, i < 3 ? '#fff' : null, i < 3 ? 4 : 0)).setOrigin(0.5).setDepth(63));
-          if (GD.SPECIES[r.sp]) {
-            const key = 'ic_' + r.sp + (r.ev ? '_e' : '');
-            const ic = add(this.add.image(x + 70, ry, this.textures.exists(key) ? key : 'ic_' + r.sp).setDepth(63));
-            ic.setScale(isz / ic.height);
+      let weekly = store.get('rkw', '1') === '1';
+      let dyn = [], tabs = [];
+      const D = o => { dyn.push(o); return add(o).setDepth(Math.max(o.depth || 0, 62)); };
+      const drawTabs = () => {
+        tabs.forEach(t => t.destroy());
+        const tw = Math.min(220, (pw - 50) / 2);
+        tabs = [[true, '📅 今週'], [false, '👑 全期間']].map(([wk, label], i) => {
+          const on = wk === weekly;
+          const b = add(button(this, w / 2 + (i ? 1 : -1) * (tw / 2 + 6), y + 58, tw, 42, label, () => {
+            if (on) return;
+            weekly = wk; store.set('rkw', wk ? '1' : '0'); Sfx.play('click'); drawTabs(); load();
+          }, { color: on ? 0xf0b030 : 0xb8ab98, dark: on ? 0xb07a18 : 0x6a6050, size: small ? 17 : 20, brush: true })).setDepth(63);
+          if (!on) b.setAlpha(0.8);
+          return b;
+        });
+      };
+      const load = () => {
+        dyn.forEach(o => o.active && o.destroy()); dyn = [];
+        const status = D(this.add.text(w / 2, y + ph / 2, '読み込み中…', TR(18, '#6a4a2a')).setOrigin(0.5));
+        const wk = weekly;
+        Net.highScores(wk).then(d => {
+          if (ui.closed || wk !== weekly) return;
+          status.destroy();
+          let top = y + 88;
+          if (wk) {
+            const left = (d && d.left) || 0, dd = Math.floor(left / 86400), hh = Math.floor(left % 86400 / 3600);
+            const rw = (d && d.rw) || [];
+            D(this.add.text(w / 2, top, `リセットまで あと${dd}日${hh}時間（月曜0時）`, TR(small ? 13 : 15, '#c0301a')).setOrigin(0.5, 0));
+            D(this.add.text(w / 2, top + 20, `ごほうび：1位 ${rw[0] || 0}P＋称号【週間王者】／2位 ${rw[1] || 0}P／3位 ${rw[2] || 0}P／〜10位 ${rw[9] || 0}P`, TR(small ? 10.5 : 12.5, '#6a4a2a', null, 0, { align: 'center', wordWrap: { width: pw - 30 } })).setOrigin(0.5, 0));
+            top += small ? 56 : 46;
+          } else {
+            D(this.add.text(w / 2, top, 'ハイスコア（全期間・1人1つの自己ベスト）', TR(small ? 13 : 15, '#6a4a2a')).setOrigin(0.5, 0));
+            top += 26;
           }
-          // 右から：スコア → Lv → 名前（数字が大きくても重ならないように、幅を測って並べる）
-          const sc = add(this.add.text(x + pw - 22, ry, Number(r.sc).toLocaleString(), TR(fs, '#b0301a')).setOrigin(1, 0.5).setDepth(63));
-          const lvT = add(this.add.text(sc.x - sc.width - 12, ry, 'Lv' + r.lv, TR(fs - 3, '#6a4a2a')).setOrigin(1, 0.5).setDepth(63));
-          const nm = add(this.add.text(x + 92, ry, r.n, TR(fs, '#3a2414')).setOrigin(0, 0.5).setDepth(63));
-          const room = lvT.x - lvT.width - 10 - nm.x;
-          while (nm.width > room && nm.text.length > 1) nm.setText(nm.text.slice(0, -2) + '…');
-        }
-        const m = d.mine;
-        const mine = m ? `あなたの自己ベスト：${m.rank}位 / ${d.total}人　${Number(m.sc).toLocaleString()}` : 'あなたの記録はまだありません';
-        add(this.add.text(w / 2, y + ph - 84, mine, TR(small ? 14 : 16, '#3a2414')).setOrigin(0.5).setDepth(63));
-      }).catch(() => { if (status.active) status.setText('サーバーにつながりません'); });
+          const list = (d && d.list) || [];
+          if (!list.length) { D(this.add.text(w / 2, y + ph / 2, wk ? '今週の記録はまだありません\nいちばん乗りをめざそう！' : 'まだ記録がありません\nいちばん乗りをめざそう！', TR(18, '#6a4a2a', null, 0, { align: 'center' })).setOrigin(0.5)); return; }
+          const bottom = y + ph - 110;
+          const rowH = Math.max(24, Math.min(34, Math.floor((bottom - top) / list.length)));
+          const n = Math.min(list.length, Math.floor((bottom - top) / rowH));
+          const fs = rowH >= 32 ? 18 : rowH >= 28 ? 16 : 14, isz = rowH - 4;
+          for (let i = 0; i < n; i++) {
+            const r = list[i], ry = top + i * rowH + rowH / 2;
+            if (r.me) D(this.add.rectangle(w / 2, ry, pw - 28, rowH - 2, 0xffd76a, 0.7));
+            else if (i % 2 === 0) D(this.add.rectangle(w / 2, ry, pw - 28, rowH - 2, 0x4a3a2e, 0.08));
+            const rc = i < 3 ? medal[i] : '#3a2414';
+            D(this.add.text(x + 36, ry, i < 3 ? ['🥇', '🥈', '🥉'][i] : String(i + 1), TR(i < 3 ? fs + 2 : fs, rc, i < 3 ? '#fff' : null, i < 3 ? 4 : 0)).setOrigin(0.5).setDepth(63));
+            if (GD.SPECIES[r.sp]) {
+              const key = 'ic_' + r.sp + (r.ev ? '_e' : '');
+              const ic = D(this.add.image(x + 70, ry, this.textures.exists(key) ? key : 'ic_' + r.sp).setDepth(63));
+              ic.setScale(isz / ic.height);
+            }
+            // 右から：スコア → Lv → 名前（数字が大きくても重ならないように、幅を測って並べる）
+            const sc = D(this.add.text(x + pw - 22, ry, Number(r.sc).toLocaleString(), TR(fs, '#b0301a')).setOrigin(1, 0.5).setDepth(63));
+            const lvT = D(this.add.text(sc.x - sc.width - 12, ry, 'Lv' + r.lv, TR(fs - 3, '#6a4a2a')).setOrigin(1, 0.5).setDepth(63));
+            const nm = D(this.add.text(x + 92, ry, r.n, TR(fs, '#3a2414')).setOrigin(0, 0.5).setDepth(63));
+            const room = lvT.x - lvT.width - 10 - nm.x;
+            while (nm.width > room && nm.text.length > 1) nm.setText(nm.text.slice(0, -2) + '…');
+          }
+          const m = d.mine;
+          const mine = m ? `あなたの${wk ? '今週の' : ''}自己ベスト：${m.rank}位 / ${d.total}人　${Number(m.sc).toLocaleString()}` : `あなたの${wk ? '今週の' : ''}記録はまだありません`;
+          D(this.add.text(w / 2, y + ph - 84, mine, TR(small ? 14 : 16, '#3a2414')).setOrigin(0.5).setDepth(63));
+        }).catch(() => { if (status.active) status.setText('サーバーにつながりません'); });
+      };
+      drawTabs(); load();
     }
 
     // ---------- 毎日のお題・ログインボーナス ----------
@@ -513,6 +545,18 @@
         if (!this.ptsText || !this.ptsText.active) return;
         this.ptsText.setText(`ガチャポイント  ${p.pts.toLocaleString()}P`);
         this.prof = p;
+        // お知らせ（実績達成・週間ランキングのごほうび）
+        (p.box || []).forEach((b, i) => {
+          const a = b.k === 'ach' ? GD.ACHIEVEMENTS[b.i - 1] : null;
+          const msg = a ? `🏅 実績達成！ 称号【${a.title}】${b.pts ? ' +' + b.pts + 'P' : ''}` : b.m;
+          if (!msg) return;
+          this.time.delayedCall(600 + i * 1800, () => {
+            const t = this.add.text(this.scale.width / 2, this.scale.height * 0.4, msg, UI.TB(Math.min(30, this.scale.width / 16), '#ffe07a', '#2a160a', 7)).setOrigin(0.5).setDepth(95).setScale(0.3);
+            this.tweens.add({ targets: t, scale: 1, duration: 300, ease: 'Back.out' });
+            this.tweens.add({ targets: t, alpha: 0, y: t.y - 30, delay: 1500, duration: 400, onComplete: () => t.destroy() });
+            Sfx.play('legend');
+          });
+        });
         // 今日はじめて：ログインボーナスとお題を見せる
         if (p.lb && !this.shopBox && !this.rankBox && !this.nameAsk && !this.confirmBox && !this.connecting) { this.showDaily(p.lb); return; }
         // 持っている妖怪が変わっていたら（ガチャ・引きつぎ）画面を作り直す
@@ -523,7 +567,7 @@
     }
     openShop(kind) {
       if (this.rankBox || this.confirmBox || this.nameAsk || this.connecting || this.shopBox || this.maintBox) return;
-      if (kind === 'gacha') Shop.openGacha(this); else Shop.openEquip(this);
+      if (kind === 'gacha') Shop.openGacha(this); else if (kind === 'extra') Extra.open(this); else Shop.openEquip(this);
     }
 
     // メンテナンス中：遊べないようにして、終わったら自動で最新版を読み込み直す

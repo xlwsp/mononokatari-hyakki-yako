@@ -49,6 +49,7 @@ for (;;) {
     base.ev.forEach(function (e) {
       if (e.e === 'pt') print('!P\t' + e.p + '\t' + e.n); // ガチャポイント
       else if (e.e === 'btk' && humans.indexOf(e.k) >= 0) print('!B\t' + e.k); // 賞金首を倒した → 装備ドロップ
+      else if (e.e === 'bbk' && humans.indexOf(e.p) >= 0) print('!K\t' + e.p); // 大妖を倒した（実績）
     });
     // 毎日のお題用：5秒ごとに、倒した数などの今の値
     if (sim.tick % 100 === 0) humans.forEach(function (id) {

@@ -496,13 +496,31 @@
         o.body.setFlipX(o.flip).setPosition(x, y + 2 - bob).setDepth(y).setRotation(moving ? Math.sin(o.walk) * 0.08 : 0);
         if (!this.tweens.isTweening(o.body)) o.body.setScale(o.base * squash, o.base / squash);
         o.body.setAlpha(alive ? (pb.iv ? (Math.floor(time / 80) % 2 ? 0.55 : 1) : 1) : 0.25);
+        o.pb = pb;
+        // 着せ替え：妖怪の色
+        const tintC = cs[0] ? GD.COSMETICS.tint[cs[0] - 1] : null;
+        if (tintC) o.body.setTint(tintC.col >= 0 ? tintC.col : Phaser.Display.Color.HSVToRGB((time / 2000) % 1, 0.35, 1).color);
+        else if (o.body.isTinted) o.body.clearTint();
         const sw = D * 0.95;
         o.shadow.setPosition(x, y - 2).setDisplaySize(sw, sw * 0.3).setDepth(y - 2);
         o.ring.setVisible(false);
         // 足もとの輪（自分は金、他の人はチームの色）
+        const fxOk0 = !this.lowFx || isMe;
         if (alive) {
           const col = isMe ? 0xffd84f : GD.COLORS[pb.cl % GD.COLORS.length];
-          this.overlay.lineStyle(isMe ? 4 : 3, col, 0.95); this.overlay.strokeEllipse(x, y - 2, D * 1.05, D * 0.34);
+          const ringC = cs[1] ? GD.COSMETICS.ring[cs[1] - 1] : null;
+          if (ringC) {
+            // 着せ替え：足もとの輪（二重の輪＋キラキラ）
+            const pul = 0.75 + Math.sin(time / 220) * 0.25;
+            this.overlay.lineStyle(isMe ? 5 : 4, ringC.col, 1); this.overlay.strokeEllipse(x, y - 2, D * 1.05, D * 0.34);
+            this.overlay.lineStyle(2, ringC.col, 0.6 * pul); this.overlay.strokeEllipse(x, y - 2, D * 1.25, D * 0.42);
+            if (fxOk0 && Math.random() < 0.15) FX.twinkle(this, x + Phaser.Math.Between(-D / 2, D / 2), y - 4, 1);
+          } else { this.overlay.lineStyle(isMe ? 4 : 3, col, 0.95); this.overlay.strokeEllipse(x, y - 2, D * 1.05, D * 0.34); }
+          // 覚醒：5段ごとに色が変わる輪
+          if (pb.aw) {
+            const ac = GD.AWAKE_COLORS[Math.min(GD.AWAKE_COLORS.length - 1, Math.floor(pb.aw / 5) + 1)];
+            this.overlay.lineStyle(3, ac, 0.55 + Math.sin(time / 300) * 0.3); this.overlay.strokeEllipse(x, y - 2, D * 1.45, D * 0.5);
+          }
           if (pb.ps) { this.overlay.lineStyle(3, 0xa04aff, 0.9); this.overlay.strokeEllipse(x, y - 2, D * 1.2, D * 0.42); }
         }
         // オーラ（レベルが上がるほど強そうに）
@@ -537,7 +555,10 @@
         const ny = Math.min(cy - D / 2, y + 2 - bob - (o.dh || D)) - 12;
         const pow = pb.lv + (pb.ev ? 10 : 0);
         const ncol = isMe ? '#fff8a8' : pow > myPow + 1 ? '#ff9a8a' : pow < myPow - 1 ? '#a8ff9a' : '#ffffff';
-        o.name.setPosition(x, ny - 6).setText(`${pb.bn ? '💰' : ''}${pb.n}${pb.b ? ' 🤖' : ''}${pb.pr ? ' 🛡' : ''}`).setColor(pb.bn ? '#ffd84f' : ncol);
+        const ach = pb.tl ? GD.ACHIEVEMENTS[pb.tl - 1] : null, cs = pb.cs || [];
+        const nmC = cs[3] ? GD.COSMETICS.nm[cs[3] - 1] : null;
+        const nameCol = pb.bn ? '#ffd84f' : nmC ? (nmC.css || (c => Phaser.Display.Color.RGBToString(c.r, c.g, c.b))(Phaser.Display.Color.HSVToRGB((time / 1500) % 1, 0.55, 1))) : ncol;
+        o.name.setPosition(x, ny - 6).setText(`${ach ? '【' + ach.title + '】' : ''}${pb.bn ? '💰' : ''}${pb.n}${pb.aw ? ' ✦' + pb.aw : ''}${pb.b ? ' 🤖' : ''}${pb.pr ? ' 🛡' : ''}`).setColor(nameCol);
         o.name.setVisible(alive);
         // HPバー
         if (alive) {
@@ -926,6 +947,20 @@
           case 'dd':
             this.burst(ev.x, ev.y - 30, 0xff8a8a, 30);
             if (ev.p === me) { Sfx.play('down'); this.cameras.main.shake(300, 0.01); }
+            {
+              // 着せ替え：倒したときの演出（倒した人が持っていれば、まわりの人にも見える）
+              const ko = this.pSprites.get(ev.by), kf = ko && ko.pb && ko.pb.cs ? ko.pb.cs[2] : 0;
+              if (kf === 1) { for (let i = 0; i < 4; i++) this.time.delayedCall(i * 140, () => { FX.confetti(this, ev.x + Phaser.Math.Between(-60, 60), ev.y - 80 - i * 20, 50); this.burst(ev.x, ev.y - 90, [0xff5a5a, 0xffe07a, 0x7ae8ff, 0xb07aff][i], 30); }); Sfx.play('lvlBig'); }
+              else if (kf === 2) { FX.confetti(this, ev.x, ev.y - 60, 140, 0xffb8d8); this.burst(ev.x, ev.y - 40, 0xff9ad0, 50); }
+              else if (kf === 3) {
+                const g = this.add.graphics().setDepth(FX_DEPTH - 4).setBlendMode('ADD');
+                g.lineStyle(6, 0xfff07a, 1); g.beginPath(); g.moveTo(ev.x + 20, ev.y - 600);
+                for (let k = 1; k <= 6; k++) g.lineTo(ev.x + Phaser.Math.Between(-40, 40), ev.y - 600 + k * 100);
+                g.strokePath(); this.cameras.main.flash(120, 255, 250, 200);
+                this.tweens.add({ targets: g, alpha: 0, duration: 400, onComplete: () => g.destroy() }); Sfx.play('zap');
+              }
+            }
+            if (ev.p === me) { /* 上で処理済み */ }
             else if (ev.by === me) {
               FX.confetti(this, ev.x, ev.y - 40, 90); FX.stars(this, ev.x, ev.y - 40, 20);
               this.ui.stampFx('撃破！！', '#ffe07a'); Sfx.play('stamp');
@@ -941,7 +976,7 @@
           // 大妖（ビッグボス）
           case 'bbs':
             Sfx.play('boss'); this.cameras.main.shake(900, 0.008);
-            this.ui.bigBossFx(true);
+            this.ui.bigBossFx(true, '', ev.lv);
             break;
           case 'bbk': {
             const near = this.local && Math.hypot(this.local.x - ev.x, this.local.y - ev.y) < 2500;
@@ -953,7 +988,8 @@
             }
             this.ui.bigBossFx(false, ev.p === me ? '' : ev.n);
             { const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-              this.ui.feed(ev.n ? `👹 <b style="color:#fff07a">${esc(ev.n)}</b> が <b style="color:#e0b0ff">大妖オオマガツ</b> を討伐！` : '👹 <b style="color:#e0b0ff">大妖オオマガツ</b> が倒された！', '#2a1040'); }
+              const bn = `大妖オオマガツ Lv${ev.lv || 200}`;
+              this.ui.feed(ev.n ? `👹 <b style="color:#fff07a">${esc(ev.n)}</b> が <b style="color:#e0b0ff">${bn}</b> を討伐！` : `👹 <b style="color:#e0b0ff">${bn}</b> が倒された！`, '#2a1040'); }
             Sfx.play(ev.p === me ? 'legend' : 'lvlBig');
             break;
           }

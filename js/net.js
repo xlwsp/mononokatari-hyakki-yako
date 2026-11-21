@@ -121,13 +121,17 @@
   // 続きからのデータがあるか（{sp, lv, ev} か null）
   const saveInfo = () => ask('save?', 'save');
   // ハイスコアランキング（{list, mine, total}）
-  const highScores = () => ask('hs?', 'hs');
+  const highScores = weekly => ask('hs?', 'hs', weekly ? { w: 1 } : null);
   // ガチャポイント・持ち物・装備（{pts, inv, eq, cost, got}）
   // texp：前の「累計EXPで解放」の記録（サーバーが1回だけ妖怪を引きつぐ）
   const legacy = () => { try { return parseInt(localStorage.getItem('nakama_texp') || '0', 10) || 0; } catch (e) { return 0; } };
   const profile = () => ask('prof?', 'prof', { texp: legacy() });
   const gacha = (n, k) => ask('gacha', 'prof', { n: n || 1, k: k || 'chara', texp: legacy() });
   const equip = (sp, key) => ask('equip', 'prof', { sp, key });
+  // やりこみ：覚醒・着せ替え（buy=買う / 着がえ i=0 ではずす）・称号
+  const awaken = sp => ask('awake', 'prof', { sp });
+  const cosmetic = (slot, i, buy) => ask('cos', 'prof', { slot, i, buy: buy ? 1 : 0 });
+  const title = i => ask('title', 'prof', { i });
   // サーバーの様子（{maint: true/false}）
   const ping = () => ask('ping', 'pong');
 
@@ -150,5 +154,5 @@
     });
   }
 
-  window.Net = { Relay, Session, connect, saveInfo, highScores, profile, gacha, equip, ping };
+  window.Net = { Relay, Session, connect, saveInfo, highScores, profile, gacha, equip, awaken, cosmetic, title, ping };
 })();

@@ -26,7 +26,8 @@
   const PARADE_LV = 20;        // 百鬼夜行に巻き込まれるレベル
   const PARADE_TIME = 45;      // 百鬼夜行を生き延びる時間
   const BOUNTY_LV = 15;        // 賞金首になるレベル
-  const BIG_LV = 200;          // 大妖（ビッグボス）のレベル
+  const BIG_LVS = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]; // 大妖のレベル（出るたびにランダム）
+  const BIG_LV = 200;          // 強さの基準になるレベル（HP・ごほうびはこのレベルを1倍として増減）
   const BIG_FIRST = 90;        // 世界ができてから大妖が現れるまで（秒）
   const BIG_RESPAWN = 420;     // 倒されてから次の大妖が現れるまで（秒）
   const BIG_HP = 600000;       // 大妖のHP（みんなで削る）
@@ -1009,7 +1010,7 @@
       this.slams = keep;
     }
 
-    // ---------- 大妖（ビッグボス）：世界の中央をのそのそ歩く Lv200 の大妖怪。みんなで倒すと中央に経験値がばらまかれる ----------
+    // ---------- 大妖（ビッグボス）：世界の中央をのそのそ歩く大妖怪（Lv100〜1000のどれか）。みんなで倒すと中央に経験値がばらまかれる ----------
     updateBig(dt) {
       if (this.big && this.big.dead) { this.big = null; this.bigT = BIG_RESPAWN; }
       if (this.big) return;
@@ -1018,11 +1019,14 @@
       if (!this.players.some(p => p.alive)) { this.bigT = 10; return; }
       const cx = WORLD.w / 2, cy = WORLD.h / 2;
       const e = this.spawnEnemy(15, null, cx, cy);
-      const lvd = dmgCurve(BIG_LV);
-      e.mhp = e.hp = BIG_HP; e.dmg = ENEMIES.bigboss.dmg * lvd; e.lvd = lvd; e.spd = ENEMIES.bigboss.spd;
+      // レベルは出るたびにランダム。高いほどHP・攻撃・ごほうびが大きい
+      const lv = BIG_LVS[randInt(0, BIG_LVS.length - 1)], k = lv / BIG_LV;
+      const lvd = dmgCurve(lv);
+      e.lv = lv; e.rw = Math.pow(k, 0.7);
+      e.mhp = e.hp = BIG_HP * Math.pow(k, 0.8); e.dmg = ENEMIES.bigboss.dmg * lvd; e.lvd = lvd; e.spd = ENEMIES.bigboss.spd;
       e.wx = cx; e.wy = cy; e.callT = 6; e.slamT = 3;
       this.big = e;
-      this.ev({ e: 'bbs', g: 1, x: r1(cx), y: r1(cy) });
+      this.ev({ e: 'bbs', g: 1, x: r1(cx), y: r1(cy), lv });
     }
     moveBig(e, dt) {
       const cx = WORLD.w / 2, cy = WORLD.h / 2, LEASH = 1300;
@@ -1069,12 +1073,13 @@
     // 大妖を倒した：経験値の玉を世界の中央にばらまく
     bigDefeated(e, owner) {
       const cx = WORLD.w / 2, cy = WORLD.h / 2;
-      if (owner) { owner.bossKills += 5; owner.pkScore += 5000; if (owner.human) this.ev({ e: 'pt', p: owner.id, n: 50 }); }
+      const rw = e.rw || 1;
+      if (owner) { owner.bossKills += 5; owner.pkScore += Math.round(5000 * rw); if (owner.human) this.ev({ e: 'pt', p: owner.id, n: Math.round(50 * rw) }); }
       for (let i = 0; i < BIG_GEMS; i++) {
         const a = rand(0, Math.PI * 2), d = Math.sqrt(Math.random()) * 1300 + 60;
-        this.dropGem(cx + Math.cos(a) * d, cy + Math.sin(a) * d, rand(60, 180), e.x, e.y);
+        this.dropGem(cx + Math.cos(a) * d, cy + Math.sin(a) * d, rand(60, 180) * rw, e.x, e.y);
       }
-      this.ev({ e: 'bbk', g: 1, n: owner ? owner.name : '', p: owner ? owner.id : 0, x: r1(e.x), y: r1(e.y) });
+      this.ev({ e: 'bbk', g: 1, lv: e.lv || BIG_LV, n: owner ? owner.name : '', p: owner ? owner.id : 0, x: r1(e.x), y: r1(e.y) });
     }
 
     pickEnemyType(lv, swarm) {
@@ -1243,7 +1248,7 @@
 
     // ---------- 戦闘 ----------
     hurtPlayer(p, dmg) {
-      dmg *= starBonus(p.star).def * (1 - (p.itDef || 0));
+      dmg *= starBonus(p.star).def * (1 - (p.itDef || 0)) / (1 + 0.5 * (awakeBonus(p.aw) - 1));
       if (p.shield > 0) {
         const a = Math.min(p.shield, dmg);
         p.shield -= a; dmg -= a;
@@ -1252,6 +1257,8 @@
       p.hp -= dmg;
     }
 
+    // 攻撃の倍率：★と覚醒
+    atkB(p) { return starBonus(p.star).atk * awakeBonus(p.aw); }
     lvMul(p) { return (1 + 0.06 * (p.lv - 1)) * (p.evo ? 3 : 1); } // 進化すると攻撃・体当たり3倍
 
     // ---------- 装備アイテム（ガチャで手に入る。種類ごとに役割がちがう） ----------
@@ -1259,6 +1266,10 @@
       p.item = null;
       // ★（ガチャで同じ妖怪を重ねた強さ。1〜5）
       p.star = item && item.st ? clamp(item.st | 0, 1, 5) : 1;
+      // 覚醒（★5のあとにポイントで上げる）・着せ替え・称号（見た目だけ）
+      p.aw = item ? clamp(item.aw | 0, 0, AWAKE_MAX) : 0;
+      p.cs = item && Array.isArray(item.cs) ? item.cs.slice(0, 4).map(v => clamp(v | 0, 0, 99)) : null;
+      p.tl = item ? clamp(item.tl | 0, 0, 99) : 0;
       p.itDef = 0; p.itRef = 0; p.itXp = 1; p.itMag = 0; p.itCd = 1; p.itPow = 1; p.itCdMul = 1; p.combo = 0;
       if (!item || item.t === undefined || item.t === null) return;
       const t = item.t | 0, r = item.r | 0;
@@ -1280,7 +1291,7 @@
     }
     itemDmg(p) {
       const it = p.item;
-      return ITEMS[it.t].dmg * RARITIES[it.r].pow * (p.itPow || 1) * this.lvMul(p) * p.dmgMul * Math.sqrt(p.skillPow) * starBonus(p.star).atk;
+      return ITEMS[it.t].dmg * RARITIES[it.r].pow * (p.itPow || 1) * this.lvMul(p) * p.dmgMul * Math.sqrt(p.skillPow) * this.atkB(p);
     }
     // 撃てる相手（守られている人・生まれたての人・自分は撃たない）
     foeOk(p, q) { return q !== p && q.alive && !isProtected(q) && !isProtected(p); }
@@ -1303,7 +1314,7 @@
       if (!this.foeOk(p, q)) return;
       if (SPECIES[q.sp].trait.id === 'hop' && chance(Math.min(0.5, 0.2 * this.traitPow(q)))) { this.ev({ e: 'ih', a: p.id, b: q.id, d: 0, x: r1(q.x), y: r1(q.y) }); return; }
       const rel = clamp(this.lvMul(p) / this.lvMul(q), 0.5, 1.5);
-      const dmg = q.mhp * pct * rel * starBonus(p.star).atk;
+      const dmg = q.mhp * pct * rel * this.atkB(p);
       const before = q.hp;
       this.hurtPlayer(q, dmg);
       if (slow) q.pslowT = Math.max(q.pslowT, slow);
@@ -1444,7 +1455,7 @@
       const foe = this.nearestFoe(p, 420);
       if (foe && (!t || (foe.x - p.x) ** 2 + (foe.y - p.y) ** 2 < (t.x - p.x) ** 2 + (t.y - p.y) ** 2)) t = foe;
       if (!t) { p.atkCd = 0.1; return; }
-      const dmg = a.dmg * p.dmgMul * this.lvMul(p) * starBonus(p.star).atk;
+      const dmg = a.dmg * p.dmgMul * this.lvMul(p) * this.atkB(p);
       const base = Math.atan2(t.y - p.y, t.x - p.x);
       const n = (a.n || 1) + p.extra;
       const vh = new Set(); // 1回の発射で同じプレイヤーに当たるのは1発だけ
@@ -1463,7 +1474,7 @@
     // スキル発動。発動したら true
     useSkill(p, def) {
       const id = def.skill.id, evo = p.evo;
-      const pw = p.skillPow * this.lvMul(p) * (evo ? 1.3 : 1) * starBonus(p.star).skill;
+      const pw = p.skillPow * this.lvMul(p) * (evo ? 1.3 : 1) * starBonus(p.star).skill * awakeBonus(p.aw);
       const area = p.areaMul;
       const fx = p.x, fy = p.y;
       const sk = (r, extra) => this.ev(Object.assign({ e: 'sk', k: id, p: p.id, sp: p.sp, x: r1(fx), y: r1(fy), r }, extra || {}));
@@ -1715,6 +1726,7 @@
         sh: p.shield > 0 ? 1 : 0, hs: p.hasteT > 0 ? 1 : 0, pr: isProtected(p) ? 1 : 0,
         bt: p.tpT > 0 ? 1 : 0, tp: p.tp, iv: p.iframe > 0 ? 1 : 0, bn: this.bounty === p ? 1 : 0,
         it: p.item ? p.item.t * 8 + p.item.r : -1,
+        aw: p.aw || undefined, cs: p.cs && p.cs.some(v => v) ? p.cs : undefined, tl: p.tl || undefined,
       };
     }
 
@@ -1759,7 +1771,7 @@
         }
         // 大妖はどこにいても：位置とHP（千分率）。いないときは次に現れるまでの秒数
         const B = this.big;
-        if (B && !B.dead) s.bb = [Math.round(B.x), Math.round(B.y), Math.ceil(B.hp / B.mhp * 1000)];
+        if (B && !B.dead) s.bb = [Math.round(B.x), Math.round(B.y), Math.ceil(B.hp / B.mhp * 1000), B.lv || BIG_LV];
         else s.bbt = Math.max(0, Math.ceil(this.bigT));
       }
       for (const ev of base.ev) {
@@ -1825,6 +1837,62 @@
     { key: 'shuriken', name: '手裏剣', kind: 'shot', dmg: 9, cd: 1.3, cdR: 0.05, n: [4, 1], radial: 1, speed: 640, life: 0.75, pr: 11, pierce: 1, pvp: 0.02, pk: 'i_shuri', range: 450, role: '全方向',
       desc: '全方向に手裏剣を投げる。うしろの敵にも当たる' },
   ];
+  // ---------- 覚醒（★5の妖怪にポイントを使って、少しずつ強くする。いつまでも上げられる） ----------
+  const AWAKE_MAX = 100;
+  const awakeCost = n => 500 + 250 * n;                 // n段目→n+1段目に必要なポイント（server.py と同じ）
+  // 攻撃・スキルの倍率（25段で+30%、そこからはゆっくり。100段で+60%）。受けるダメージはその半分だけ減る
+  const awakeBonus = aw => 1 + 0.012 * Math.min(aw || 0, 25) + 0.004 * Math.max(0, (aw || 0) - 25);
+  // 覚醒のオーラの色（5段ごとに変わる）
+  const AWAKE_COLORS = [0, 0x8fe8ff, 0x7cff8a, 0xffe07a, 0xff9a4a, 0xff5a8a, 0xc070ff, 0xffffff];
+
+  // ---------- 着せ替え（強さは変わらない。server.py の COSMETICS と同じ順・同じ値段） ----------
+  // 番号は「その種類の中の何番目か＋1」（0 = なし）でやりとりする
+  const COSMETICS = {
+    tint: [ // 妖怪の色
+      { id: 'gold', name: '金色', price: 3000, col: 0xffd860 }, { id: 'shadow', name: '影', price: 2000, col: 0x8a7aaa },
+      { id: 'sakura', name: '桜', price: 2000, col: 0xffb8d8 }, { id: 'ice', name: '氷', price: 2000, col: 0xa8e8ff },
+      { id: 'rainbow', name: '虹', price: 8000, col: -1 },
+    ],
+    ring: [ // 足もとの輪
+      { id: 'fire', name: '炎の輪', price: 1500, col: 0xff6a2a }, { id: 'sakura', name: '桜の輪', price: 1500, col: 0xff9ad0 },
+      { id: 'star', name: '星の輪', price: 1500, col: 0x7ae8ff }, { id: 'gold', name: '金の輪', price: 3000, col: 0xffd84f },
+    ],
+    kfx: [ // 倒したときの演出
+      { id: 'hanabi', name: '花火', price: 2000 }, { id: 'sakura', name: '桜吹雪', price: 2000 }, { id: 'kaminari', name: '雷鳴', price: 2000 },
+    ],
+    nm: [ // 名前の色
+      { id: 'red', name: '紅', price: 500, css: '#ff7a6a' }, { id: 'blue', name: '蒼', price: 500, css: '#7ab8ff' },
+      { id: 'gold', name: '金', price: 2000, css: '#ffd84f' }, { id: 'rainbow', name: '虹', price: 5000, css: '' },
+    ],
+  };
+  const COS_SLOTS = ['tint', 'ring', 'kfx', 'nm'];
+  const COS_SLOT_NAME = { tint: '妖怪の色', ring: '足もとの輪', kfx: '倒したときの演出', nm: '名前の色' };
+
+  // ---------- 実績と称号（server.py の ACHIEVEMENTS と同じ順。称号の番号＝順番＋1） ----------
+  // stat: k=倒した敵 b=ボス pk=プレイヤー bb=大妖 bt=賞金首 lv=最高レベル t=遊んだ秒 ch=持っている妖怪 s5=★5の数 it=装備の種類 aw=覚醒の合計 w1=週間1位
+  const ACHIEVEMENTS = [
+    { id: 'k1', stat: 'k', goal: 1000, title: '妖怪退治人', pts: 300 },
+    { id: 'k2', stat: 'k', goal: 10000, title: '百鬼殺し', pts: 1000 },
+    { id: 'k3', stat: 'k', goal: 100000, title: '千鬼殺し', pts: 3000 },
+    { id: 'b1', stat: 'b', goal: 10, title: 'ボスハンター', pts: 500 },
+    { id: 'b2', stat: 'b', goal: 100, title: '鬼神', pts: 2000 },
+    { id: 'p1', stat: 'pk', goal: 10, title: '腕自慢', pts: 500 },
+    { id: 'p2', stat: 'pk', goal: 100, title: '修羅', pts: 2000 },
+    { id: 'bb', stat: 'bb', goal: 1, title: '大妖討伐者', pts: 1500 },
+    { id: 'bt', stat: 'bt', goal: 5, title: '賞金稼ぎ', pts: 1000 },
+    { id: 'l1', stat: 'lv', goal: 100, title: '百段', pts: 800 },
+    { id: 'l2', stat: 'lv', goal: 200, title: '天上', pts: 2000 },
+    { id: 't1', stat: 't', goal: 36000, title: '常連', pts: 1000 },
+    { id: 'c1', stat: 'ch', goal: 13, title: '妖怪コレクター', pts: 1500 },
+    { id: 'c2', stat: 's5', goal: 5, title: '絆の主', pts: 2000 },
+    { id: 'i1', stat: 'it', goal: 25, title: '蒐集家', pts: 1000 },
+    { id: 'i2', stat: 'it', goal: 50, title: '宝物庫の主', pts: 3000 },
+    { id: 'a1', stat: 'aw', goal: 10, title: '覚醒者', pts: 1000 },
+    { id: 'a2', stat: 'aw', goal: 50, title: '真なる覚醒', pts: 3000 },
+    { id: 'w1', stat: 'w1', goal: 1, title: '週間王者', pts: 0 },
+  ];
+  const ACH_STAT_NAME = { k: '倒した敵', b: 'たおしたボス', pk: 'たおしたプレイヤー', bb: '大妖の討伐', bt: '賞金首の討伐', lv: '最高レベル', t: '遊んだ時間', ch: '持っている妖怪', s5: '★5の妖怪', it: '集めた装備', aw: '覚醒の合計', w1: '週間ランキング1位' };
+
   // ＋強化：同じ装備が2個目で+1…最大+5。1つにつき威力・効果 +12%
   const ITEM_PLUS_MAX = 5, ITEM_PLUS_STEP = 0.12;
   // 妖怪と装備の組み合わせ（ゲームの中では秘密。装備したときに「組み合わせ効果アップ！」で分かる）
@@ -1898,7 +1966,7 @@
   const UNLOCK_AT = {}; UNLOCKS.forEach(([k, v]) => { UNLOCK_AT[k] = v; });
 
   global.GD = {
-    UNLOCKS, UNLOCK_AT, ITEMS, RARITIES, ORBIT_SPEED, itemCount, itemShow, itemInfo, isCombo, ITEM_PLUS_MAX, ITEM_PLUS_STEP, STARTERS, CHARA_RARITY, CHARA_RATES, STAR_NEED, starOf, starBonus,
+    UNLOCKS, UNLOCK_AT, ITEMS, RARITIES, ORBIT_SPEED, itemCount, itemShow, itemInfo, isCombo, AWAKE_MAX, awakeCost, awakeBonus, AWAKE_COLORS, COSMETICS, COS_SLOTS, COS_SLOT_NAME, ACHIEVEMENTS, ACH_STAT_NAME, ITEM_PLUS_MAX, ITEM_PLUS_STEP, STARTERS, CHARA_RARITY, CHARA_RATES, STAR_NEED, starOf, starBonus,
     WORLD, TICK, EDGE, VIEW_R, RADAR_R, MAX_PLAYERS, EVOLVE_LV, PROTECT_TIME, NEWBIE_LV, generateMap, resolve, auraTier,
     SPECIES, SPECIES_KEYS, ENEMY_TYPES, ENEMIES, UPGRADES, COLORS, upgradeText,
     xpNeed, clamp,
