@@ -49,7 +49,7 @@
     maimai: {
       name: 'マイマイ', evoName: 'オオマイマイ', color: 0xc8d27a, hp: 165, spd: 175, role: 'タフ型',
       atk: { pattern: 'single', dmg: 17, cd: 1.1, speed: 320, life: 1.3, r: 10 },
-      skill: { id: 'heal', name: 'ぬめぬめ回復', cd: 7, desc: 'HPを回復', area: false },
+      skill: { id: 'heal', name: 'ぬめぬめ回復', cd: 7, minCd: 5, desc: 'HPを回復', area: false },
       trait: { id: 'underdog', name: '根性', desc: '格上が相手だと体当たりが強くなる' },
     },
     rangyo: {
@@ -85,7 +85,7 @@
     komori: {
       name: 'コモリ', evoName: '森亀コモリ', color: 0x7aaa5a, hp: 185, spd: 165, role: '守り型',
       atk: { pattern: 'single', dmg: 19, cd: 1.2, speed: 360, life: 1.2, r: 11 },
-      skill: { id: 'shell', name: '甲羅バリア', cd: 9, desc: 'ダメージを防ぐバリア', area: false },
+      skill: { id: 'shell', name: '甲羅バリア', cd: 9, minCd: 7, desc: 'ダメージを防ぐバリア', area: false },
       trait: { id: 'guard', name: '鉄壁', desc: '受ける体当たりダメージを軽減' },
     },
     toosibi: {
@@ -177,7 +177,8 @@
     area:     { name: '{skill} 拡大', desc: '{skill}の範囲 +30%', ok: p => SPECIES[p.sp].skill.area && p.areaMul < 2.6, apply: p => { p.areaMul *= 1.3; } },
     // HPカードは30枚まで。増え方は「掛け算」ではなく「足し算」（レベルが高いほど少し多く増える）
     hp:       { name: 'タフネス', desc: '最大HPアップ & 全回復（30枚まで）', ok: p => (p.hpCards || 0) < 30, apply: p => { p.hpCards = (p.hpCards || 0) + 1; p.mhp += SPECIES[p.sp].hp * 0.25 * (1 + 0.04 * p.lv) * (p.evo ? 2.5 : 1); p.hp = p.mhp; } },
-    regen:    { name: '自然回復', desc: '毎秒HPが回復 +1.5', ok: p => p.regen < 9, apply: p => { p.regen += 1.5; } },
+    // 自然回復：1枚ごとに毎秒・最大HPの0.5%（20枚まで＝毎秒10%）。進化でさらに+0.5%
+    regen:    { name: '自然回復', desc: '毎秒 最大HPの0.5%回復（20枚まで）', ok: p => ((p.cards && p.cards.regen) || 0) < 20, apply: () => {} },
     magnet:   { name: 'マグネット', desc: '経験値の吸引範囲 +40%', ok: p => p.magnet < 450, apply: p => { p.magnet *= 1.4; } },
     bump:     { name: '体当たり強化', desc: 'ぶつかったときのダメージ +25%', ok: () => true, apply: p => { p.bumpMul += 0.25; } },
     trait:    { name: '{trait} 覚醒', desc: '【{trait}】の効果 大アップ＋攻撃と体当たり +10%', ok: p => p.traitLv < 5, apply: p => { p.traitLv++; p.dmgMul += 0.1; p.bumpMul += 0.1; } },
@@ -425,6 +426,8 @@
     addPlayer(id, name, bot, sp) {
       const p = { id, name, bot: !!bot, human: !bot, color: this.players.length % COLORS.length, tp: 0 };
       this.resetPlayer(p, sp);
+      // Botもたまに装備を持っている（弱めのもの）
+      this.setItem(p, bot && chance(0.6) ? { st: 1, t: randInt(0, ITEMS.length - 1), r: chance(0.25) ? 1 : 0 } : null);
       this.players.push(p);
       this.pmap.set(id, p);
       return p;
@@ -564,6 +567,7 @@
       if (p.bot) v *= 0.7; // Botは成長がゆっくり
       if (p.lv < 10) v *= 1 + 0.6 * (10 - p.lv) / 9; // 低レベルは経験値ボーナス（Lv1で+60%、Lv10で0）
       if (p.sp === 'rangyo') v *= 1.15; // 成長型
+      if (p.itXp) v *= p.itXp; // 打ち出の小槌
       p.xp += v; p.txp += v;
       while (p.xp >= p.xpn) {
         p.xp -= p.xpn;
@@ -611,7 +615,8 @@
         p.espd = p.spd * mul;
         if (p.shieldT > 0) { p.shieldT -= dt; if (p.shieldT <= 0) p.shield = 0; }
         if (p.protT > 0) p.protT -= dt;
-        if (p.regen > 0) p.hp = Math.min(p.mhp, p.hp + p.regen * dt);
+        const rg = 0.005 * Math.min(20, (p.cards && p.cards.regen) || 0) + (p.evo ? 0.005 : 0);
+        if (rg > 0) p.hp = Math.min(p.mhp, p.hp + p.mhp * rg * dt);
       }
 
       for (const p of this.players) this.movePlayer(p, dt);
@@ -760,9 +765,10 @@
       if (ta === 'luck' && chance(Math.min(0.6, 0.32 * wa))) { dmg *= 2; note = '会心！'; }
       atk.lastBump = this.time;
       if (td === 'hop' && chance(Math.min(0.5, 0.2 * wd))) return { dmg: 0, note: 'よけた！' };
-      if (td === 'guard') dmg *= 1 - Math.min(0.6, 0.3 * wd);
+      if (td === 'guard') dmg *= 1 - Math.min(0.45, 0.2 * wd);
       this.hurtPlayer(def, dmg);
       def.iframe = Math.max(def.iframe, 0.2);
+      if (def.itRef) atk.hp -= dmg * def.itRef * 0.5; // 八咫鏡：体当たりのダメージを少しはね返す
       if (ta === 'gulp') atk.hp = Math.min(atk.mhp, atk.hp + dmg * 0.3 * wa);
       if (ta === 'poison') { def.poisonT = 4; def.poisonDps = dmg * 0.3 * wa; def.poisonBy = atk; }
       if (ta === 'awe') def.pslowT = 1.2 * wa;
@@ -1232,7 +1238,7 @@
 
     // ---------- 戦闘 ----------
     hurtPlayer(p, dmg) {
-      dmg *= starBonus(p.star).def;
+      dmg *= starBonus(p.star).def * (1 - (p.itDef || 0));
       if (p.shield > 0) {
         const a = Math.min(p.shield, dmg);
         p.shield -= a; dmg -= a;
@@ -1243,39 +1249,150 @@
 
     lvMul(p) { return (1 + 0.06 * (p.lv - 1)) * (p.evo ? 3 : 1); } // 進化すると攻撃・体当たり3倍
 
-    // 装備アイテム（体のまわりをくるくる回って、触れた敵にダメージ）
+    // ---------- 装備アイテム（ガチャで手に入る。種類ごとに役割がちがう） ----------
     setItem(p, item) {
       p.item = null;
       // ★（ガチャで同じ妖怪を重ねた強さ。1〜5）
       p.star = item && item.st ? clamp(item.st | 0, 1, 5) : 1;
+      p.itDef = 0; p.itRef = 0; p.itXp = 1; p.itMag = 0; p.itCd = 1;
       if (!item || item.t === undefined || item.t === null) return;
       const t = item.t | 0, r = item.r | 0;
-      if (t >= 0 && t < ITEMS.length && r >= 0 && r < RARITIES.length) p.item = { t, r };
+      if (t >= 0 && t < ITEMS.length && r >= 0 && r < RARITIES.length) {
+        p.item = { t, r };
+        const d = ITEMS[t];
+        if (d.def) p.itDef = d.def[0] + d.def[1] * r;
+        if (d.ref) p.itRef = d.ref[0] + d.ref[1] * r;
+        if (d.xp) p.itXp = 1 + d.xp[0] + d.xp[1] * r;
+        if (d.mag) p.itMag = d.mag[0] + d.mag[1] * r;
+      }
     }
-    orbitHits(p) {
+    itemDmg(p) {
+      const it = p.item;
+      return ITEMS[it.t].dmg * RARITIES[it.r].pow * this.lvMul(p) * p.dmgMul * Math.sqrt(p.skillPow) * starBonus(p.star).atk;
+    }
+    // 撃てる相手（守られている人・生まれたての人・自分は撃たない）
+    foeOk(p, q) { return q !== p && q.alive && !isProtected(q) && !isProtected(p); }
+    nearestFoe(p, range) {
+      let best = range * range, bt = null;
+      for (const q of this.players) {
+        if (!this.foeOk(p, q)) continue;
+        const d = (q.x - p.x) ** 2 + (q.y - p.y) ** 2;
+        if (d < best) { best = d; bt = q; }
+      }
+      return bt;
+    }
+    // 装備の攻撃がプレイヤーに当たった：相手の最大HPの割合ダメージ（レベル差で少し変わる）
+    itemHitPlayer(p, q, pct, slow) {
+      if (!this.foeOk(p, q) || !p.item) return;
+      if (SPECIES[q.sp].trait.id === 'hop' && chance(Math.min(0.5, 0.2 * this.traitPow(q)))) { this.ev({ e: 'ih', a: p.id, b: q.id, d: 0, x: r1(q.x), y: r1(q.y) }); return; }
+      const rel = clamp(this.lvMul(p) / this.lvMul(q), 0.5, 1.5);
+      const dmg = q.mhp * pct * RARITIES[p.item.r].pow * rel * starBonus(p.star).atk;
+      const before = q.hp;
+      this.hurtPlayer(q, dmg);
+      if (slow) q.pslowT = Math.max(q.pslowT, slow);
+      this.ev({ e: 'ih', a: p.id, b: q.id, d: Math.round(before - q.hp), x: r1(q.x), y: r1(q.y) });
+      this.ev({ e: 'hu', p: q.id, x: r1(q.x), y: r1(q.y) });
+      if (q.hp <= 0) this.kill(q, p);
+    }
+    itemTick(p, dt) {
       const it = p.item;
       if (!it) return;
-      const def = ITEMS[it.t], n = RARITIES[it.r].n;
-      const R = this.radius(p) + 46, hitR = 24 + it.r * 2;
-      // 装備も、カードで上げた攻撃力・スキル威力についていく
-      const dmg = def.dmg * RARITIES[it.r].pow * this.lvMul(p) * p.dmgMul * Math.sqrt(p.skillPow) * starBonus(p.star).atk;
-      const cd = 0.35 * Math.sqrt(p.rateMul);
-      const base = this.time * ORBIT_SPEED;
-      for (let i = 0; i < n; i++) {
-        const a = base + (i / n) * Math.PI * 2;
-        const ox = p.x + Math.cos(a) * R, oy = p.y - 20 + Math.sin(a) * R;
-        this.enemiesIn(ox, oy, hitR, e => {
-          if ((e.oc || 0) > this.time) return;
-          e.oc = this.time + cd;
-          this.damage(e, dmg, p, def.slow || 0);
-          if (def.heal) p.hp = Math.min(p.mhp, p.hp + p.mhp * def.heal);
-        });
+      const def = ITEMS[it.t], r = it.r;
+      if (def.kind === 'orbit') {
+        const n = itemCount(it.t, r), R = this.radius(p) + 46, hitR = 24 + r * 2;
+        const dmg = this.itemDmg(p), cd = 0.35 * Math.sqrt(p.rateMul);
+        const base = this.time * ORBIT_SPEED;
+        const oc = p.oc || (p.oc = {});
+        for (let i = 0; i < n; i++) {
+          const a = base + (i / n) * Math.PI * 2;
+          const ox = p.x + Math.cos(a) * R, oy = p.y - 20 + Math.sin(a) * R;
+          this.enemiesIn(ox, oy, hitR, e => {
+            if ((e.oc || 0) > this.time) return;
+            e.oc = this.time + cd;
+            this.damage(e, dmg, p, def.slow || 0);
+            if (def.heal) p.hp = Math.min(p.mhp, p.hp + p.mhp * def.heal);
+          });
+          // 刃は人にも当たる（同じ相手には0.6秒に1回）
+          if (def.pvp) for (const q of this.players) {
+            if (!this.foeOk(p, q) || (oc[q.id] || 0) > this.time) continue;
+            const rr = hitR + this.radius(q) * 0.8;
+            if ((q.x - ox) ** 2 + (q.y - 20 - oy) ** 2 > rr * rr) continue;
+            oc[q.id] = this.time + 0.6;
+            this.itemHitPlayer(p, q, def.pvp);
+          }
+        }
+        return;
       }
+      if (!def.cd) return; // 持っているだけで効くもの（鏡・小槌）
+      p.itCd -= dt;
+      if (p.itCd > 0) return;
+      const dmg = this.itemDmg(p), cdNext = (def.cd - (def.cdR || 0) * r) * Math.sqrt(p.rateMul);
+      const range = def.range || 520;
+      if (def.kind === 'shot') {
+        // 狙う相手：弓は人を優先、ほかは敵を優先
+        let tg = def.hunt ? this.nearestFoe(p, range) : null;
+        if (!tg) tg = this.nearestEnemy(p.x, p.y, range);
+        if (!tg && def.pvp && !def.radial) tg = this.nearestFoe(p, range);
+        if (!tg && !def.radial) { p.itCd = 0.2; return; }
+        if (def.radial && !tg && !this.nearestFoe(p, range)) { p.itCd = 0.2; return; }
+        const n = itemCount(it.t, r);
+        const baseA = tg ? Math.atan2(tg.y - p.y, tg.x - p.x) : rand(0, Math.PI * 2);
+        for (let i = 0; i < n; i++) {
+          const ang = def.radial ? baseA + (i / n) * Math.PI * 2 : baseA + (i - (n - 1) / 2) * (def.spread || 0.16);
+          this.spawnProj(p, p.x, p.y, ang, def.speed, dmg, def.pr, def.life, def.pierce || 0, def.pk, def.aoe, def.slow);
+          this.projs[this.projs.length - 1].pv = def.pvp || 0;
+        }
+      } else if (def.kind === 'zap') {
+        // 雷：近くの敵（と人）へ次々に飛び移る
+        let first = this.nearestEnemy(p.x, p.y, range), firstP = this.nearestFoe(p, range * 0.8);
+        if (!first && !firstP) { p.itCd = 0.25; return; }
+        const pts = [r1(p.x), r1(p.y - 30)];
+        const hitE = new Set();
+        let cx = p.x, cy = p.y;
+        let cur = first;
+        const jumps = itemCount(it.t, r);
+        for (let j = 0; j < jumps && cur; j++) {
+          hitE.add(cur.id);
+          this.damage(cur, dmg, p, 0);
+          if (!isBoss(cur)) cur.stunT = Math.max(cur.stunT || 0, 0.25);
+          pts.push(r1(cur.x), r1(cur.y - cur.r));
+          cx = cur.x; cy = cur.y;
+          let nb = null, bd = 260 * 260;
+          this.enemiesIn(cx, cy, 260, e => { if (hitE.has(e.id) || e.dead) return; const d = (e.x - cx) ** 2 + (e.y - cy) ** 2; if (d < bd) { bd = d; nb = e; } });
+          cur = nb;
+        }
+        if (firstP) { pts.push(r1(firstP.x), r1(firstP.y - 30)); this.itemHitPlayer(p, firstP, def.pvp); }
+        this.ev({ e: 'zp', x: r1(p.x), y: r1(p.y), pts });
+      } else if (def.kind === 'wind') {
+        // 突風：まわりの敵と人を吹き飛ばす
+        const R = (def.R + 20 * r) * Math.sqrt(p.areaMul);
+        let any = false;
+        this.enemiesIn(p.x, p.y, R, e => {
+          any = true;
+          this.damage(e, dmg, p, 0);
+          if (isBoss(e)) return;
+          const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1, k = def.knock * (1 - d / R * 0.5);
+          e.x = clamp(e.x + dx / d * k, EDGE, WORLD.w - EDGE); e.y = clamp(e.y + dy / d * k, EDGE, WORLD.h - EDGE);
+          e.stunT = Math.max(e.stunT || 0, 0.5);
+        });
+        for (const q of this.players) {
+          if (!this.foeOk(p, q)) continue;
+          const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy) || 1;
+          if (d > R) continue;
+          any = true;
+          q.x = clamp(q.x + dx / d * def.knock * 1.3, EDGE, WORLD.w - EDGE); q.y = clamp(q.y + dy / d * def.knock * 1.3, EDGE, WORLD.h - EDGE);
+          resolve(this.map, q, 16); q.tx = q.x; q.ty = q.y; q.tp++; q.tpT = 0.12;
+          this.itemHitPlayer(p, q, def.pvp);
+        }
+        if (!any) { p.itCd = 0.25; return; }
+        this.ev({ e: 'wd', x: r1(p.x), y: r1(p.y), r: Math.round(R) });
+      }
+      p.itCd = cdNext;
     }
 
     playerCombat(p, dt) {
       if (!p.alive) return;
-      this.orbitHits(p);
+      this.itemTick(p, dt);
       // 接触ダメージ
       if (p.iframe <= 0) {
         // 当たり判定は見た目の大きさに比例（大きくなるほど当たりやすい）
@@ -1288,6 +1405,7 @@
           // Lv100以上：1回で受けるダメージは最大HPの6%（ボスは12%）まで。囲まれると危ないが一瞬では溶けない
           const raw = dmgFor(hitBy, p);
           this.hurtPlayer(p, p.lv >= 100 ? Math.min(raw, p.mhp * (isBoss(hitBy) ? 0.1 : p.lv >= 200 ? 0.05 : 0.06)) : raw);
+          if (p.itRef) this.damage(hitBy, this.itemDmg(p) * p.itRef * 2.5, p, 0); // 八咫鏡：はね返す
           p.iframe = 0.5;
           this.ev({ e: 'hu', p: p.id, x: r1(p.x), y: r1(p.y) });
           if (p.hp <= 0) { this.kill(p, null); return; }
@@ -1297,7 +1415,7 @@
       // スキル
       p.scd -= dt;
       if (p.scd <= 0) {
-        if (this.useSkill(p, def)) p.scd = def.skill.cd * p.skillCd * (p.evo ? 0.6 : 1) * starBonus(p.star).cd;
+        if (this.useSkill(p, def)) p.scd = Math.max(def.skill.minCd || 0, def.skill.cd * p.skillCd * (p.evo ? 0.6 : 1) * starBonus(p.star).cd);
         else p.scd = 0.3;
       }
       // 通常攻撃（モンスターごとに違う）
@@ -1342,7 +1460,8 @@
           return true;
         case 'heal':
           if (p.hp >= p.mhp * 0.9) return false;
-          p.hp = Math.min(p.mhp, p.hp + p.mhp * (evo ? 0.25 : 0.16) * Math.min(2, p.skillPow));
+          // 回復量は最大HPの11%（進化15%）。強化カードの伸びはゆるやか
+          p.hp = Math.min(p.mhp, p.hp + p.mhp * (evo ? 0.15 : 0.11) * (1 + Math.min(1, (p.skillPow - 1) * 0.3)) * starBonus(p.star).skill ** 0.5);
           sk(0);
           return true;
         case 'lucky': {
@@ -1388,8 +1507,9 @@
         }
         case 'shell':
           if (p.shield > 0) return false;
-          p.shield = ((evo ? 60 : 35) + p.lv * 3) * Math.min(2.5, p.skillPow);
-          p.shieldT = 6;
+          // バリアは最大HPの14%（進化20%）を4秒
+          p.shield = p.mhp * (evo ? 0.2 : 0.14) * (1 + Math.min(0.8, (p.skillPow - 1) * 0.25)) * starBonus(p.star).skill ** 0.5;
+          p.shieldT = 4;
           sk(0);
           return true;
         case 'nova': {
@@ -1464,6 +1584,19 @@
         pr.life -= dt;
         if (pr.life <= 0) continue;
         let gone = false;
+        // 装備の弾は人にも当たる
+        if (pr.pv && pr.o && pr.o.alive) {
+          for (const q of this.players) {
+            if (!this.foeOk(pr.o, q) || (pr.hit && pr.hit.has(q.id))) continue;
+            const rr = this.radius(q) * 0.8 + pr.r;
+            if ((q.x - pr.x) ** 2 + (q.y - 20 - pr.y) ** 2 >= rr * rr) continue;
+            if (pr.aoe) this.ev({ e: 'bm', x: r1(pr.x), y: r1(pr.y), r: pr.aoe });
+            this.itemHitPlayer(pr.o, q, pr.pv, pr.slow);
+            (pr.hit || (pr.hit = new Set())).add(q.id);
+            if (pr.aoe || --pr.pierce < 0) { gone = true; break; }
+          }
+          if (gone) { this.ev({ e: 'pd', id: pr.id, x: r1(pr.x), y: r1(pr.y) }); continue; }
+        }
         this.near(pr.x, pr.y, e => {
           if (e.dead || (pr.hit && pr.hit.has(e.id))) return;
           const rr = e.r + pr.r;
@@ -1511,7 +1644,7 @@
           for (const p of this.players) {
             if (!p.alive) continue;
             const dx = p.x - g.x, dy = p.y - g.y;
-            const mg = p.magnet + this.radius(p); // 体が大きいほど吸い寄せる範囲も広い
+            const mg = p.magnet + (p.itMag || 0) + this.radius(p); // 体が大きいほど吸い寄せる範囲も広い
             if (Math.abs(dx) > mg || Math.abs(dy) > mg) continue;
             if (dx * dx + dy * dy < mg * mg) { g.pull = p; break; }
           }
@@ -1619,7 +1752,7 @@
       s.me = {
         xp: Math.floor(me.xp), xpn: me.xpn, tx: Math.floor(me.txp), k: me.kills, pk: me.pkills, ch: me.choices[0] || null,
         cht: me.choices[0] ? Math.max(0, Math.ceil(15 - me.chT)) : 0,
-        scd: Math.round(clamp(me.scd / (SPECIES[me.sp].skill.cd * me.skillCd * (me.evo ? 0.6 : 1) * starBonus(me.star).cd), 0, 1) * 100) / 100, st: me.star || 1,
+        scd: Math.round(clamp(me.scd / Math.max(SPECIES[me.sp].skill.minCd || 0, SPECIES[me.sp].skill.cd * me.skillCd * (me.evo ? 0.6 : 1) * starBonus(me.star).cd), 0, 1) * 100) / 100, st: me.star || 1,
         by: me.killedBy, dt: me.alive ? 0 : Math.round(me.deadT),
         hy: me.hyT ? Math.ceil(me.hyT) : 0, pt: Math.max(0, Math.ceil(this.paradeT)),
         cd: me.cardsV !== me.cardsSent || this.tick % 40 === 0 ? (me.cardsSent = me.cardsV, me.cards) : undefined,
@@ -1642,13 +1775,59 @@
     }
   }
 
-  // 装備アイテム（ガチャで手に入る）。t=種類, r=レアリティ
+  // 装備アイテム（ガチャで手に入る）。t=種類, r=レアリティ。並び順は変えない（持ち物のセーブが番号なので、足すときは後ろに）
+  // kind: orbit=体のまわりを回る / shot=弾を撃つ / zap=連鎖する雷 / wind=突風 / passive=持っているだけで効く
+  // n=[数の基本, レアリティ1つごとに増える数]  pvp=人に当たったときの、相手の最大HPに対する割合
   const ITEMS = [
-    { key: 'sword', name: '小剣', dmg: 11, desc: '鋭い刃で切り裂く' },
-    { key: 'magatama', name: '勾玉', dmg: 7, heal: 0.004, desc: '当てるたびにHPが少し回復' },
-    { key: 'redfire', name: '赤ファイア', dmg: 14, desc: '燃えさかる炎で大ダメージ' },
-    { key: 'bluefire', name: '青ファイア', dmg: 8, slow: 1.2, desc: '冷たい炎で敵を遅くする' },
+    { key: 'sword', name: '小剣', kind: 'orbit', dmg: 12, n: [3, 1], pvp: 0.03, role: '近接・対人',
+      desc: 'まわりを回る刃。敵にも、ほかのプレイヤーにも当たる' },
+    { key: 'magatama', name: '勾玉', kind: 'orbit', dmg: 6, n: [2, 1], heal: 0.004, def: [0.06, 0.03], role: '守り・回復',
+      desc: '当たるたびにHP回復。受けるダメージも減る' },
+    { key: 'redfire', name: '赤ファイア', kind: 'shot', dmg: 20, cd: 1.5, cdR: 0.05, n: [1, 0.5], speed: 520, life: 1.1, pr: 14, aoe: 95, pvp: 0.05, pk: 'i_fire', range: 560, role: '遠距離・爆発',
+      desc: '近くの敵に火の玉。当たると爆発する（人にも当たる）' },
+    { key: 'bluefire', name: '青ファイア', kind: 'shot', dmg: 10, cd: 1.1, cdR: 0.04, n: [3, 0.5], spread: 0.22, speed: 600, life: 0.9, pr: 12, pierce: 2, slow: 1.5, pvp: 0.025, pk: 'i_ice', range: 520, role: '遠距離・足止め',
+      desc: '冷たい炎を3方向に。当たった敵も人も遅くなる' },
+    { key: 'bow', name: '破魔弓', kind: 'shot', dmg: 34, cd: 2.0, cdR: 0.12, n: [1, 0.34], speed: 1100, life: 0.85, pr: 10, pierce: 3, hunt: 1, pvp: 0.08, pk: 'i_arrow', range: 900, role: '狙撃・対人',
+      desc: '遠くのプレイヤーを優先して狙い撃つ。人に大ダメージ' },
+    { key: 'taiko', name: '雷太鼓', kind: 'zap', dmg: 32, cd: 2.4, cdR: 0.1, n: [3, 1], pvp: 0.04, range: 420, role: '連鎖・群れ',
+      desc: '雷が敵から敵へ飛び移る。群れにつよい' },
+    { key: 'mirror', name: '八咫鏡', kind: 'passive', dmg: 10, show: 2, def: [0.1, 0.04], ref: [0.3, 0.15], role: '反射・守り',
+      desc: '受けるダメージが減り、ぶつかってきた敵や人にダメージを返す' },
+    { key: 'uchiwa', name: '天狗の羽団扇', kind: 'wind', dmg: 14, cd: 3.2, cdR: 0.15, R: 230, knock: 170, pvp: 0.03, role: '吹き飛ばし',
+      desc: '突風でまわりの敵と人を吹き飛ばす。囲まれたときに' },
+    { key: 'kozuchi', name: '打ち出の小槌', kind: 'passive', dmg: 0, show: 1, xp: [0.1, 0.05], mag: [60, 25], role: '成長・稼ぎ',
+      desc: 'もらえる経験値が増え、遠くの玉も吸い寄せる' },
+    { key: 'shuriken', name: '手裏剣', kind: 'shot', dmg: 9, cd: 1.3, cdR: 0.05, n: [4, 1], radial: 1, speed: 640, life: 0.75, pr: 11, pierce: 1, pvp: 0.02, pk: 'i_shuri', range: 450, role: '全方向',
+      desc: '全方向に手裏剣を投げる。うしろの敵にも当たる' },
   ];
+  // そのレアリティでの数（回る数・弾の数・雷が飛び移る回数）
+  function itemCount(t, r) {
+    const d = ITEMS[t];
+    if (!d.n) return d.show || 1;
+    return Math.max(1, Math.floor(d.n[0] + d.n[1] * r + 1e-6));
+  }
+  // 体のまわりに見せる数
+  function itemShow(t, r) {
+    const d = ITEMS[t];
+    if (d.kind === 'orbit') return itemCount(t, r);
+    return d.show || 2;
+  }
+  // 説明（UIで使う）。そのレアリティでの数値つき
+  function itemInfo(t, r) {
+    const d = ITEMS[t], ra = RARITIES[r], pct = v => Math.round(v * 100) + '%';
+    const out = [];
+    if (d.kind === 'orbit') out.push(`回る数 ${itemCount(t, r)}`);
+    if (d.kind === 'shot') out.push(`${itemCount(t, r)}発 / ${(d.cd - (d.cdR || 0) * r).toFixed(1)}秒`);
+    if (d.kind === 'zap') out.push(`${itemCount(t, r)}体に連鎖 / ${(d.cd - (d.cdR || 0) * r).toFixed(1)}秒`);
+    if (d.kind === 'wind') out.push(`半径${d.R + 20 * r} / ${(d.cd - (d.cdR || 0) * r).toFixed(1)}秒`);
+    if (d.dmg && d.kind !== 'passive') out.push(`威力 ${Math.round(d.dmg * ra.pow)}`);
+    if (d.def) out.push(`被ダメ -${pct(d.def[0] + d.def[1] * r)}`);
+    if (d.ref) out.push(`反射 ${pct(d.ref[0] + d.ref[1] * r)}`);
+    if (d.xp) out.push(`経験値 +${pct(d.xp[0] + d.xp[1] * r)}`);
+    if (d.mag) out.push(`吸い寄せ +${d.mag[0] + d.mag[1] * r}`);
+    if (d.pvp) out.push(`対人 ${(d.pvp * ra.pow * 100).toFixed(1)}%/発`);
+    return out.join('・');
+  }
   // n=まわりに出る数, pow=威力
   const RARITIES = [
     { name: 'コモン', color: 0xd0d0d0, css: '#d0d0d0', n: 8, pow: 0.55, rate: 50 },
@@ -1687,7 +1866,7 @@
   const UNLOCK_AT = {}; UNLOCKS.forEach(([k, v]) => { UNLOCK_AT[k] = v; });
 
   global.GD = {
-    UNLOCKS, UNLOCK_AT, ITEMS, RARITIES, ORBIT_SPEED, STARTERS, CHARA_RARITY, CHARA_RATES, STAR_NEED, starOf, starBonus,
+    UNLOCKS, UNLOCK_AT, ITEMS, RARITIES, ORBIT_SPEED, itemCount, itemShow, itemInfo, STARTERS, CHARA_RARITY, CHARA_RATES, STAR_NEED, starOf, starBonus,
     WORLD, TICK, EDGE, VIEW_R, RADAR_R, MAX_PLAYERS, EVOLVE_LV, PROTECT_TIME, NEWBIE_LV, generateMap, resolve, auraTier,
     SPECIES, SPECIES_KEYS, ENEMY_TYPES, ENEMIES, UPGRADES, COLORS, upgradeText,
     xpNeed, clamp,

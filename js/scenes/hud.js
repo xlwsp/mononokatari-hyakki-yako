@@ -13,7 +13,7 @@
   const UP_VAL = {
     dmg: ['+20%', '攻撃のダメージ'], rate: ['-13%', '攻撃の間隔（速く撃てる）'], extra: ['+1発', '通常攻撃の弾が増える'],
     pierce: ['+1体', '弾が敵をつらぬく'], skillPow: ['+45%', '{skill}の威力'], skillCd: ['-22%', '{skill}の待ち時間'],
-    area: ['+30%', '{skill}の範囲'], hp: ['HP UP', '最大HPアップ＆全回復\n（30枚まで）'], regen: ['+1.5/秒', '毎秒HPが回復'],
+    area: ['+30%', '{skill}の範囲'], hp: ['HP UP', '最大HPアップ＆全回復\n（30枚まで）'], regen: ['+0.5%/秒', '毎秒 最大HPの0.5%回復\n（20枚まで）'],
     magnet: ['+40%', '経験値を吸い寄せる範囲'], bump: ['+25%', 'ぶつかったときのダメージ'], trait: ['+10%', '【{trait}】大アップ\n＋攻撃と体当たり'],
   };
   const UP_ICON = { dmg: '⚔️', rate: '⚡', extra: '✨', pierce: '🏹', skillPow: '💥', skillCd: '⏱️', area: '🌀', hp: '❤️', regen: '💚', magnet: '🧲', bump: '💢', trait: '👑' };
@@ -327,7 +327,7 @@
     drawCardBag() {
       const cards = this.gs.myCards || {}, L = this.L;
       const short = L.compact;
-      const parts = UP_ORDER.filter(k => cards[k] > 0).map(k => `${UP_ICON[k]}${short ? '' : UP_SHORT[k]}×${cards[k]}${k === 'hp' ? '/30' : ''}`);
+      const parts = UP_ORDER.filter(k => cards[k] > 0).map(k => `${UP_ICON[k]}${short ? '' : UP_SHORT[k]}×${cards[k]}${k === 'hp' ? '/30' : k === 'regen' ? '/20' : ''}`);
       const key = parts.join(' ') + '|' + L.w + '|' + (this.skPos ? this.skPos.y : 0);
       if (key === this.cardBagKey) return;
       this.cardBagKey = key;

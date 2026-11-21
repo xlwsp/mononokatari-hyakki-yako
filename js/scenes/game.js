@@ -558,13 +558,13 @@
           const t = code >> 3, r = code & 7, it = GD.ITEMS[t], ra = GD.RARITIES[r];
           if (it && ra) {
             o.orb = [];
-            for (let i = 0; i < ra.n; i++) {
+            for (let i = 0, n = GD.itemShow(t, r); i < n; i++) {
               o.orb.push({
                 aura: this.add.image(0, 0, 'aura').setBlendMode(Phaser.BlendModes.ADD).setTint(ra.color),
                 img: this.add.image(0, 0, 'it_' + it.key),
               });
             }
-            o.orbR = r; o.orbSpin = it.key === 'sword';
+            o.orbR = r; o.orbSpin = it.key === 'sword' || it.key === 'shuriken';
           }
         }
       }
@@ -715,7 +715,7 @@
         p.life -= dt;
         if (p.life <= 0) { this.freeProj(id); continue; }
         p.img.x += p.vx * dt; p.img.y += p.vy * dt;
-        if (p.k === 'sinonome') p.img.rotation += dt * 8;
+        if (p.k === 'sinonome' || p.k === 'i_shuri') p.img.rotation += dt * 14;
       }
     }
 
@@ -791,6 +791,39 @@
             const o = this.eSprites.get(ev.i);
             if (o) { o.img.setTintFill(0xffffff); o.flash = 0.07; }
             this.dmgText(ev.x, ev.y - 20, ev.d);
+            break;
+          }
+          case 'zp': {
+            // 雷太鼓：ジグザグの稲妻
+            const g = this.add.graphics().setDepth(FX_DEPTH - 4).setBlendMode('ADD');
+            const P = ev.pts || [];
+            for (const [wd, col, al] of [[7, 0xffe04a, 0.5], [3, 0xffffff, 1]]) {
+              g.lineStyle(wd, col, al); g.beginPath(); g.moveTo(P[0], P[1]);
+              for (let i = 2; i < P.length; i += 2) {
+                const x0 = P[i - 2], y0 = P[i - 1], x1 = P[i], y1 = P[i + 1];
+                for (let k = 1; k <= 3; k++) g.lineTo(x0 + (x1 - x0) * k / 4 + Phaser.Math.Between(-14, 14), y0 + (y1 - y0) * k / 4 + Phaser.Math.Between(-14, 14));
+                g.lineTo(x1, y1);
+              }
+              g.strokePath();
+            }
+            for (let i = 2; i < P.length; i += 2) this.burst(P[i], P[i + 1], 0xfff07a, 6);
+            this.tweens.add({ targets: g, alpha: 0, duration: 260, onComplete: () => g.destroy() });
+            if (ev.pts && ev.x !== undefined && this.me && Math.hypot(ev.x - this.me.x, ev.y - this.me.y) < 500) Sfx.play('zap');
+            break;
+          }
+          case 'wd': {
+            // 天狗の羽団扇：緑の突風の輪
+            const c = this.add.circle(ev.x, ev.y - 20, ev.r, 0x9affb0, 0.18).setStrokeStyle(6, 0xd8ffe0, 0.9).setDepth(FX_DEPTH - 6).setScale(0.2).setBlendMode('ADD');
+            this.tweens.add({ targets: c, scale: 1, alpha: 0, duration: 380, ease: 'Cubic.out', onComplete: () => c.destroy() });
+            this.burst(ev.x, ev.y - 20, 0xc8ffd0, 14);
+            if (this.me && Math.hypot(ev.x - this.me.x, ev.y - this.me.y) < 500) Sfx.play('wind');
+            break;
+          }
+          case 'ih': {
+            // 装備の攻撃がプレイヤーに当たった
+            const col = ev.b === me ? '#ff6a6a' : ev.a === me ? '#ffb84a' : '#ffffff';
+            this.floatText(ev.x + Phaser.Math.Between(-14, 14), ev.y - 80, ev.d > 0 ? String(ev.d) : 'MISS', col, ev.a === me || ev.b === me ? 22 : 16);
+            if (ev.a === me) Sfx.play('kill');
             break;
           }
           case 'bm': {

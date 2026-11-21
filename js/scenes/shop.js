@@ -150,7 +150,7 @@
         rateText.setText(`${GD.CHARA_RATES.map((r, i) => `${TIER_NAME[i]} ${r}%`).join('　')}　／　10連は★★以上が1体確定\n同じ妖怪が出ると★アップ（★2に1体・★3に2体・★4に4体・★5に8体）`);
         hint.setVisible(true).setText('どの妖怪が出るかな？');
       } else {
-        rateText.setText(`${GD.RARITIES.map(r => `${r.name} ${r.rate}%`).join('　')}\n出たアイテムは「装備」で妖怪に持たせる`);
+        rateText.setText(`${GD.RARITIES.map(r => `${r.name} ${r.rate}%`).join('　')}\n全${GD.ITEMS.length}種（遠距離・対人・守り・稼ぎ…）。出たアイテムは「装備」で妖怪に持たせる`);
         hint.setVisible(true).setText('何が出るかな？');
       }
     };
@@ -241,13 +241,16 @@
           const g = got[0], ra = GD.RARITIES[g.r];
           itemIcon(scene, cx, cy - 30, g.t, g.r, Math.min(130, stageH * 0.42)).forEach(S);
           S(scene.add.text(cx, cy + stageH * 0.24, itemLabel(g.t, g.r), TR(small ? 22 : 26, ra.css, '#1a1020', 6)).setOrigin(0.5));
-          S(scene.add.text(cx, cy + stageH * 0.24 + 32, `${GD.ITEMS[g.t].desc}・まわり${ra.n}方向`, TR(15, '#fff8ea', '#1a1020', 3)).setOrigin(0.5));
+          const it = GD.ITEMS[g.t];
+          S(scene.add.text(cx, cy + stageH * 0.24 + 24, `【${it.role}】${it.desc}`, TR(small ? 13 : 15, '#fff8ea', '#1a1020', 3, { align: 'center', wordWrap: { width: pw - 60, useAdvancedWrap: true } })).setOrigin(0.5, 0));
+          S(scene.add.text(cx, cy + stageH * 0.24 + (small ? 62 : 50), GD.itemInfo(g.t, g.r), TR(small ? 12 : 13.5, '#ffe07a', '#1a1020', 3, { align: 'center', wordWrap: { width: pw - 60, useAdvancedWrap: true } })).setOrigin(0.5, 0));
         } else {
           const cols = 5, cw = (pw - 52) / cols, rh = (stageH - 16) / 2;
           got.forEach((g, i) => {
             const gx = x + 26 + cw * (i % cols) + cw / 2, gy = stageY + 8 + rh * Math.floor(i / cols) + rh / 2 - 8;
             itemIcon(scene, gx, gy, g.t, g.r, Math.min(cw, rh) * 0.5).forEach(o => { S(o); o.setAlpha(0); scene.tweens.add({ targets: o, alpha: 1, delay: i * 70, duration: 200 }); });
-            S(scene.add.text(gx, gy + rh * 0.36, GD.RARITIES[g.r].name, TR(small ? 11 : 13, GD.RARITIES[g.r].css, '#1a1020', 3)).setOrigin(0.5));
+            S(scene.add.text(gx, gy + rh * 0.32, GD.ITEMS[g.t].name, TR(small ? 10 : 12, '#fff8ea', '#1a1020', 3)).setOrigin(0.5));
+            S(scene.add.text(gx, gy + rh * 0.32 + (small ? 14 : 16), GD.RARITIES[g.r].name, TR(small ? 10 : 12, GD.RARITIES[g.r].css, '#1a1020', 3)).setOrigin(0.5));
           });
         }
       });
@@ -260,7 +263,7 @@
   // ---------------- 装備 ----------------
   function openEquip(scene) {
     if (scene.shopBox) return;
-    const ui = overlay(scene, '🛡 装備', 640, 760);
+    const ui = overlay(scene, '🛡 装備', 760, 820);
     const { x, y, pw, ph, w, add } = ui;
     const small = pw < 480;
     const keys = GD.UNLOCKS.map(u => u[0]).filter(k => Unlock.ok(k));
@@ -270,7 +273,7 @@
     const clearDyn = () => { dyn.forEach(o => o.active && o.destroy()); dyn.length = 0; };
     const status = add(scene.add.text(w / 2, y + ph / 2, '読み込み中…', TR(18, SOFT)).setOrigin(0.5).setDepth(62));
     add(scene.add.text(w / 2, y + 48, '妖怪をえらんで、下のアイテムをタップで装備', TR(small ? 13 : 16, INK)).setOrigin(0.5).setDepth(62));
-    add(scene.add.text(w / 2, y + 68, 'ゲーム中は体のまわりを回って敵にダメージ（攻撃UP・スキル強化も乗る）', TR(small ? 11 : 12.5, SOFT, null, 0, { align: 'center', wordWrap: { width: pw - 30 } })).setOrigin(0.5, 0).setDepth(62));
+    add(scene.add.text(w / 2, y + 68, '装備ごとに役割がちがう：遠くを撃つ・人に強い・守る・稼ぐ など（カードの攻撃UPも乗る）', TR(small ? 11 : 12.5, SOFT, null, 0, { align: 'center', wordWrap: { width: pw - 30 } })).setOrigin(0.5, 0).setDepth(62));
 
     const draw = () => {
       clearDyn();
@@ -300,33 +303,41 @@
       const cur = prof.eq[sel];
       const sp = GD.SPECIES[sel];
       const bar = D(scene.add.graphics());
-      bar.fillStyle(0x2a1430, 0.92); bar.fillRoundedRect(x + 16, yy, pw - 32, 62, 12);
+      bar.fillStyle(0x2a1430, 0.92); bar.fillRoundedRect(x + 16, yy, pw - 32, 84, 12);
       if (cur) {
         const [t, r] = cur.split('_').map(Number);
         itemIcon(scene, x + 54, yy + 31, t, r, 40).forEach(D);
         D(scene.add.text(x + 88, yy + 8, `${sp.name} の装備`, TR(13, '#e8d8c0')));
-        D(scene.add.text(x + 88, yy + 28, itemLabel(t, r), TR(small ? 16 : 20, GD.RARITIES[r].css, '#1a1020', 4)));
+        D(scene.add.text(x + 88, yy + 26, itemLabel(t, r) + `【${GD.ITEMS[t].role}】`, TR(small ? 15 : 19, GD.RARITIES[r].css, '#1a1020', 4)));
+        D(scene.add.text(x + 26, yy + 56, GD.itemInfo(t, r), TR(small ? 11 : 13, '#ffe07a', '#1a1020', 3, { wordWrap: { width: pw - 70, useAdvancedWrap: true } })));
         D(button(scene, x + pw - 78, yy + 31, 106, 42, 'はずす', () => doEquip(null), { color: 0x8a7e6e, dark: 0x4a4038, size: 18, brush: true }));
       } else {
         D(scene.add.text(w / 2, yy + 31, `${sp.name} は何も装備していません`, TR(16, '#e8d8c0')).setOrigin(0.5));
       }
-      yy += 72;
-      // 持ち物（種類 × レアリティ の表）
+      yy += 94;
+      // 持ち物（種類 × レアリティ の表）。広い画面は2列
       const gridBottom = y + ph - 66;
-      const lw = small ? 54 : 74;
-      const cw = (pw - 32 - lw) / 5, rh = Math.min(cw, (gridBottom - yy - 24) / 4);
-      GD.RARITIES.forEach((ra, r) => D(scene.add.text(x + 16 + lw + cw * r + cw / 2, yy + 9, ra.name, TR(small ? 10.5 : 13, ra.css, '#2a1f18', 3)).setOrigin(0.5)));
+      const N = GD.ITEMS.length, gc = pw >= 640 ? 2 : 1, perCol = Math.ceil(N / gc);
+      const colW = (pw - 32 - (gc - 1) * 12) / gc;
+      const lw = small ? 62 : 84;
+      const cw = (colW - lw) / 5, rh = Math.min(cw, (gridBottom - yy - 24) / perCol);
+      for (let c = 0; c < gc; c++) {
+        const gx0 = x + 16 + c * (colW + 12);
+        GD.RARITIES.forEach((ra, r) => D(scene.add.text(gx0 + lw + cw * r + cw / 2, yy + 9, ra.name, TR(small ? 10 : 11.5, ra.css, '#2a1f18', 3)).setOrigin(0.5)));
+      }
       GD.ITEMS.forEach((it, t) => {
-        const ry = yy + 22 + rh * t + rh / 2;
-        D(scene.add.text(x + 16 + lw / 2, ry, it.name, TR(small ? 11 : 14, INK, null, 0, { align: 'center', wordWrap: { width: lw - 4, useAdvancedWrap: true } })).setOrigin(0.5));
+        const c = Math.floor(t / perCol), gx0 = x + 16 + c * (colW + 12);
+        const ry = yy + 22 + rh * (t % perCol) + rh / 2;
+        D(scene.add.text(gx0 + lw / 2, ry - 7, it.name, TR(small ? 11 : 13, INK, null, 0, { align: 'center', wordWrap: { width: lw - 4, useAdvancedWrap: true } })).setOrigin(0.5));
+        D(scene.add.text(gx0 + lw / 2, ry + 11, it.role, TR(small ? 9 : 10, '#8a4a1a', null, 0, { align: 'center' })).setOrigin(0.5));
         GD.RARITIES.forEach((ra, r) => {
-          const cx = x + 16 + lw + cw * r + cw / 2, key = t + '_' + r, n = prof.inv[key] || 0;
-          const box = D(scene.add.rectangle(cx, ry, cw - 6, rh - 6, n ? 0x2a1f30 : 0x4a3a2e, n ? 0.92 : 0.12));
+          const cx = gx0 + lw + cw * r + cw / 2, key = t + '_' + r, n = prof.inv[key] || 0;
+          const box = D(scene.add.rectangle(cx, ry, cw - 5, rh - 5, n ? 0x2a1f30 : 0x4a3a2e, n ? 0.92 : 0.12));
           if (cur === key) box.setStrokeStyle(4, 0xffd76a); else box.setStrokeStyle(1, 0x4a3a2e, 0.4);
-          if (!n) { D(scene.add.text(cx, ry, '？', TR(18, '#b0a090')).setOrigin(0.5)); return; }
-          itemIcon(scene, cx, ry - 2, t, r, Math.min(rh, cw) * 0.52).forEach(D);
-          if (n > 1) D(scene.add.text(cx + (cw - 6) / 2 - 4, ry + (rh - 6) / 2 - 2, '×' + n, TR(13, '#fff', '#1a1020', 4)).setOrigin(1, 1));
-          D(scene.add.zone(cx, ry, cw - 6, rh - 6).setInteractive({ useHandCursor: true })).on('pointerdown', () => doEquip(key));
+          if (!n) { D(scene.add.text(cx, ry, '？', TR(16, '#b0a090')).setOrigin(0.5)); return; }
+          itemIcon(scene, cx, ry - 1, t, r, Math.min(rh, cw) * 0.58).forEach(D);
+          if (n > 1) D(scene.add.text(cx + (cw - 5) / 2 - 3, ry + (rh - 5) / 2 - 1, '×' + n, TR(12, '#fff', '#1a1020', 4)).setOrigin(1, 1));
+          D(scene.add.zone(cx, ry, cw - 5, rh - 5).setInteractive({ useHandCursor: true })).on('pointerdown', () => doEquip(key));
         });
       });
     };

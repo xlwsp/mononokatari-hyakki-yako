@@ -131,7 +131,7 @@ highscores = HighScores()
 
 # ---------------- ガチャポイント・持ち物・装備（端末ごと） ----------------
 PROFILE_FILE = os.path.join(ROOT, 'tools', 'profiles.json')
-ITEM_TYPES = 4                       # 小剣・勾玉・赤ファイア・青ファイア（js/sim.js の ITEMS と同じ順）
+ITEM_TYPES = 10                      # js/sim.js の ITEMS と同じ数・同じ順（小剣・勾玉・赤ファイア・青ファイア・破魔弓・雷太鼓・八咫鏡・羽団扇・小槌・手裏剣）
 RARITY_RATES = [50, 28, 15, 6, 1]    # コモン・アンコモン・レア・エピック・レジェンド（%）
 GACHA_COST = 100
 # 妖怪ガチャ（js/sim.js の STARTERS / CHARA_RARITY / CHARA_RATES / STAR_NEED と同じ内容）

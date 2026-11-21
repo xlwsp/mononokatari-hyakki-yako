@@ -450,11 +450,12 @@
             const ic = add(this.add.image(x + 70, ry, this.textures.exists(key) ? key : 'ic_' + r.sp).setDepth(63));
             ic.setScale(isz / ic.height);
           }
+          // 右から：スコア → Lv → 名前（数字が大きくても重ならないように、幅を測って並べる）
+          const sc = add(this.add.text(x + pw - 22, ry, Number(r.sc).toLocaleString(), TR(fs, '#b0301a')).setOrigin(1, 0.5).setDepth(63));
+          const lvT = add(this.add.text(sc.x - sc.width - 12, ry, 'Lv' + r.lv, TR(fs - 3, '#6a4a2a')).setOrigin(1, 0.5).setDepth(63));
           const nm = add(this.add.text(x + 92, ry, r.n, TR(fs, '#3a2414')).setOrigin(0, 0.5).setDepth(63));
-          const room = pw - (small ? 150 : 180) - 92;
+          const room = lvT.x - lvT.width - 10 - nm.x;
           while (nm.width > room && nm.text.length > 1) nm.setText(nm.text.slice(0, -2) + '…');
-          add(this.add.text(x + pw - (small ? 118 : 150), ry, 'Lv' + r.lv, TR(fs - 2, '#6a4a2a')).setOrigin(0, 0.5).setDepth(63));
-          add(this.add.text(x + pw - 22, ry, Number(r.sc).toLocaleString(), TR(fs, '#b0301a')).setOrigin(1, 0.5).setDepth(63));
         }
         const m = d.mine;
         const mine = m ? `あなたの自己ベスト：${m.rank}位 / ${d.total}人　${Number(m.sc).toLocaleString()}` : 'あなたの記録はまだありません';

@@ -154,6 +154,8 @@
       if (gap && now - (this.last[name] || 0) < gap) return;
       this.last[name] = now;
       switch (name) {
+        case 'zap': this.tone(1400, 0.12, 'sawtooth', 0.025, -1100); this.noise(0.1, 0.03, 6000); break;
+        case 'wind': this.noise(0.3, 0.05, 900); this.tone(300, 0.25, 'sine', 0.02, 260); break;
         case 'gem': this.tone(900 + Math.random() * 300, 0.06, 'sine', 0.035); break;
         case 'kill': this.tone(260, 0.08, 'triangle', 0.03, -120); break;
         case 'lvl': [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.16, 'triangle', 0.06, 0, i * 0.07)); break;

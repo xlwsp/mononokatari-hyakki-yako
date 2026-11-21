@@ -199,6 +199,77 @@
     });
     flame('it_redfire', '#ff4a1a', '#ffa020', '#fff2a0');
     flame('it_bluefire', '#2a6aff', '#40c8ff', '#e8fbff');
+    // 新しい装備（64×64）
+    canvasTex(scene, 'it_bow', 64, 64, ctx => {
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#3a1a0a'; ctx.lineWidth = 9;
+      ctx.beginPath(); ctx.arc(14, 32, 26, -Math.PI * 0.42, Math.PI * 0.42); ctx.stroke();
+      ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(14, 32, 26, -Math.PI * 0.42, Math.PI * 0.42); ctx.stroke();
+      ctx.strokeStyle = '#fff4d8'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(20, 8); ctx.lineTo(20, 56); ctx.stroke();
+      ctx.strokeStyle = '#3a2a14'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(10, 32); ctx.lineTo(56, 32); ctx.stroke();
+      ctx.fillStyle = '#e8eef8'; ctx.strokeStyle = '#3a4058'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(62, 32); ctx.lineTo(50, 25); ctx.lineTo(50, 39); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(8, 27, 8, 4); ctx.fillRect(8, 33, 8, 4);
+    });
+    canvasTex(scene, 'it_taiko', 64, 64, ctx => {
+      ctx.lineWidth = 3; ctx.strokeStyle = '#2a1408';
+      ctx.fillStyle = '#b8402a'; ctx.beginPath(); ctx.ellipse(32, 36, 22, 16, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f4e6c4'; ctx.beginPath(); ctx.ellipse(32, 30, 20, 10, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#e0a83a'; for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; ctx.beginPath(); ctx.arc(32 + Math.cos(a) * 21, 38 + Math.sin(a) * 13, 2, 0, 7); ctx.fill(); }
+      ctx.fillStyle = '#fff07a'; ctx.strokeStyle = '#7a5a00'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(36, 2); ctx.lineTo(26, 18); ctx.lineTo(33, 18); ctx.lineTo(27, 30); ctx.lineTo(42, 13); ctx.lineTo(35, 13); ctx.closePath(); ctx.fill(); ctx.stroke();
+    });
+    canvasTex(scene, 'it_mirror', 64, 64, ctx => {
+      ctx.lineWidth = 3; ctx.strokeStyle = '#5a3a08';
+      ctx.fillStyle = '#e0a83a'; ctx.beginPath(); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + Math.PI / 8; ctx.lineTo(32 + Math.cos(a) * 29, 32 + Math.sin(a) * 29); } ctx.closePath(); ctx.fill(); ctx.stroke();
+      const g = ctx.createLinearGradient(14, 14, 50, 50); g.addColorStop(0, '#ffffff'); g.addColorStop(0.5, '#bfe6ff'); g.addColorStop(1, '#6aa0d8');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32, 32, 19, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(22, 30); ctx.lineTo(30, 22); ctx.moveTo(24, 38); ctx.lineTo(38, 24); ctx.stroke();
+    });
+    canvasTex(scene, 'it_uchiwa', 64, 64, ctx => {
+      ctx.lineWidth = 3; ctx.strokeStyle = '#1e3a14';
+      ctx.fillStyle = '#7a4a1a'; ctx.beginPath(); ctx.roundRect(29, 38, 6, 24, 3); ctx.fill(); ctx.stroke();
+      for (let i = 0; i < 7; i++) {
+        const a = -Math.PI / 2 + (i - 3) * 0.32;
+        ctx.fillStyle = i % 2 ? '#3a9a4a' : '#5ac85a';
+        ctx.beginPath(); ctx.ellipse(32 + Math.cos(a) * 15, 38 + Math.sin(a) * 15, 7, 17, a + Math.PI / 2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      }
+      ctx.fillStyle = '#ffd84f'; ctx.beginPath(); ctx.arc(32, 38, 5, 0, 7); ctx.fill(); ctx.stroke();
+    });
+    canvasTex(scene, 'it_kozuchi', 64, 64, ctx => {
+      ctx.lineWidth = 3; ctx.strokeStyle = '#3a1a08';
+      ctx.save(); ctx.translate(32, 32); ctx.rotate(-0.6);
+      ctx.fillStyle = '#8a4a1a'; ctx.beginPath(); ctx.roundRect(-4, -2, 8, 30, 3); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.roundRect(-20, -22, 40, 22, 8); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ffd84f'; ctx.beginPath(); ctx.roundRect(-20, -15, 40, 7, 2); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = '#ffe07a'; ctx.strokeStyle = '#8a5a00'; ctx.lineWidth = 2;
+      [[50, 12], [56, 26]].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill(); ctx.stroke(); });
+    });
+    canvasTex(scene, 'it_shuriken', 64, 64, ctx => {
+      ctx.lineWidth = 3; ctx.strokeStyle = '#1a1e2a';
+      const g = ctx.createRadialGradient(32, 32, 2, 32, 32, 28); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#7a8aa8');
+      ctx.fillStyle = g; star(ctx, 32, 32, 29, 9, 4); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#1a1e2a'; ctx.beginPath(); ctx.arc(32, 32, 5, 0, 7); ctx.fill();
+    });
+    // 装備の弾
+    const glow = (key, col, size) => canvasTex(scene, key, size, size, ctx => {
+      const r = size / 2, g = ctx.createRadialGradient(r, r, 0, r, r, r);
+      g.addColorStop(0, '#ffffff'); g.addColorStop(0.3, col); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
+    });
+    glow('pj_i_fire', '#ff7a1a', 40);
+    glow('pj_i_ice', '#4ad8ff', 30);
+    canvasTex(scene, 'pj_i_arrow', 56, 16, ctx => {
+      ctx.strokeStyle = '#ffe9b0'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(4, 8); ctx.lineTo(44, 8); ctx.stroke();
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(56, 8); ctx.lineTo(42, 2); ctx.lineTo(42, 14); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ff8a7a'; ctx.fillRect(2, 3, 9, 3); ctx.fillRect(2, 10, 9, 3);
+    });
+    canvasTex(scene, 'pj_i_shuri', 30, 30, ctx => {
+      ctx.fillStyle = '#e8eef8'; star(ctx, 15, 15, 14, 4, 4); ctx.fill();
+    });
     // レアリティのオーラ（白いもや。色は表示するときに付ける）
     canvasTex(scene, 'aura', 96, 96, ctx => {
       const g = ctx.createRadialGradient(48, 48, 6, 48, 48, 46);
