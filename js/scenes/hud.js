@@ -10,6 +10,9 @@
   const UP_SHORT = { dmg: '攻撃', rate: '連射', extra: '弾数', pierce: '貫通', skillPow: '技威力', skillCd: '技連発', area: '技範囲', hp: 'HP', regen: '回復', magnet: '吸引', bump: '体当り', trait: '覚醒' };
   const UP_ORDER = ['dmg', 'rate', 'extra', 'pierce', 'bump', 'skillPow', 'skillCd', 'area', 'hp', 'regen', 'magnet', 'trait'];
   // カードの「数値」と「説明」（数値は大きく色つきで見せる）
+  // 毎日のお題の文（menu.js と同じ）
+  const missionText = m => ({ k: `敵を${m.g}体たおす`, b: `ボスを${m.g}体たおす`, pk: `プレイヤーを${m.g}回たおす`, lv: `レベル${m.g}に到達`, t: `${Math.round(m.g / 60)}分あそぶ` }[m.k] || '');
+  window.missionText = missionText;
   const UP_VAL = {
     dmg: ['+20%', '攻撃のダメージ'], rate: ['-13%', '攻撃の間隔（速く撃てる）'], extra: ['+1発', '通常攻撃の弾が増える'],
     pierce: ['+1体', '弾が敵をつらぬく'], skillPow: ['+45%', '{skill}の威力'], skillCd: ['-22%', '{skill}の待ち時間'],
@@ -99,11 +102,46 @@
       this.bbName = this.add.text(0, 0, '大妖 オオマガツ　Lv200', TB(16, '#e8d0ff', '#1a0a2a', 4)).setOrigin(0.5, 1).setDepth(4).setVisible(false);
       this.bbHint = this.add.text(0, 0, '', TO(12, '#e8d0ff', '#1a0a2a', 3)).setOrigin(0.5, 0).setDepth(4).setVisible(false);
       this.setupChat();
+      this.setupFeed();
       this.layout();
       this.onResize = () => { this.layout(); if (this.cards) { this.hideCards(); this.cardSeq = -1; } };
       this.scale.on('resize', this.onResize);
       this.events.once('shutdown', () => this.scale.off('resize', this.onResize));
       this.ready = true;
+    }
+
+    // ---------- 右側の記録（プレイヤー同士のキル・大妖の討伐・ドロップ） ----------
+    setupFeed() {
+      const box = this.feedBox = document.createElement('div');
+      box.style.cssText = 'position:fixed;right:12px;top:140px;width:min(300px,46vw);z-index:20;pointer-events:none;font-family:"M PLUS Rounded 1c",sans-serif;font-weight:800;font-size:13.5px;line-height:1.35;display:flex;flex-direction:column;align-items:flex-end;';
+      document.body.appendChild(box);
+      this.events.once('shutdown', () => box.remove());
+      const ss = this.gs.session;
+      const note = m => {
+        if (m.k === 'drop' && m.it) {
+          const it = GD.ITEMS[m.it.t], ra = GD.RARITIES[m.it.r];
+          if (!it || !ra) return;
+          const plus = Math.min(GD.ITEM_PLUS_MAX, (m.it.n || 1) - 1);
+          this.banner(`💰 ${ra.name} ${it.name}${plus ? ' +' + plus : ''} を手に入れた！`, ra.css);
+          this.feed(`💰 賞金首から <b style="color:${ra.css}">${ra.name} ${it.name}</b>${plus ? ' (+' + plus + ')' : ''} をゲット`, '#3a2a08');
+          if (window.Sfx) Sfx.play('legend');
+        } else if (m.k === 'mis' && m.m) {
+          this.banner(`📅 お題クリア！ +${m.m.pt}P`, '#9aff7a');
+          this.feed(`📅 お題クリア：${missionText(m.m)}　<b style="color:#9aff7a">+${m.m.pt}P</b>`, '#14301a');
+          if (window.Sfx) Sfx.play('cap');
+        }
+      };
+      if (ss) { ss.notes.splice(0).forEach(note); ss.onNote = note; this.events.once('shutdown', () => { ss.onNote = null; }); }
+    }
+    feed(html, bg) {
+      if (!this.feedBox) return;
+      const d = document.createElement('div');
+      d.style.cssText = `margin-top:4px;padding:4px 10px;border-radius:8px;background:${bg || '#10141f'}d0;color:#fff8ea;text-shadow:0 1px 2px #000;transition:opacity 1s;max-width:100%;`;
+      d.innerHTML = html;
+      this.feedBox.appendChild(d);
+      while (this.feedBox.children.length > 6) this.feedBox.removeChild(this.feedBox.firstChild);
+      setTimeout(() => { d.style.opacity = '0'; }, 9000);
+      setTimeout(() => d.remove(), 10200);
     }
 
     // ---------- 全体チャット（友達と遊ぶ間だけ。サーバーの CHAT_ON で切りかえ） ----------
@@ -281,6 +319,7 @@
       if (!rows.some(x => x.r[0] === me.id) && rk) rows.push({ r: [me.id, me.n, me.sc, me.lv, 0], rank: rk });
       if (lastBot && !rows.includes(lastBot)) rows.push(lastBot);
       const ph = 24 + rows.length * 20;
+      if (this.feedBox) { const ft = (LB.y + ph + 8) + 'px'; if (this.feedBox.style.top !== ft) this.feedBox.style.top = ft; }
       g.fillStyle(0x161c30, LB.alpha * 0.85); g.fillRoundedRect(LB.x, LB.y, LB.w, ph, 10);
       g.lineStyle(2, 0xf0c35a, LB.alpha); g.strokeRoundedRect(LB.x, LB.y, LB.w, ph, 10);
       this.lbTitle.setPosition(LB.x + 10, LB.y + 4).setAlpha(Math.min(1, LB.alpha + 0.3));

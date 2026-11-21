@@ -794,7 +794,17 @@
             this.dmgText(ev.x, ev.y - 20, ev.d);
             break;
           }
-          case 'zp': {
+          case 'kl': {
+            // キルログ（人どうしだけ）
+            const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+            const mine = ev.ai === me || ev.bi === me;
+            this.ui.feed(`<span style="color:${ev.ai === me ? '#fff07a' : '#ffb0a0'}">${esc(ev.a)}</span> ⚔ <span style="color:${ev.bi === me ? '#fff07a' : '#b8dcff'}">${esc(ev.b)}</span>`, mine ? '#4a1a10' : '#10141f');
+            break;
+          }
+          case 'cb':
+            if (ev.p === me) { this.ui.banner('✨ 組み合わせ効果アップ！', '#ffe07a'); Sfx.play('lvlBig'); }
+            break;
+                    case 'zp': {
             // 雷太鼓：ジグザグの稲妻
             const g = this.add.graphics().setDepth(FX_DEPTH - 4).setBlendMode('ADD');
             const P = ev.pts || [];
@@ -934,6 +944,8 @@
               this.burst(ev.x, ev.y - 100, 0xffe07a, 80);
             }
             this.ui.bigBossFx(false, ev.p === me ? '' : ev.n);
+            { const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+              this.ui.feed(ev.n ? `👹 <b style="color:#fff07a">${esc(ev.n)}</b> が <b style="color:#e0b0ff">大妖オオマガツ</b> を討伐！` : '👹 <b style="color:#e0b0ff">大妖オオマガツ</b> が倒された！', '#2a1040'); }
             Sfx.play(ev.p === me ? 'legend' : 'lvlBig');
             break;
           }

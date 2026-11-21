@@ -19,6 +19,7 @@
   const EVOLVE_LV = 30;        // このレベルで進化（進化するとものすごく強くなる）
   const PROTECT_TIME = 10;     // 出撃直後は体当たりされない
   const NEWBIE_LV = 1;         // （レベルによる保護はなし）
+  const PVP_SHOT = 0.06;       // 通常攻撃が人に当たったとき：1秒あたり相手の最大HPの約6%（連射カードで増える）
   const BUMP_CD = 0.55;        // 同じ相手への体当たりの間隔（秒）
   const ELITE_LV = 12;         // このレベルから「強敵」が混ざる
   const PARADE_EVERY = 240;    // 百鬼夜行（高レベルの人のもとへ強敵の大群が押し寄せる）の間隔
@@ -709,6 +710,7 @@
         this.enemiesIn(p.x, p.y, R, e => this.damage(e, 50 * w, null));
         this.ev({ e: 'bm', x: r1(p.x), y: r1(p.y), r: R });
       }
+      if (killer && killer.human && p.human) this.ev({ e: 'kl', g: 1, a: killer.name, b: p.name, ai: killer.id, bi: p.id }); // キルログ（人どうしだけ）
       this.ev({ e: 'dd', p: p.id, by: killer ? killer.id : 0, x: r1(p.x), y: r1(p.y), lv: p.lv, sc: p.score, sp: p.sp });
     }
 
@@ -760,11 +762,11 @@
       const ta = SPECIES[atk.sp].trait.id, td = SPECIES[def.sp].trait.id;
       const wa = this.traitPow(atk), wd = this.traitPow(def);
       // 固定ダメージ＋相手の最大HPの割合ダメージ（大きくなっても戦いが長引かないように。上限なし）
-      const pct = 0.04 + 0.002 * Math.min(atk.lv, 40);
+      const pct = 0.03; // 体当たりは控えめ（相手の最大HPの3%＋少し）。ほかの攻撃と同じくらいの強さに
       const rel = clamp(this.lvMul(atk) / this.lvMul(def), 0.5, 1.5);
-      let dmg = this.bumpPower(atk) + def.mhp * pct * rel * Math.sqrt(atk.bumpMul), note = '';
+      let dmg = this.bumpPower(atk) * 0.15 + def.mhp * pct * rel * Math.sqrt(atk.bumpMul), note = '';
       if (ta === 'underdog' && def.lv > atk.lv) dmg *= 1 + Math.min(0.6 * wa, (def.lv - atk.lv) * 0.08 * wa);
-      if (ta === 'first' && this.time - atk.lastBump > 3) { dmg *= 1 + wa; note = '先制！'; }
+      if (ta === 'first' && this.time - atk.lastBump > 3) { dmg *= 1 + Math.min(1, 0.5 * wa); note = '先制！'; }
       if (ta === 'luck' && chance(Math.min(0.6, 0.32 * wa))) { dmg *= 2; note = '会心！'; }
       atk.lastBump = this.time;
       if (td === 'hop' && chance(Math.min(0.5, 0.2 * wd))) return { dmg: 0, note: 'よけた！' };
@@ -1257,21 +1259,28 @@
       p.item = null;
       // ★（ガチャで同じ妖怪を重ねた強さ。1〜5）
       p.star = item && item.st ? clamp(item.st | 0, 1, 5) : 1;
-      p.itDef = 0; p.itRef = 0; p.itXp = 1; p.itMag = 0; p.itCd = 1;
+      p.itDef = 0; p.itRef = 0; p.itXp = 1; p.itMag = 0; p.itCd = 1; p.itPow = 1; p.itCdMul = 1; p.combo = 0;
       if (!item || item.t === undefined || item.t === null) return;
       const t = item.t | 0, r = item.r | 0;
       if (t >= 0 && t < ITEMS.length && r >= 0 && r < RARITIES.length) {
-        p.item = { t, r };
+        const plus = clamp(item.p | 0, 0, ITEM_PLUS_MAX);
+        p.item = { t, r, p: plus };
         const d = ITEMS[t];
-        if (d.def) p.itDef = d.def[0] + d.def[1] * r;
-        if (d.ref) p.itRef = d.ref[0] + d.ref[1] * r;
-        if (d.xp) p.itXp = 1 + d.xp[0] + d.xp[1] * r;
-        if (d.mag) p.itMag = d.mag[0] + d.mag[1] * r;
+        // ＋強化（同じ装備がかぶるほど強い）と、妖怪との組み合わせ（隠し効果）
+        p.combo = isCombo(p.sp, t) ? 1 : 0;
+        p.itPow = (1 + ITEM_PLUS_STEP * plus) * (p.combo ? COMBO_POW : 1);
+        p.itCdMul = p.combo ? COMBO_CD : 1;
+        const k = p.itPow;
+        if (d.def) p.itDef = Math.min(0.6, (d.def[0] + d.def[1] * r) * k);
+        if (d.ref) p.itRef = (d.ref[0] + d.ref[1] * r) * k;
+        if (d.xp) p.itXp = 1 + (d.xp[0] + d.xp[1] * r) * k;
+        if (d.mag) p.itMag = (d.mag[0] + d.mag[1] * r) * k;
+        if (p.combo && p.human) this.ev({ e: 'cb', p: p.id });
       }
     }
     itemDmg(p) {
       const it = p.item;
-      return ITEMS[it.t].dmg * RARITIES[it.r].pow * this.lvMul(p) * p.dmgMul * Math.sqrt(p.skillPow) * starBonus(p.star).atk;
+      return ITEMS[it.t].dmg * RARITIES[it.r].pow * (p.itPow || 1) * this.lvMul(p) * p.dmgMul * Math.sqrt(p.skillPow) * starBonus(p.star).atk;
     }
     // 撃てる相手（守られている人・生まれたての人・自分は撃たない）
     foeOk(p, q) { return q !== p && q.alive && !isProtected(q) && !isProtected(p); }
@@ -1286,10 +1295,15 @@
     }
     // 装備の攻撃がプレイヤーに当たった：相手の最大HPの割合ダメージ（レベル差で少し変わる）
     itemHitPlayer(p, q, pct, slow) {
-      if (!this.foeOk(p, q) || !p.item) return;
+      if (!p.item) return;
+      this.pvpHit(p, q, pct * RARITIES[p.item.r].pow * (p.itPow || 1), slow);
+    }
+    // 攻撃（通常攻撃・装備）がプレイヤーに当たった。pct = 相手の最大HPに対する割合
+    pvpHit(p, q, pct, slow) {
+      if (!this.foeOk(p, q)) return;
       if (SPECIES[q.sp].trait.id === 'hop' && chance(Math.min(0.5, 0.2 * this.traitPow(q)))) { this.ev({ e: 'ih', a: p.id, b: q.id, d: 0, x: r1(q.x), y: r1(q.y) }); return; }
       const rel = clamp(this.lvMul(p) / this.lvMul(q), 0.5, 1.5);
-      const dmg = q.mhp * pct * RARITIES[p.item.r].pow * rel * starBonus(p.star).atk;
+      const dmg = q.mhp * pct * rel * starBonus(p.star).atk;
       const before = q.hp;
       this.hurtPlayer(q, dmg);
       if (slow) q.pslowT = Math.max(q.pslowT, slow);
@@ -1329,7 +1343,7 @@
       if (!def.cd) return; // 持っているだけで効くもの（鏡・小槌）
       p.itCd -= dt;
       if (p.itCd > 0) return;
-      const dmg = this.itemDmg(p), cdNext = (def.cd - (def.cdR || 0) * r) * Math.sqrt(p.rateMul);
+      const dmg = this.itemDmg(p), cdNext = (def.cd - (def.cdR || 0) * r) * Math.sqrt(p.rateMul) * (p.itCdMul || 1);
       const range = def.range || 520;
       if (def.kind === 'shot') {
         // 狙う相手：弓は人を優先、ほかは敵を優先
@@ -1343,7 +1357,7 @@
         for (let i = 0; i < n; i++) {
           const ang = def.radial ? baseA + (i / n) * Math.PI * 2 : baseA + (i - (n - 1) / 2) * (def.spread || 0.16);
           this.spawnProj(p, p.x, p.y, ang, def.speed, dmg, def.pr, def.life, def.pierce || 0, def.pk, def.aoe, def.slow);
-          this.projs[this.projs.length - 1].pv = def.pvp || 0;
+          this.projs[this.projs.length - 1].pv = (def.pvp || 0) * RARITIES[r].pow * (p.itPow || 1);
         }
       } else if (def.kind === 'zap') {
         // 雷：近くの敵（と人）へ次々に飛び移る
@@ -1425,16 +1439,23 @@
       p.atkCd -= dt;
       if (p.atkCd > 0) return;
       const a = def.atk;
-      const t = this.nearestEnemy(p.x, p.y, 420);
+      // 近くの敵か、近くのプレイヤー（近い方）をねらう
+      let t = this.nearestEnemy(p.x, p.y, 420);
+      const foe = this.nearestFoe(p, 420);
+      if (foe && (!t || (foe.x - p.x) ** 2 + (foe.y - p.y) ** 2 < (t.x - p.x) ** 2 + (t.y - p.y) ** 2)) t = foe;
       if (!t) { p.atkCd = 0.1; return; }
       const dmg = a.dmg * p.dmgMul * this.lvMul(p) * starBonus(p.star).atk;
       const base = Math.atan2(t.y - p.y, t.x - p.x);
       const n = (a.n || 1) + p.extra;
+      const vh = new Set(); // 1回の発射で同じプレイヤーに当たるのは1発だけ
       for (let i = 0; i < n; i++) {
         let ang;
         if (a.pattern === 'radial') ang = base + (i / n) * Math.PI * 2;
         else ang = base + (i - (n - 1) / 2) * (a.spread || 0.12);
         this.spawnProj(p, p.x, p.y, ang, a.speed, dmg, a.r, a.life, (a.pierce || 0) + p.pierce, p.sp, a.aoe, a.slow);
+        // 通常攻撃もプレイヤーに当たる：どの妖怪でも1秒あたりの対人ダメージがだいたい同じになるよう、間隔と弾数でならす
+        const pr = this.projs[this.projs.length - 1];
+        pr.pv = PVP_SHOT * a.cd * Math.sqrt(p.dmgMul) * (p.bot ? 0.8 : 1); pr.vh = vh;
       }
       p.atkCd = a.cd * p.rateMul;
     }
@@ -1590,12 +1611,13 @@
         // 装備の弾は人にも当たる
         if (pr.pv && pr.o && pr.o.alive) {
           for (const q of this.players) {
-            if (!this.foeOk(pr.o, q) || (pr.hit && pr.hit.has(q.id))) continue;
+            if (!this.foeOk(pr.o, q) || (pr.hit && pr.hit.has(q.id)) || (pr.vh && pr.vh.has(q.id))) continue;
             const rr = this.radius(q) * 0.8 + pr.r;
             if ((q.x - pr.x) ** 2 + (q.y - 20 - pr.y) ** 2 >= rr * rr) continue;
             if (pr.aoe) this.ev({ e: 'bm', x: r1(pr.x), y: r1(pr.y), r: pr.aoe });
-            this.itemHitPlayer(pr.o, q, pr.pv, pr.slow);
+            this.pvpHit(pr.o, q, pr.pv, pr.slow);
             (pr.hit || (pr.hit = new Set())).add(q.id);
+            if (pr.vh) pr.vh.add(q.id);
             if (pr.aoe || --pr.pierce < 0) { gone = true; break; }
           }
           if (gone) { this.ev({ e: 'pd', id: pr.id, x: r1(pr.x), y: r1(pr.y) }); continue; }
@@ -1803,6 +1825,13 @@
     { key: 'shuriken', name: '手裏剣', kind: 'shot', dmg: 9, cd: 1.3, cdR: 0.05, n: [4, 1], radial: 1, speed: 640, life: 0.75, pr: 11, pierce: 1, pvp: 0.02, pk: 'i_shuri', range: 450, role: '全方向',
       desc: '全方向に手裏剣を投げる。うしろの敵にも当たる' },
   ];
+  // ＋強化：同じ装備が2個目で+1…最大+5。1つにつき威力・効果 +12%
+  const ITEM_PLUS_MAX = 5, ITEM_PLUS_STEP = 0.12;
+  // 妖怪と装備の組み合わせ（ゲームの中では秘密。装備したときに「組み合わせ効果アップ！」で分かる）
+  const COMBOS = { gekomaru: 'magatama', suzune: 'uchiwa', maimai: 'mirror', rangyo: 'kozuchi', kodama: 'sword', kohaku: 'shuriken',
+    kuroro: 'bow', uroko: 'bluefire', komori: 'mirror', toosibi: 'redfire', nejimaru: 'taiko', hakua: 'taiko', sinonome: 'magatama' };
+  const COMBO_POW = 1.3, COMBO_CD = 0.85;
+  const isCombo = (sp, t) => !!ITEMS[t] && COMBOS[sp] === ITEMS[t].key;
   // そのレアリティでの数（回る数・弾の数・雷が飛び移る回数）
   function itemCount(t, r) {
     const d = ITEMS[t];
@@ -1869,7 +1898,7 @@
   const UNLOCK_AT = {}; UNLOCKS.forEach(([k, v]) => { UNLOCK_AT[k] = v; });
 
   global.GD = {
-    UNLOCKS, UNLOCK_AT, ITEMS, RARITIES, ORBIT_SPEED, itemCount, itemShow, itemInfo, STARTERS, CHARA_RARITY, CHARA_RATES, STAR_NEED, starOf, starBonus,
+    UNLOCKS, UNLOCK_AT, ITEMS, RARITIES, ORBIT_SPEED, itemCount, itemShow, itemInfo, isCombo, ITEM_PLUS_MAX, ITEM_PLUS_STEP, STARTERS, CHARA_RARITY, CHARA_RATES, STAR_NEED, starOf, starBonus,
     WORLD, TICK, EDGE, VIEW_R, RADAR_R, MAX_PLAYERS, EVOLVE_LV, PROTECT_TIME, NEWBIE_LV, generateMap, resolve, auraTier,
     SPECIES, SPECIES_KEYS, ENEMY_TYPES, ENEMIES, UPGRADES, COLORS, upgradeText,
     xpNeed, clamp,

@@ -134,6 +134,18 @@ PROFILE_FILE = os.path.join(ROOT, 'tools', 'profiles.json')
 ITEM_TYPES = 10                      # js/sim.js の ITEMS と同じ数・同じ順（小剣・勾玉・赤ファイア・青ファイア・破魔弓・雷太鼓・八咫鏡・羽団扇・小槌・手裏剣）
 RARITY_RATES = [50, 28, 15, 6, 1]    # コモン・アンコモン・レア・エピック・レジェンド（%）
 GACHA_COST = 100
+ITEM_PLUS_MAX = 5                    # 装備の＋強化の上限（js/sim.js と同じ）
+DROP_RATES = [0, 40, 35, 18, 7]      # 賞金首を倒したときの装備ドロップ（アンコモン以上）
+# 毎日のお題：種類 → (説明, 目標のむずかしさ3段階)。説明は js/scenes/menu.js 側にもある
+MISSIONS = {
+    'k': ('敵をたおす', [300, 800, 1500]),
+    'b': ('ボスをたおす', [2, 4, 8]),
+    'pk': ('プレイヤーをたおす', [1, 3, 6]),
+    'lv': ('1回のプレイでレベル到達', [25, 50, 80]),
+    't': ('あそぶ（秒）', [600, 1200, 1800]),
+}
+MISSION_PTS = [150, 250, 400]        # むずかしさごとのごほうび
+LOGIN_BASE, LOGIN_STEP = 100, 50     # ログインボーナス：1日目100P、連続で+50P（7日目以降400P）
 # 妖怪ガチャ（js/sim.js の STARTERS / CHARA_RARITY / CHARA_RATES / STAR_NEED と同じ内容）
 STARTERS = ['gekomaru', 'maimai', 'suzune']
 CHARA_TIERS = [
@@ -203,7 +215,11 @@ class Profiles:
 
     def view(self, tok):
         p = self.get(tok)
-        return {'pts': p['pts'], 'inv': p['inv'], 'eq': p['eq'], 'cost': GACHA_COST, 'chars': p['chars']}
+        out = {'pts': p['pts'], 'inv': p['inv'], 'eq': p['eq'], 'cost': GACHA_COST, 'chars': p['chars']}
+        if tok:
+            dy = self.daily(tok)
+            out['dy'] = {'st': dy['st'], 'm': dy['m'], 'lbn': LOGIN_BASE + LOGIN_STEP * (min(dy['st'], 7) - 1)}
+        return out
 
     def gacha_chara(self, tok, times=1):
         p = self.get(tok)
@@ -243,6 +259,72 @@ class Profiles:
         self.dirty = True
         return got
 
+    # ---------- 賞金首のドロップ（レアが出やすい装備） ----------
+    def drop_item(self, tok):
+        if not tok:
+            return None
+        p = self.get(tok)
+        r = random.choices(range(5), weights=DROP_RATES)[0]
+        t = random.randrange(ITEM_TYPES)
+        key = '%d_%d' % (t, r)
+        p['inv'][key] = p['inv'].get(key, 0) + 1
+        self.dirty = True
+        return {'t': t, 'r': r, 'n': p['inv'][key]}
+
+    # ---------- 毎日のお題とログインボーナス ----------
+    def daily(self, tok):
+        p = self.get(tok)
+        today = time.strftime('%Y-%m-%d')
+        dy = p.get('dy')
+        if not dy or dy.get('d') != today:
+            last = dy.get('d') if dy else None
+            yday = time.strftime('%Y-%m-%d', time.localtime(time.time() - 86400))
+            st = (dy.get('st', 0) + 1) if last == yday else 1
+            rnd = random.Random(today + (tok or ''))
+            kinds = rnd.sample(list(MISSIONS.keys()), 3)
+            ms = []
+            for k in kinds:
+                lvl = rnd.randrange(len(MISSIONS[k][1]))
+                ms.append({'k': k, 'g': MISSIONS[k][1][lvl], 'c': 0, 'ok': 0, 'pt': MISSION_PTS[lvl]})
+            dy = {'d': today, 'st': st, 'm': ms, 'lb': 0}
+            p['dy'] = dy
+            if tok:
+                self.dirty = True
+        return dy
+
+    # 今日のログインボーナス（1日1回）。もらえたら {n, st}
+    def login_bonus(self, tok):
+        if not tok:
+            return None
+        dy = self.daily(tok)
+        if dy.get('lb'):
+            return None
+        n = LOGIN_BASE + LOGIN_STEP * (min(dy['st'], 7) - 1)
+        dy['lb'] = 1
+        self.get(tok)['pts'] += n
+        self.dirty = True
+        return {'n': n, 'st': dy['st']}
+
+    # お題を進める。deltas: {'k': 増えた数, 'lv': 今のLv} → クリアしたお題のリスト
+    def mission_progress(self, tok, deltas):
+        if not tok:
+            return []
+        dy = self.daily(tok)
+        done = []
+        for m in dy['m']:
+            if m['ok'] or m['k'] not in deltas:
+                continue
+            v = deltas[m['k']]
+            c0 = m['c']
+            m['c'] = max(m['c'], v) if m['k'] == 'lv' else m['c'] + v
+            if m['c'] >= m['g']:
+                m['c'] = m['g']; m['ok'] = 1
+                self.get(tok)['pts'] += m['pt']
+                done.append(m)
+            if m['c'] != c0:
+                self.dirty = True
+        return done
+
     def add_pts(self, tok, n):
         if not tok:
             return
@@ -266,7 +348,7 @@ class Profiles:
             t = random.randrange(ITEM_TYPES)
             key = '%d_%d' % (t, r)
             p['inv'][key] = p['inv'].get(key, 0) + 1
-            got.append({'t': t, 'r': r})
+            got.append({'t': t, 'r': r, 'n': p['inv'][key]})  # n=持っている数（2個目から＋強化）
         self.dirty = True
         return got
 
@@ -290,6 +372,7 @@ class Profiles:
         if key:
             t, r = key.split('_')
             out['t'], out['r'] = int(t), int(r)
+            out['p'] = max(0, min(ITEM_PLUS_MAX, d.get('inv', {}).get(key, 1) - 1))  # ＋強化
         return out
 
     def flush(self):
@@ -396,6 +479,7 @@ class World:
         self.maint_check = 0
         self.toks = {}  # プレイヤーid → セーブの合言葉
         self.names = {}  # プレイヤーid → 名前（抜けた後に届くスコア用）
+        self.mlast = {}  # プレイヤーid → お題用の前回の数
         self.last_flush = time.monotonic()
 
     async def start(self):
@@ -455,6 +539,35 @@ class World:
                         profiles.add_pts(world.toks.get(pid), int(n))
                     except Exception:
                         pass
+                    continue
+                if line.startswith('!B\t'):
+                    _, pid = line.split('\t', 1)
+                    got = profiles.drop_item(world.toks.get(pid))
+                    c = clients.get(pid)
+                    if got and c:
+                        c.send({'t': 'note', 'k': 'drop', 'it': got})
+                    continue
+                if line.startswith('!M\t'):
+                    _, pid, js = line.split('\t', 2)
+                    try:
+                        cur = json.loads(js)
+                        last = world.mlast.get(pid) or {}
+                        world.mlast[pid] = cur
+                        dl = {}
+                        for key in ('k', 'b', 'pk'):
+                            v, v0 = cur.get(key, 0), last.get(key, 0)
+                            d = v - v0 if v >= v0 else v  # やられて数が戻ったら、そこから数え直し
+                            if d > 0:
+                                dl[key] = d
+                        dl['lv'] = cur.get('lv', 1)
+                        if cur.get('a') and last:
+                            dl['t'] = 5
+                        c = clients.get(pid)
+                        for m in profiles.mission_progress(world.toks.get(pid), dl):
+                            if c:
+                                c.send({'t': 'note', 'k': 'mis', 'm': m})
+                    except Exception as e:
+                        log('mission error:', repr(e))
                     continue
                 if line.startswith('!H\t'):
                     _, pid, js = line.split('\t', 2)
@@ -598,7 +711,8 @@ def handle_msg(c: Client, text: str):
             got = profiles.gacha_chara(tok, n) if m.get('k') == 'chara' else profiles.gacha(tok, n)
         elif t == 'equip':
             profiles.equip(tok, m.get('sp'), m.get('key'))
-        c.send({'t': 'prof', 'd': dict(profiles.view(tok), got=got)})
+        lb = profiles.login_bonus(tok) if t == 'prof?' else None
+        c.send({'t': 'prof', 'd': dict(profiles.view(tok), got=got, lb=lb)})
     elif t == 'ping':
         c.send({'t': 'pong', 'd': {'maint': world.maint}})
     elif t == 'hs?':
@@ -618,6 +732,7 @@ def leave(c: Client):
         c.joined = False
         world.members.discard(c.id)
         world.leaves.append(c.id)
+        world.mlast.pop(c.id, None)
         asyncio.get_event_loop().call_later(3, world.toks.pop, c.id, None)
         asyncio.get_event_loop().call_later(3, world.names.pop, c.id, None)  # 抜けたときのセーブを受け取ってから消す
         log(c.name, 'left', '(online %d)' % len(world.members))

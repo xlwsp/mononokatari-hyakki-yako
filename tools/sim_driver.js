@@ -5,6 +5,7 @@
 //   出力  : 毎ティック "id<TAB>json" を人数分、最後に "."
 //           セーブは "!S<TAB>id<TAB>json"（2秒ごと・抜けるとき。やられていたら null）
 //           ハイスコアは "!H<TAB>id<TAB>json"、ガチャポイントは "!P<TAB>id<TAB>数"
+//           賞金首を倒した人は "!B<TAB>id"、お題用の数は "!M<TAB>id<TAB>json"（5秒ごと）
 var window = this;
 load(arguments[0] + '/js/sim.js');
 
@@ -45,7 +46,15 @@ for (;;) {
   } catch (e) { if (errors++ < 20) print('#err ' + e + ' ' + (e.stack || '')); }
   if (true) { // 毎ティック（1秒に20回）送ってなめらかに
     var base = sim.snapshot();
-    base.ev.forEach(function (e) { if (e.e === 'pt') print('!P\t' + e.p + '\t' + e.n); }); // ガチャポイント
+    base.ev.forEach(function (e) {
+      if (e.e === 'pt') print('!P\t' + e.p + '\t' + e.n); // ガチャポイント
+      else if (e.e === 'btk' && humans.indexOf(e.k) >= 0) print('!B\t' + e.k); // 賞金首を倒した → 装備ドロップ
+    });
+    // 毎日のお題用：5秒ごとに、倒した数などの今の値
+    if (sim.tick % 100 === 0) humans.forEach(function (id) {
+      var p = sim.pmap.get(id);
+      if (p) print('!M\t' + id + '\t' + JSON.stringify({ k: p.kills, b: p.bossKills, pk: p.pkills, lv: p.lv, a: p.alive ? 1 : 0 }));
+    });
     humans.forEach(function (id) {
       var s = sim.snapshotFor(base, id);
       if (s) print(id + '\t' + JSON.stringify(s));

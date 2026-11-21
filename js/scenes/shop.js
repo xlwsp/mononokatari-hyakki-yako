@@ -150,7 +150,7 @@
         rateText.setText(`${GD.CHARA_RATES.map((r, i) => `${TIER_NAME[i]} ${r}%`).join('　')}　／　10連は★★以上が1体確定\n同じ妖怪が出ると★アップ（★2に1体・★3に2体・★4に4体・★5に8体）`);
         hint.setVisible(true).setText('どの妖怪が出るかな？');
       } else {
-        rateText.setText(`${GD.RARITIES.map(r => `${r.name} ${r.rate}%`).join('　')}\n全${GD.ITEMS.length}種（遠距離・対人・守り・稼ぎ…）。出たアイテムは「装備」で妖怪に持たせる`);
+        rateText.setText(`${GD.RARITIES.map(r => `${r.name} ${r.rate}%`).join('　')}\n全${GD.ITEMS.length}種。かぶると＋強化（最大+5）。「装備」で妖怪に持たせる`);
         hint.setVisible(true).setText('何が出るかな？');
       }
     };
@@ -240,7 +240,8 @@
         if (got.length === 1) {
           const g = got[0], ra = GD.RARITIES[g.r];
           itemIcon(scene, cx, cy - 30, g.t, g.r, Math.min(130, stageH * 0.42)).forEach(S);
-          S(scene.add.text(cx, cy + stageH * 0.24, itemLabel(g.t, g.r), TR(small ? 22 : 26, ra.css, '#1a1020', 6)).setOrigin(0.5));
+          S(scene.add.text(cx, cy + stageH * 0.24, itemLabel(g.t, g.r) + (g.n > 1 ? `  +${Math.min(GD.ITEM_PLUS_MAX, g.n - 1)}` : ''), TR(small ? 22 : 26, ra.css, '#1a1020', 6)).setOrigin(0.5));
+          if (g.n > 1) S(scene.add.text(cx, cy - stageH * 0.42, g.n - 1 <= GD.ITEM_PLUS_MAX ? `かぶった！ +${g.n - 1} に強化` : '+MAX（これ以上は強くならない）', TR(small ? 16 : 19, '#ffe07a', '#7a2a00', 5)).setOrigin(0.5));
           const it = GD.ITEMS[g.t];
           S(scene.add.text(cx, cy + stageH * 0.24 + 24, `【${it.role}】${it.desc}`, TR(small ? 13 : 15, '#fff8ea', '#1a1020', 3, { align: 'center', wordWrap: { width: pw - 60, useAdvancedWrap: true } })).setOrigin(0.5, 0));
           S(scene.add.text(cx, cy + stageH * 0.24 + (small ? 62 : 50), GD.itemInfo(g.t, g.r), TR(small ? 12 : 13.5, '#ffe07a', '#1a1020', 3, { align: 'center', wordWrap: { width: pw - 60, useAdvancedWrap: true } })).setOrigin(0.5, 0));
@@ -249,7 +250,7 @@
           got.forEach((g, i) => {
             const gx = x + 26 + cw * (i % cols) + cw / 2, gy = stageY + 8 + rh * Math.floor(i / cols) + rh / 2 - 8;
             itemIcon(scene, gx, gy, g.t, g.r, Math.min(cw, rh) * 0.5).forEach(o => { S(o); o.setAlpha(0); scene.tweens.add({ targets: o, alpha: 1, delay: i * 70, duration: 200 }); });
-            S(scene.add.text(gx, gy + rh * 0.32, GD.ITEMS[g.t].name, TR(small ? 10 : 12, '#fff8ea', '#1a1020', 3)).setOrigin(0.5));
+            S(scene.add.text(gx, gy + rh * 0.32, GD.ITEMS[g.t].name + (g.n > 1 ? ` +${Math.min(GD.ITEM_PLUS_MAX, g.n - 1)}` : ''), TR(small ? 10 : 12, g.n > 1 ? '#ffe07a' : '#fff8ea', '#1a1020', 3)).setOrigin(0.5));
             S(scene.add.text(gx, gy + rh * 0.32 + (small ? 14 : 16), GD.RARITIES[g.r].name, TR(small ? 10 : 12, GD.RARITIES[g.r].css, '#1a1020', 3)).setOrigin(0.5));
           });
         }
@@ -308,7 +309,14 @@
         const [t, r] = cur.split('_').map(Number);
         itemIcon(scene, x + 54, yy + 31, t, r, 40).forEach(D);
         D(scene.add.text(x + 88, yy + 8, `${sp.name} の装備`, TR(13, '#e8d8c0')));
-        D(scene.add.text(x + 88, yy + 26, itemLabel(t, r) + `【${GD.ITEMS[t].role}】`, TR(small ? 15 : 19, GD.RARITIES[r].css, '#1a1020', 4)));
+        const plus = Math.min(GD.ITEM_PLUS_MAX, (prof.inv[cur] || 1) - 1);
+        const lbl = D(scene.add.text(x + 88, yy + 26, itemLabel(t, r) + (plus ? ` +${plus}` : '') + `【${GD.ITEMS[t].role}】`, TR(small ? 15 : 19, GD.RARITIES[r].css, '#1a1020', 4)));
+        if (GD.isCombo(sel, t)) {
+          // 組み合わせ（装備してはじめて分かる）
+          const cb = D(scene.add.text(lbl.x + lbl.width + 10, yy + 28, '✨組み合わせ効果アップ！', TR(small ? 12 : 14, '#ffe07a', '#7a2a00', 4)));
+          if (cb.x + cb.width > x + pw - 140) cb.setPosition(x + 88 + 140, yy + 6);
+          scene.tweens.add({ targets: cb, alpha: 0.55, yoyo: true, repeat: -1, duration: 600 });
+        }
         D(scene.add.text(x + 26, yy + 56, GD.itemInfo(t, r), TR(small ? 11 : 13, '#ffe07a', '#1a1020', 3, { wordWrap: { width: pw - 70, useAdvancedWrap: true } })));
         D(button(scene, x + pw - 78, yy + 31, 106, 42, 'はずす', () => doEquip(null), { color: 0x8a7e6e, dark: 0x4a4038, size: 18, brush: true }));
       } else {
@@ -336,14 +344,25 @@
           if (cur === key) box.setStrokeStyle(4, 0xffd76a); else box.setStrokeStyle(1, 0x4a3a2e, 0.4);
           if (!n) { D(scene.add.text(cx, ry, '？', TR(16, '#b0a090')).setOrigin(0.5)); return; }
           itemIcon(scene, cx, ry - 1, t, r, Math.min(rh, cw) * 0.58).forEach(D);
-          if (n > 1) D(scene.add.text(cx + (cw - 5) / 2 - 3, ry + (rh - 5) / 2 - 1, '×' + n, TR(12, '#fff', '#1a1020', 4)).setOrigin(1, 1));
+          if (n > 1) D(scene.add.text(cx - (cw - 5) / 2 + 3, ry - (rh - 5) / 2 + 1, '+' + Math.min(GD.ITEM_PLUS_MAX, n - 1), TR(12, '#ffe07a', '#1a1020', 4)));
           D(scene.add.zone(cx, ry, cw - 5, rh - 5).setInteractive({ useHandCursor: true })).on('pointerdown', () => doEquip(key));
         });
       });
     };
     const doEquip = key => {
       Sfx.play('click');
-      Net.equip(sel, key).then(p => { prof = p; if (!ui.closed) { draw(); if (key) Sfx.play('cap'); } }).catch(() => {});
+      Net.equip(sel, key).then(p => {
+        prof = p;
+        if (ui.closed) return;
+        draw();
+        if (!key) return;
+        if (GD.isCombo(sel, Number(key.split('_')[0]))) {
+          Sfx.play('lvlBig'); scene.cameras.main.flash(200, 255, 240, 180);
+          const bn = scene.add.text(w / 2, y + ph / 2, '✨ 組み合わせ効果アップ！', TB(small ? 26 : 34, '#ffe07a', '#7a2a00', 7)).setOrigin(0.5).setDepth(80).setScale(0.3);
+          scene.tweens.add({ targets: bn, scale: 1, duration: 280, ease: 'Back.out' });
+          scene.tweens.add({ targets: bn, alpha: 0, y: bn.y - 30, delay: 1300, duration: 500, onComplete: () => bn.destroy() });
+        } else Sfx.play('cap');
+      }).catch(() => {});
     };
     Net.profile().then(p => { prof = p; if (!ui.closed) draw(); }).catch(() => { if (!ui.closed) status.setText('サーバーにつながりません'); });
     ui.onClose = clearDyn;

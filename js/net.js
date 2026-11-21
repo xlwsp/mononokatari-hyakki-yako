@@ -41,9 +41,11 @@
       this.onLost = null;
       this.lastSend = 0;
       this.chat = []; this.onSay = null; // 全体チャット
+      this.notes = []; this.onNote = null;
       this.unsubs = [
         relay.on('st', m => { if (this._onSnap) this._onSnap(m.s); else { this.pending.push(m.s); if (this.pending.length > 20) this.pending.shift(); } }),
         relay.on('say', m => { this.chatOn = true; (m.h || []).forEach(r => { this.chat.push(r); if (this.chat.length > 30) this.chat.shift(); }); if (this.onSay) this.onSay(m.h || []); }),
+        relay.on('note', m => { if (this.onNote) this.onNote(m); else this.notes.push(m); }), // お題クリア・賞金首のドロップ
         relay.on('reset', () => this.onLost && this.onLost('サーバーの世界が作り直されました')),
         relay.on('maint', () => this.onLost && this.onLost('🔧 メンテナンス中です')),
         relay.on('close', () => this.onLost && this.onLost('サーバーとの接続が切れました')),

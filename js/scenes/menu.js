@@ -253,6 +253,7 @@
         ['🏆 ランキング', () => this.showRanking(), 0xf0b030, 0xb07a18],
         ['🎲 ガチャ', () => this.openShop('gacha'), 0xef7a6a, 0xb24a3e],
         ['🛡 装備', () => this.openShop('equip'), 0x6fb6e8, 0x3f7fae],
+        ['📅 お題', () => this.showDaily(), 0x7ac85a, 0x4a8a34],
       ];
       const parchment = (x, y, pw, ph) => {
         panel(this, x, y, pw, ph, { color: 0xf6ead0, alpha: 0.95, border: 0x8a5a1a, borderW: 4, shadow: 0.5 });
@@ -281,9 +282,9 @@
         // ---------- パソコン（横長）：画面いっぱいの2段組 ----------
         const M = Math.max(18, Math.round(w * 0.025));
         // 上の帯：左にロゴ、右にメニューとスコア
-        const mbw = Phaser.Math.Clamp(Math.round(w * 0.14), 140, 200), mbh = Phaser.Math.Clamp(Math.round(h * 0.075), 48, 62);
+        const mbw = Phaser.Math.Clamp(Math.round(w * 0.12), 120, 180), mbh = Phaser.Math.Clamp(Math.round(h * 0.075), 48, 62);
         const topH = Math.max(Phaser.Math.Clamp(Math.round(h * 0.15), 76, 130), M + mbh + 10 + 46);
-        const menuW = mbw * 3 + 20;
+        const menuW = mbw * menu.length + 10 * (menu.length - 1);
         const logoMax = Math.min(h * 0.085, (w - menuW - M * 3) / 7.2);
         const logoSz = Phaser.Math.Clamp(Math.round(logoMax), 30, 76);
         const logo = this.add.text(M, topH * 0.46, 'モノノカタリ', TB(logoSz, '#f8e6bc', '#2a160a', logoSz / 9 + 3)).setOrigin(0, 0.5);
@@ -403,7 +404,7 @@
         if (showUnlock) this.starBox = starInfo(this, cx, iy + 4, pw);
         this.msgText = this.add.text(cx, py - 6, this.notice || '', TR(15, '#fff', '#2a160a', 5, { align: 'center', wordWrap: { width: w - 30 } })).setOrigin(0.5, 1).setDepth(5);
         menu.forEach(([label, fn, col, dark], i) => {
-          const mw = (w - 24) / 3 - 6;
+          const mw = (w - 24) / menu.length - 6;
           button(this, 12 + mw / 2 + i * (mw + 9), menuY, mw, menuH, label, fn, { color: col, dark, size: Math.min(19, mw / 6.2), brush: true });
         });
         this.previewH = 0; this.preview = null;
@@ -463,12 +464,57 @@
       }).catch(() => { if (status.active) status.setText('サーバーにつながりません'); });
     }
 
+    // ---------- 毎日のお題・ログインボーナス ----------
+    showDaily(lb) {
+      if (this.rankBox || this.shopBox || this.nameAsk || this.confirmBox || this.connecting) return;
+      const ui = Shop.overlay(this, lb ? '🎁 ログインボーナス' : '📅 今日のお題', 560, 600);
+      const { x, y, pw, ph, w, add } = ui;
+      const small = pw < 460;
+      const D = o => add(o).setDepth(63);
+      const draw = p => {
+        if (ui.closed || !p || !p.dy) { if (!ui.closed && (!p || !p.dy)) D(this.add.text(w / 2, y + ph / 2, 'サーバーにつながりません', TR(18, '#6a4a2a')).setOrigin(0.5)); return; }
+        let yy = y + 50;
+        const dy = p.dy;
+        if (lb) {
+          D(this.add.text(w / 2, yy + 6, `連続ログイン ${lb.st}日目！`, TB(small ? 24 : 30, '#c0301a', '#fff', 4)).setOrigin(0.5, 0));
+          D(this.add.text(w / 2, yy + 50, `+${lb.n}P`, TR(small ? 34 : 42, '#e07a10', '#fff', 6)).setOrigin(0.5, 0));
+          this.cameras.main.flash(250, 255, 240, 200);
+          if (window.FX) FX.confetti(this, w / 2, yy + 60, 70);
+          Sfx.play('legend');
+          yy += 112;
+        } else {
+          D(this.add.text(w / 2, yy + 4, `連続ログイン ${dy.st}日目　（明日のボーナス ${Math.min(400, dy.lbn + 50)}P）`, TR(small ? 13 : 15, '#6a4a2a')).setOrigin(0.5, 0));
+          yy += 34;
+        }
+        D(this.add.text(w / 2, yy, '📅 今日のお題（毎日0時に新しくなる）', TR(small ? 16 : 19, '#3a2414')).setOrigin(0.5, 0));
+        yy += 34;
+        const bh = Math.min(86, (y + ph - 80 - yy) / 3 - 8);
+        dy.m.forEach(m => {
+          const g = add(this.add.graphics()).setDepth(62);
+          g.fillStyle(m.ok ? 0x2a5a2a : 0x2a1430, 0.92); g.fillRoundedRect(x + 20, yy, pw - 40, bh, 12);
+          g.lineStyle(3, m.ok ? 0x9aff7a : 0xd8a83a, 1); g.strokeRoundedRect(x + 20, yy, pw - 40, bh, 12);
+          D(this.add.text(x + 36, yy + 10, (m.ok ? '✅ ' : '') + missionText(m), TR(small ? 16 : 19, '#fff8ea', '#1a1020', 3)));
+          D(this.add.text(x + pw - 36, yy + 10, `+${m.pt}P`, TR(small ? 16 : 19, m.ok ? '#9aff7a' : '#ffe07a', '#1a1020', 3)).setOrigin(1, 0));
+          const gw = pw - 72, gy = yy + bh - 24, k = Math.min(1, m.c / m.g);
+          g.fillStyle(0x0c0816, 1); g.fillRoundedRect(x + 36, gy, gw, 14, 7);
+          if (k > 0) { g.fillStyle(m.ok ? 0x6ae04a : 0xf0b030, 1); g.fillRoundedRect(x + 36, gy, Math.max(14, gw * k), 14, 7); }
+          const cur = m.k === 't' ? `${Math.floor(m.c / 60)}/${Math.round(m.g / 60)}分` : `${m.c}/${m.g}`;
+          D(this.add.text(x + 36 + gw / 2, gy + 7, m.ok ? 'クリア！（ポイントは自動でもらえます）' : cur, TR(11.5, '#fff', '#1a1020', 3)).setOrigin(0.5));
+          yy += bh + 8;
+        });
+      };
+      if (this.prof && this.prof.dy) draw(this.prof); else Net.profile().then(draw).catch(() => draw(null));
+    }
+
     msg(s) { this.msgText.setText(s); }
 
     refreshPts() {
       Net.profile().then(p => {
         if (!this.ptsText || !this.ptsText.active) return;
         this.ptsText.setText(`ガチャポイント  ${p.pts.toLocaleString()}P`);
+        this.prof = p;
+        // 今日はじめて：ログインボーナスとお題を見せる
+        if (p.lb && !this.shopBox && !this.rankBox && !this.nameAsk && !this.confirmBox && !this.connecting) { this.showDaily(p.lb); return; }
         // 持っている妖怪が変わっていたら（ガチャ・引きつぎ）画面を作り直す
         if (Unlock.set(p.chars) && !this.shopBox && !this.rankBox && !this.nameAsk && !this.confirmBox && !this.connecting) {
           this.saveName(); this.scene.restart({ msg: this.msgText && this.msgText.text, keep: true });
