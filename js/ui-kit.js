@@ -58,6 +58,8 @@
 
   // ボタン：見た目どおりの範囲で反応する透明ゾーンを重ねる。キーボードのフォーカス表示つき
   function button(scene, x, y, w, h, label, onClick, opt = {}) {
+    // どのボタンも夜の枠にそろえる（color は うっすらした色味として残す）
+    if (!opt.night && !opt.classic) opt = Object.assign({}, opt, { night: true, accent: opt.accent != null ? opt.accent : opt.color });
     const c = scene.add.container(x, y);
     const g = scene.add.graphics();
     const col = opt.color || C.green, dark = opt.dark || C.greenDark;

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const { TR, TB, C, panel, button } = UI;
-  const INK = '#3a2414', SOFT = '#6a4a2a';
+  const INK = '#fff4e6', SOFT = '#cfc2e6';
 
   const itemLabel = (t, r) => `${GD.RARITIES[r].name} ${GD.ITEMS[t].name}`;
   const lsGet = (k, d) => { try { return localStorage.getItem('nakama_' + k) || d; } catch (e) { return d; } };
@@ -67,9 +67,8 @@
     const add = o => { objs.push(o); if (o.setDepth) o.setDepth(Math.max(o.depth || 0, 61)); return o; };
     add(scene.add.rectangle(0, 0, w, h, 0x0c0816, 0.78).setOrigin(0).setInteractive().setDepth(60));
     // 夜の枠（白い線＋角の◆）の中に、読みやすい紙の板
-    add(UI.nightFrame(scene, x - 7, y - 7, pw + 14, ph + 14, { alpha: 0.88, r: 22, gem: 9 }).setDepth(61));
-    add(panel(scene, x, y, pw, ph, { color: 0xf3ecf6, alpha: 1, border: 0x3a2a5a, borderW: 3, shadow: 0 }).setDepth(61));
-    add(scene.add.graphics().lineStyle(1.5, 0x9a88c0, 0.8).strokeRoundedRect(x + 6, y + 6, pw - 12, ph - 12, 13).setDepth(61));
+    // 夜の枠：半透明の黒＋白い線＋角の◆（ロビーとおそろい）
+    add(UI.nightFrame(scene, x, y, pw, ph, { alpha: 0.9, fill: 0x0c0818, r: 18, gem: 9 }).setDepth(61));
     // 見出しの帯
     const bandW = Math.min(pw - 40, 380);
     add(UI.nightFrame(scene, w / 2 - bandW / 2, y - 18, bandW, 50, { alpha: 0.95, fill: 0x120c24, gem: 6, inner: false }).setDepth(61));
@@ -111,7 +110,7 @@
     const S = o => { shown.push(o); if (o.setDepth) o.setDepth(Math.max(o.depth || 0, 63)); return o; };
 
     // 文字・舞台・ボタン
-    const ptsText = add(scene.add.text(w / 2, y + 100, '読み込み中…', TR(small ? 20 : 24, '#0a5a9a', '#ffffff', 5)).setOrigin(0.5).setDepth(62));
+    const ptsText = add(scene.add.text(w / 2, y + 100, '読み込み中…', TR(small ? 20 : 24, '#7ae8ff', '#0a0614', 5)).setOrigin(0.5).setDepth(62));
     add(scene.add.text(w / 2, y + 126, '5レベルごと・進化でポイントがもらえる', TR(13, SOFT)).setOrigin(0.5).setDepth(62));
     const rateText = add(scene.add.text(w / 2, y + 144, '', TR(small ? 11.5 : 13.5, INK, null, 0, { align: 'center', lineSpacing: 3, wordWrap: { width: pw - 36, useAdvancedWrap: true } })).setOrigin(0.5, 0).setDepth(62));
     const stageY = y + 196, stageH = Math.max(160, ph - 196 - 150);
@@ -337,12 +336,12 @@
         const c = Math.floor(t / perCol), gx0 = x + 16 + c * (colW + 12);
         const ry = yy + 22 + rh * (t % perCol) + rh / 2;
         D(scene.add.text(gx0 + lw / 2, ry - 7, it.name, TR(small ? 11 : 13, INK, null, 0, { align: 'center', wordWrap: { width: lw - 4, useAdvancedWrap: true } })).setOrigin(0.5));
-        D(scene.add.text(gx0 + lw / 2, ry + 11, it.role, TR(small ? 9 : 10, '#8a4a1a', null, 0, { align: 'center' })).setOrigin(0.5));
+        D(scene.add.text(gx0 + lw / 2, ry + 11, it.role, TR(small ? 9 : 10, '#ffb070', null, 0, { align: 'center' })).setOrigin(0.5));
         GD.RARITIES.forEach((ra, r) => {
           const cx = gx0 + lw + cw * r + cw / 2, key = t + '_' + r, n = prof.inv[key] || 0;
           const box = D(scene.add.rectangle(cx, ry, cw - 5, rh - 5, n ? 0x2a1f30 : 0x4a3a2e, n ? 0.92 : 0.12));
           if (cur === key) box.setStrokeStyle(4, 0xffd76a); else box.setStrokeStyle(1, 0x4a3a2e, 0.4);
-          if (!n) { D(scene.add.text(cx, ry, '？', TR(16, '#b0a090')).setOrigin(0.5)); return; }
+          if (!n) { D(scene.add.text(cx, ry, '？', TR(16, '#8a809a')).setOrigin(0.5)); return; }
           itemIcon(scene, cx, ry - 1, t, r, Math.min(rh, cw) * 0.58).forEach(D);
           if (n > 1) D(scene.add.text(cx - (cw - 5) / 2 + 3, ry - (rh - 5) / 2 + 1, '+' + Math.min(GD.ITEM_PLUS_MAX, n - 1), TR(12, '#ffe07a', '#1a1020', 4)));
           D(scene.add.zone(cx, ry, cw - 5, rh - 5).setInteractive({ useHandCursor: true })).on('pointerdown', () => doEquip(key));

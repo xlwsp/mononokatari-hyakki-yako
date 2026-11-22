@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const { TR, TB, button } = UI;
-  const INK = '#2a1a3a', SOFT = '#5a4a6a';
+  const INK = '#fff4e6', SOFT = '#cfc2e6';
   const fmtT = t => (t >= 3600 ? `${Math.floor(t / 3600)}時間${Math.floor(t % 3600 / 60)}分` : `${Math.floor(t / 60)}分${t % 60}秒`);
   const fmtDate = at => { const d = new Date(at * 1000); return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
   const spName = r => (r.ev ? GD.SPECIES[r.sp].evoName : GD.SPECIES[r.sp].name);
@@ -30,7 +30,7 @@
       });
     };
     const icon = (k, cx, cy, sz, ev) => { const ic = D(scene.add.image(cx, cy, 'ic_' + k + (ev ? '_e' : ''))); ic.setScale(sz / ic.height); return ic; };
-    const row = (yy, h, i) => { const g = D(scene.add.graphics()); g.fillStyle(i % 2 ? 0xe6dcef : 0xf3ecf8, 1); g.fillRoundedRect(x + 16, yy, pw - 32, h - 3, 8); };
+    const row = (yy, h, i) => { const g = D(scene.add.graphics()); g.fillStyle(i % 2 ? 0x221a3c : 0x17122c, 0.95); g.fillRoundedRect(x + 16, yy, pw - 32, h - 3, 8); };
 
     const drawSp = () => {
       const best = rec.best || {};
@@ -44,7 +44,7 @@
         icon(k, x + 34, yy + rh / 2 - 1, rh - 8, b && b.lv >= GD.EVOLVE_LV);
         D(scene.add.text(x + 58, yy + rh / 2 - 1, GD.SPECIES[k].name, TR(small ? 12 : 15, INK)).setOrigin(0, 0.5));
         const v = b ? [`Lv${b.lv}`, b.sc.toLocaleString(), `${b.pk}人`, `${b.n}回`] : ['―', '―', '―', '―'];
-        v.forEach((t, j) => D(scene.add.text(x + pw * cols[j + 1], yy + rh / 2 - 1, t, TR(small ? 12 : 15, b ? INK : '#9a90a8')).setOrigin(0.5, 0.5)));
+        v.forEach((t, j) => D(scene.add.text(x + pw * cols[j + 1], yy + rh / 2 - 1, t, TR(small ? 12 : 15, b ? INK : '#7a7090')).setOrigin(0.5, 0.5)));
       });
     };
     const runRow = (r, yy, rh, i, hl) => {
@@ -53,7 +53,7 @@
       const fs = small ? 11.5 : 14;
       D(scene.add.text(x + 58, yy + 5, `${spName(r)}  Lv${r.lv}　スコア ${r.sc.toLocaleString()}`, TR(fs, INK)));
       D(scene.add.text(x + 58, yy + rh / 2 + 2, `${fmtDate(r.at)}　${fmtT(r.t)}　撃破${r.k}　キル${r.pk}人　${r.by ? r.by + 'に倒された' : '敵にやられた'}`, TR(fs * 0.8, SOFT)));
-      if (hl) D(scene.add.text(x + pw - 26, yy + rh / 2 - 1, hl, TR(fs * 1.1, '#c0501a')).setOrigin(1, 0.5));
+      if (hl) D(scene.add.text(x + pw - 26, yy + rh / 2 - 1, hl, TR(fs * 1.1, '#ffb070')).setOrigin(1, 0.5));
     };
     const drawRuns = () => {
       const runs = (rec.runs || []).slice().reverse();
@@ -66,7 +66,7 @@
       const half = (bottom - top) / 2;
       [['top_sc', '🏆 スコアが高かったプレイ', r => r.sc.toLocaleString()], ['top_pk', '⚔ いちばんキルしたプレイ', r => `${r.pk}人`]].forEach(([key, title, hl], s) => {
         const list = rec[key] || [], yy0 = top + s * half;
-        D(scene.add.text(x + 20, yy0, title, TB(small ? 16 : 19, '#3a2a5a', '#ffffff', 3)));
+        D(scene.add.text(x + 20, yy0, title, TB(small ? 16 : 19, '#ffe7b0', '#0a0614', 3)));
         if (!list.length) { D(scene.add.text(x + 30, yy0 + 34, 'まだ記録がありません', TR(13, SOFT))); return; }
         const rh = Math.min(46, (half - 34) / 5);
         list.slice(0, 5).forEach((r, i) => runRow(r, yy0 + 30 + i * rh, rh, i, `${i + 1}位 ${hl(r)}`));
@@ -92,7 +92,7 @@
     let prof = null, busy = false, dyn = [];
     const clear = () => { dyn.forEach(o => o.active && o.destroy()); dyn = []; };
     const D = o => { dyn.push(o); if (o.setDepth) o.setDepth(Math.max(o.depth || 0, 63)); return o; };
-    const ptsText = add(scene.add.text(w / 2, y + 52, '読み込み中…', TR(small ? 17 : 20, '#0a5a9a', '#ffffff', 5)).setOrigin(0.5).setDepth(62));
+    const ptsText = add(scene.add.text(w / 2, y + 52, '読み込み中…', TR(small ? 17 : 20, '#7ae8ff', '#0a0614', 5)).setOrigin(0.5).setDepth(62));
     const act = pr => {
       if (busy) return; busy = true;
       pr.then(p => { busy = false; if (!ui.closed && p) { prof = p; draw(); } }).catch(() => { busy = false; if (!ui.closed) ptsText.setText('サーバーにつながりません'); });
@@ -103,18 +103,18 @@
       ptsText.setText(`ガチャポイント  ${prof.pts.toLocaleString()}P`);
       const cons = prof.cons || {}, bag = prof.bag || [];
       let yy = y + 78;
-      D(scene.add.text(w / 2, yy, `1回のプレイ（やられるまで）で、えらんだ道具を1つずつ使えます。持っていけるのは${GD.CONS_SLOTS}種類まで。\nゲーム中は右下のボタンか Z / X / C キーで使う（使わなければ減らない）`, TR(small ? 11 : 13, '#4a3a5a', null, 0, { align: 'center', wordWrap: { width: pw - 40 } })).setOrigin(0.5, 0));
+      D(scene.add.text(w / 2, yy, `1回のプレイ（やられるまで）で、えらんだ道具を1つずつ使えます。持っていけるのは${GD.CONS_SLOTS}種類まで。\nゲーム中は右下のボタンか Z / X / C キーで使う（使わなければ減らない）`, TR(small ? 11 : 13, '#d8ccf0', null, 0, { align: 'center', wordWrap: { width: pw - 40 } })).setOrigin(0.5, 0));
       yy += small ? 58 : 50;
       const rh = Math.min(104, (y + ph - 80 - yy) / GD.CONSUMABLES.length);
       GD.CONSUMABLES.forEach((c, i) => {
         const ry = yy + i * rh, have = cons[c.id] || 0, on = bag.includes(c.id);
         const g = D(scene.add.graphics());
-        g.fillStyle(on ? 0xfff0c8 : 0xf3ecf8, 1); g.fillRoundedRect(x + 16, ry, pw - 32, rh - 6, 12);
-        g.lineStyle(on ? 3 : 1.5, on ? 0xd8a020 : 0x9a88c0, 1); g.strokeRoundedRect(x + 16, ry, pw - 32, rh - 6, 12);
+        g.fillStyle(on ? 0x3a2c10 : 0x17122c, 0.95); g.fillRoundedRect(x + 16, ry, pw - 32, rh - 6, 12);
+        g.lineStyle(on ? 3 : 1.5, on ? 0xffd76a : 0xffffff, on ? 1 : 0.45); g.strokeRoundedRect(x + 16, ry, pw - 32, rh - 6, 12);
         D(scene.add.text(x + 46, ry + (rh - 6) / 2, c.icon, { fontSize: small ? '30px' : '38px' }).setOrigin(0.5));
         D(scene.add.text(x + 80, ry + 8, `${c.name}　${c.price}P`, TR(small ? 14 : 17, INK)));
         D(scene.add.text(x + 80, ry + (small ? 30 : 34), c.desc, TR(small ? 11 : 13, SOFT, null, 0, { wordWrap: { width: pw - 330, useAdvancedWrap: true } })));
-        D(scene.add.text(x + 80, ry + rh - 26, `持っている数：${have}`, TR(small ? 11 : 13, have ? '#2a7a2a' : '#9a90a8')));
+        D(scene.add.text(x + 80, ry + rh - 26, `持っている数：${have}`, TR(small ? 11 : 13, have ? '#8aff9a' : '#7a7090')));
         const bx = x + pw - 30, bw = small ? 64 : 84, bh = Math.min(34, (rh - 18) / 2);
         const b1 = D(button(scene, bx - bw / 2 - bw - 8, ry + 6 + bh / 2, bw, bh, '1個買う', () => act(Net.consBuy(c.id, 1)), { night: true, size: small ? 11 : 13 }));
         const b5 = D(button(scene, bx - bw / 2, ry + 6 + bh / 2, bw, bh, '5個買う', () => act(Net.consBuy(c.id, 5)), { night: true, size: small ? 11 : 13 }));

@@ -12,21 +12,21 @@
     wrap.id = 'nameEditor';
     wrap.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(20,10,30,0.66);display:flex;align-items:flex-start;justify-content:center;padding-top:min(18vh,140px);';
     const box = document.createElement('div');
-    box.style.cssText = 'width:min(420px,calc(100vw - 32px));background:#f3ecf6;border:3px solid #3a2a5a;border-radius:18px;outline:3px solid #fff;outline-offset:4px;padding:18px 18px 16px;box-shadow:0 10px 30px rgba(0,0,0,0.5);font-family:"M PLUS Rounded 1c",sans-serif;text-align:center;';
+    box.style.cssText = 'width:min(420px,calc(100vw - 32px));background:rgba(12,8,24,0.94);border:3px solid #fff;border-radius:18px;padding:18px 18px 16px;box-shadow:0 10px 30px rgba(0,0,0,0.5);font-family:"M PLUS Rounded 1c",sans-serif;text-align:center;';
     const title = document.createElement('div');
     title.textContent = opt.title || 'なまえ';
-    title.style.cssText = 'font-weight:900;font-size:22px;color:#3a2414;margin-bottom:4px;';
+    title.style.cssText = 'font-weight:900;font-size:22px;color:#fff4e6;margin-bottom:4px;';
     const sub = document.createElement('div');
     sub.textContent = opt.sub || 'ランキングやほかの人の画面に表示されます（12文字まで）';
-    sub.style.cssText = 'font-weight:800;font-size:13px;color:#6a4a2a;margin-bottom:12px;';
+    sub.style.cssText = 'font-weight:800;font-size:13px;color:#cfc2e6;margin-bottom:12px;';
     const inp = document.createElement('input');
     inp.type = 'text'; inp.maxLength = 12; inp.placeholder = 'ゆうしゃ'; inp.value = opt.value || '';
     inp.autocomplete = 'off'; inp.enterKeyHint = 'done';
-    inp.style.cssText = 'width:100%;box-sizing:border-box;height:52px;border-radius:12px;border:3px solid #4a3a2e;background:#fff;padding:0 12px;font-family:inherit;font-weight:800;font-size:20px;color:#3a2414;outline:none;text-align:center;';
+    inp.style.cssText = 'width:100%;box-sizing:border-box;height:52px;border-radius:12px;border:2px solid #fff;background:#140e24;padding:0 12px;font-family:inherit;font-weight:800;font-size:20px;color:#fff4e6;outline:none;text-align:center;';
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;gap:10px;margin-top:14px;';
-    const mk = (label, bg, fg) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = `flex:1;height:50px;border-radius:12px;border:3px solid #2a1608;background:${bg};color:${fg};font-family:inherit;font-weight:900;font-size:19px;cursor:pointer;`; return b; };
-    const cancel = mk(opt.cancelLabel || 'やめる', '#b8ab98', '#2a1608'), ok = mk('けってい', '#ef7a6a', '#fff8ea');
+    const mk = (label, bg, fg) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = `flex:1;height:50px;border-radius:12px;border:2px solid #fff;background:${bg};color:${fg};font-family:inherit;font-weight:900;font-size:19px;cursor:pointer;`; return b; };
+    const cancel = mk(opt.cancelLabel || 'やめる', 'rgba(255,255,255,0.08)', '#fff4e6'), ok = mk('けってい', 'rgba(255,110,90,0.35)', '#fff8ea');
     row.append(cancel, ok); box.append(title, sub, inp, row); wrap.append(box);
     document.body.appendChild(wrap);
     // 入力中はゲームのキー操作を止める（WASD・スペースなどが打てなくならないように）
@@ -307,16 +307,16 @@
       wrap.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(20,10,30,0.66);display:flex;align-items:flex-start;justify-content:center;padding-top:min(8vh,60px);overflow:auto;';
       const F = '"M PLUS Rounded 1c",sans-serif';
       wrap.innerHTML = `
-        <div style="width:min(480px,calc(100vw - 28px));background:#f3ecf6;border:3px solid #3a2a5a;border-radius:18px;outline:3px solid #fff;outline-offset:4px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-family:${F};color:#3a2414;">
+        <div style="width:min(480px,calc(100vw - 28px));background:rgba(12,8,24,0.94);border:3px solid #fff;border-radius:18px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-family:${F};color:#fff4e6;">
           <div style="font-weight:900;font-size:22px;text-align:center">📮 ご意見・バグ報告</div>
-          <div style="font-weight:800;font-size:12.5px;color:#6a4a2a;text-align:center;margin:4px 0 10px">運営に届きます。ほかのプレイヤーには見えません</div>
+          <div style="font-weight:800;font-size:12.5px;color:#cfc2e6;text-align:center;margin:4px 0 10px">運営に届きます。ほかのプレイヤーには見えません</div>
           <div id="fbKinds" style="display:flex;gap:6px;margin-bottom:10px"></div>
           <div id="fbStars" style="text-align:center;font-size:30px;margin-bottom:6px;cursor:pointer;user-select:none"></div>
-          <textarea id="fbText" maxlength="500" placeholder="ここに書いてね（500文字まで）" style="width:100%;box-sizing:border-box;height:150px;border-radius:12px;border:3px solid #4a3a2e;padding:10px;font-family:${F};font-weight:800;font-size:16px;color:#3a2414;resize:vertical;outline:none"></textarea>
-          <div id="fbMsg" style="font-weight:800;font-size:13px;color:#c0301a;min-height:18px;margin:4px 0"></div>
+          <textarea id="fbText" maxlength="500" placeholder="ここに書いてね（500文字まで）" style="width:100%;box-sizing:border-box;height:150px;border-radius:12px;border:2px solid #fff;background:#140e24;padding:10px;font-family:${F};font-weight:800;font-size:16px;color:#fff4e6;resize:vertical;outline:none"></textarea>
+          <div id="fbMsg" style="font-weight:800;font-size:13px;color:#ff8a7a;min-height:18px;margin:4px 0"></div>
           <div style="display:flex;gap:10px">
-            <button id="fbCancel" style="flex:1;height:48px;border-radius:12px;border:3px solid #2a1608;background:#b8ab98;color:#2a1608;font-family:${F};font-weight:900;font-size:18px">とじる</button>
-            <button id="fbSend" style="flex:1;height:48px;border-radius:12px;border:3px solid #2a1608;background:#ef7a6a;color:#fff8ea;font-family:${F};font-weight:900;font-size:18px">送信する</button>
+            <button id="fbCancel" style="flex:1;height:48px;border-radius:12px;border:2px solid #fff;background:rgba(255,255,255,0.08);color:#fff4e6;font-family:${F};font-weight:900;font-size:18px">とじる</button>
+            <button id="fbSend" style="flex:1;height:48px;border-radius:12px;border:2px solid #fff;background:rgba(255,110,90,0.35);color:#fff8ea;font-family:${F};font-weight:900;font-size:18px">送信する</button>
           </div>
         </div>`;
       document.body.appendChild(wrap);
@@ -324,10 +324,10 @@
       const KINDS = [['review', '⭐ レビュー'], ['idea', '🙏 改善してほしい'], ['bug', '🐞 バグ報告']];
       let kind = 'idea', stars = 0;
       const drawKinds = () => {
-        $('fbKinds').innerHTML = KINDS.map(([k, l]) => `<button data-k="${k}" style="flex:1;height:42px;border-radius:10px;border:3px solid #2a1608;background:${k === kind ? '#d8a020' : '#e8dcc0'};color:#2a1608;font-family:${F};font-weight:900;font-size:14px">${l}</button>`).join('');
+        $('fbKinds').innerHTML = KINDS.map(([k, l]) => `<button data-k="${k}" style="flex:1;height:42px;border-radius:10px;border:2px solid ${k === kind ? '#ffd76a' : 'rgba(255,255,255,0.6)'};background:${k === kind ? 'rgba(255,215,106,0.25)' : 'rgba(255,255,255,0.06)'};color:#fff4e6;font-family:${F};font-weight:900;font-size:14px">${l}</button>`).join('');
         $('fbKinds').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { kind = b.dataset.k; drawKinds(); }));
         $('fbStars').style.display = kind === 'review' ? 'block' : 'none';
-        $('fbStars').innerHTML = [1, 2, 3, 4, 5].map(i => `<span data-s="${i}" style="color:${i <= stars ? '#f0a810' : '#c8b8a0'}">★</span>`).join('');
+        $('fbStars').innerHTML = [1, 2, 3, 4, 5].map(i => `<span data-s="${i}" style="color:${i <= stars ? '#ffd23a' : '#5a5070'}">★</span>`).join('');
         $('fbStars').querySelectorAll('span').forEach(sp => sp.addEventListener('click', () => { stars = +sp.dataset.s; drawKinds(); }));
         $('fbText').placeholder = kind === 'bug' ? 'どこで・何をしたら・どうなったか を書いてね（500文字まで）' : kind === 'review' ? '遊んでみた感想を書いてね（500文字まで）' : '直してほしいところ・欲しい機能を書いてね（500文字まで）';
       };
@@ -339,13 +339,13 @@
       $('fbSend').addEventListener('click', () => {
         const text = $('fbText').value.trim();
         if (text.length < 2) { $('fbMsg').textContent = '内容を書いてね'; return; }
-        $('fbSend').disabled = true; $('fbMsg').style.color = '#6a4a2a'; $('fbMsg').textContent = '送信中…';
+        $('fbSend').disabled = true; $('fbMsg').style.color = '#cfc2e6'; $('fbMsg').textContent = '送信中…';
         Net.feedback({ k: kind, st: kind === 'review' ? stars : 0, m: text, n: (this.input_ && this.input_.node.value.trim()) || '', ua: (navigator.userAgent || '').slice(0, 160), sc: `${window.innerWidth}x${window.innerHeight}` })
           .then(r => {
-            if (r && r.ok) { $('fbMsg').style.color = '#2a7a2a'; $('fbMsg').textContent = '送信しました！ ありがとう！'; Sfx.play('cap'); setTimeout(close, 1200); }
-            else { $('fbSend').disabled = false; $('fbMsg').style.color = '#c0301a'; $('fbMsg').textContent = r && r.wait ? '少し時間をあけてから送ってね' : '送れませんでした'; }
+            if (r && r.ok) { $('fbMsg').style.color = '#8aff9a'; $('fbMsg').textContent = '送信しました！ ありがとう！'; Sfx.play('cap'); setTimeout(close, 1200); }
+            else { $('fbSend').disabled = false; $('fbMsg').style.color = '#ff8a7a'; $('fbMsg').textContent = r && r.wait ? '少し時間をあけてから送ってね' : '送れませんでした'; }
           })
-          .catch(() => { $('fbSend').disabled = false; $('fbMsg').style.color = '#c0301a'; $('fbMsg').textContent = 'サーバーにつながりません'; });
+          .catch(() => { $('fbSend').disabled = false; $('fbMsg').style.color = '#ff8a7a'; $('fbMsg').textContent = 'サーバーにつながりません'; });
       });
       setTimeout(() => $('fbText').focus(), 50);
       this.events.once('shutdown', () => { if (wrap.isConnected) close(); });
@@ -542,7 +542,7 @@
       const { x, y, pw, ph, w, add } = ui;
       const picker = monsterPicker(this, w / 2, y + 64, pw - 40, this.sp, k => { this.pick(k); ui.close(); }, { cols: pw < 480 ? 5 : 7, maxSize: 70, depth: 64 });
       ui.onClose = () => picker.destroy();
-      add(this.add.text(w / 2, y + 64 + picker.height + 18, '🔒 はガチャ（召喚）で手に入る', TR(14, '#6a4a2a')).setOrigin(0.5, 0));
+      add(this.add.text(w / 2, y + 64 + picker.height + 18, '🔒 はガチャ（召喚）で手に入る', TR(14, '#cfc2e6')).setOrigin(0.5, 0));
     }
 
     // ハイスコアランキング（全期間・人のプレイヤーだけ・1人1つの自己ベスト）
@@ -570,7 +570,7 @@
       };
       const load = () => {
         dyn.forEach(o => o.active && o.destroy()); dyn = [];
-        const status = D(this.add.text(w / 2, y + ph / 2, '読み込み中…', TR(18, '#6a4a2a')).setOrigin(0.5));
+        const status = D(this.add.text(w / 2, y + ph / 2, '読み込み中…', TR(18, '#cfc2e6')).setOrigin(0.5));
         const wk = weekly;
         Net.highScores(wk).then(d => {
           if (ui.closed || wk !== weekly) return;
@@ -579,24 +579,24 @@
           if (wk) {
             const left = (d && d.left) || 0, dd = Math.floor(left / 86400), hh = Math.floor(left % 86400 / 3600);
             const rw = (d && d.rw) || [];
-            D(this.add.text(w / 2, top, `リセットまで あと${dd}日${hh}時間（月曜0時）`, TR(small ? 13 : 15, '#c0301a')).setOrigin(0.5, 0));
-            D(this.add.text(w / 2, top + 20, `ごほうび：1位 ${rw[0] || 0}P＋称号【週間王者】／2位 ${rw[1] || 0}P／3位 ${rw[2] || 0}P／〜10位 ${rw[9] || 0}P`, TR(small ? 10.5 : 12.5, '#6a4a2a', null, 0, { align: 'center', wordWrap: { width: pw - 30 } })).setOrigin(0.5, 0));
+            D(this.add.text(w / 2, top, `リセットまで あと${dd}日${hh}時間（月曜0時）`, TR(small ? 13 : 15, '#ff8a7a')).setOrigin(0.5, 0));
+            D(this.add.text(w / 2, top + 20, `ごほうび：1位 ${rw[0] || 0}P＋称号【週間王者】／2位 ${rw[1] || 0}P／3位 ${rw[2] || 0}P／〜10位 ${rw[9] || 0}P`, TR(small ? 10.5 : 12.5, '#cfc2e6', null, 0, { align: 'center', wordWrap: { width: pw - 30 } })).setOrigin(0.5, 0));
             top += small ? 56 : 46;
           } else {
-            D(this.add.text(w / 2, top, 'ハイスコア（全期間・1人1つの自己ベスト）', TR(small ? 13 : 15, '#6a4a2a')).setOrigin(0.5, 0));
+            D(this.add.text(w / 2, top, 'ハイスコア（全期間・1人1つの自己ベスト）', TR(small ? 13 : 15, '#cfc2e6')).setOrigin(0.5, 0));
             top += 26;
           }
           const list = (d && d.list) || [];
-          if (!list.length) { D(this.add.text(w / 2, y + ph / 2, wk ? '今週の記録はまだありません\nいちばん乗りをめざそう！' : 'まだ記録がありません\nいちばん乗りをめざそう！', TR(18, '#6a4a2a', null, 0, { align: 'center' })).setOrigin(0.5)); return; }
+          if (!list.length) { D(this.add.text(w / 2, y + ph / 2, wk ? '今週の記録はまだありません\nいちばん乗りをめざそう！' : 'まだ記録がありません\nいちばん乗りをめざそう！', TR(18, '#cfc2e6', null, 0, { align: 'center' })).setOrigin(0.5)); return; }
           const bottom = y + ph - 110;
           const rowH = Math.max(24, Math.min(34, Math.floor((bottom - top) / list.length)));
           const n = Math.min(list.length, Math.floor((bottom - top) / rowH));
           const fs = rowH >= 32 ? 18 : rowH >= 28 ? 16 : 14, isz = rowH - 4;
           for (let i = 0; i < n; i++) {
             const r = list[i], ry = top + i * rowH + rowH / 2;
-            if (r.me) D(this.add.rectangle(w / 2, ry, pw - 28, rowH - 2, 0xffd76a, 0.7));
-            else if (i % 2 === 0) D(this.add.rectangle(w / 2, ry, pw - 28, rowH - 2, 0x4a3a2e, 0.08));
-            const rc = i < 3 ? medal[i] : '#3a2414';
+            if (r.me) D(this.add.rectangle(w / 2, ry, pw - 28, rowH - 2, 0xffd76a, 0.28));
+            else if (i % 2 === 0) D(this.add.rectangle(w / 2, ry, pw - 28, rowH - 2, 0xffffff, 0.06));
+            const rc = i < 3 ? medal[i] : '#fff4e6';
             D(this.add.text(x + 36, ry, i < 3 ? ['🥇', '🥈', '🥉'][i] : String(i + 1), TR(i < 3 ? fs + 2 : fs, rc, i < 3 ? '#fff' : null, i < 3 ? 4 : 0)).setOrigin(0.5).setDepth(63));
             if (GD.SPECIES[r.sp]) {
               const key = 'ic_' + r.sp + (r.ev ? '_e' : '');
@@ -604,15 +604,15 @@
               ic.setScale(isz / ic.height);
             }
             // 右から：スコア → Lv → 名前（数字が大きくても重ならないように、幅を測って並べる）
-            const sc = D(this.add.text(x + pw - 22, ry, Number(r.sc).toLocaleString(), TR(fs, '#b0301a')).setOrigin(1, 0.5).setDepth(63));
-            const lvT = D(this.add.text(sc.x - sc.width - 12, ry, 'Lv' + r.lv, TR(fs - 3, '#6a4a2a')).setOrigin(1, 0.5).setDepth(63));
-            const nm = D(this.add.text(x + 92, ry, r.n, TR(fs, '#3a2414')).setOrigin(0, 0.5).setDepth(63));
+            const sc = D(this.add.text(x + pw - 22, ry, Number(r.sc).toLocaleString(), TR(fs, '#ffb070')).setOrigin(1, 0.5).setDepth(63));
+            const lvT = D(this.add.text(sc.x - sc.width - 12, ry, 'Lv' + r.lv, TR(fs - 3, '#cfc2e6')).setOrigin(1, 0.5).setDepth(63));
+            const nm = D(this.add.text(x + 92, ry, r.n, TR(fs, '#fff4e6')).setOrigin(0, 0.5).setDepth(63));
             const room = lvT.x - lvT.width - 10 - nm.x;
             while (nm.width > room && nm.text.length > 1) nm.setText(nm.text.slice(0, -2) + '…');
           }
           const m = d.mine;
           const mine = m ? `あなたの${wk ? '今週の' : ''}自己ベスト：${m.rank}位 / ${d.total}人　${Number(m.sc).toLocaleString()}` : `あなたの${wk ? '今週の' : ''}記録はまだありません`;
-          D(this.add.text(w / 2, y + ph - 84, mine, TR(small ? 14 : 16, '#3a2414')).setOrigin(0.5).setDepth(63));
+          D(this.add.text(w / 2, y + ph - 84, mine, TR(small ? 14 : 16, '#fff4e6')).setOrigin(0.5).setDepth(63));
         }).catch(() => { if (status.active) status.setText('サーバーにつながりません'); });
       };
       drawTabs(); load();
@@ -626,21 +626,21 @@
       const small = pw < 460;
       const D = o => add(o).setDepth(63);
       const draw = p => {
-        if (ui.closed || !p || !p.dy) { if (!ui.closed && (!p || !p.dy)) D(this.add.text(w / 2, y + ph / 2, 'サーバーにつながりません', TR(18, '#6a4a2a')).setOrigin(0.5)); return; }
+        if (ui.closed || !p || !p.dy) { if (!ui.closed && (!p || !p.dy)) D(this.add.text(w / 2, y + ph / 2, 'サーバーにつながりません', TR(18, '#cfc2e6')).setOrigin(0.5)); return; }
         let yy = y + 50;
         const dy = p.dy;
         if (lb) {
-          D(this.add.text(w / 2, yy + 6, `連続ログイン ${lb.st}日目！`, TB(small ? 24 : 30, '#c0301a', '#fff', 4)).setOrigin(0.5, 0));
+          D(this.add.text(w / 2, yy + 6, `連続ログイン ${lb.st}日目！`, TB(small ? 24 : 30, '#ffb070', '#0a0614', 4)).setOrigin(0.5, 0));
           D(this.add.text(w / 2, yy + 50, `+${lb.n}P`, TR(small ? 34 : 42, '#e07a10', '#fff', 6)).setOrigin(0.5, 0));
           this.cameras.main.flash(250, 255, 240, 200);
           if (window.FX) FX.confetti(this, w / 2, yy + 60, 70);
           Sfx.play('legend');
           yy += 112;
         } else {
-          D(this.add.text(w / 2, yy + 4, `連続ログイン ${dy.st}日目　（明日のボーナス ${Math.min(400, dy.lbn + 50)}P）`, TR(small ? 13 : 15, '#6a4a2a')).setOrigin(0.5, 0));
+          D(this.add.text(w / 2, yy + 4, `連続ログイン ${dy.st}日目　（明日のボーナス ${Math.min(400, dy.lbn + 50)}P）`, TR(small ? 13 : 15, '#cfc2e6')).setOrigin(0.5, 0));
           yy += 34;
         }
-        D(this.add.text(w / 2, yy, '📅 今日のお題（毎日0時に新しくなる）', TR(small ? 16 : 19, '#3a2414')).setOrigin(0.5, 0));
+        D(this.add.text(w / 2, yy, '📅 今日のお題（毎日0時に新しくなる）', TR(small ? 16 : 19, '#fff4e6')).setOrigin(0.5, 0));
         yy += 34;
         const bh = Math.min(86, (y + ph - 80 - yy) / 3 - 8);
         dy.m.forEach(m => {
@@ -737,10 +737,10 @@
       const objs = [];
       objs.push(this.add.rectangle(0, 0, w, h, 0x10081a, 0.82).setOrigin(0).setInteractive().setDepth(90));
       const pw = Math.min(460, w - 30), ph = 220;
-      objs.push(panel(this, w / 2 - pw / 2, h / 2 - ph / 2, pw, ph, { alpha: 1 }).setDepth(91));
-      objs.push(this.add.text(w / 2, h / 2 - 62, '🔧 メンテナンス中', TO(30, '#ffe07a', '#4a3a2e', 7)).setOrigin(0.5).setDepth(92));
-      objs.push(this.add.text(w / 2, h / 2 - 6, 'ゲームを更新しています。\n終わると自動で始められるようになります。\n（セーブは消えません）', T(15, C.brownCss, { align: 'center', lineSpacing: 4 })).setOrigin(0.5).setDepth(92));
-      const dots = this.add.text(w / 2, h / 2 + 66, '', T(16, C.soft)).setOrigin(0.5).setDepth(92);
+      objs.push(UI.nightFrame(this, w / 2 - pw / 2, h / 2 - ph / 2, pw, ph, { alpha: 0.92, fill: 0x0c0818 }).setDepth(91));
+      objs.push(this.add.text(w / 2, h / 2 - 62, '🔧 メンテナンス中', TO(30, '#ffe07a', '#0a0614', 7)).setOrigin(0.5).setDepth(92));
+      objs.push(this.add.text(w / 2, h / 2 - 6, 'ゲームを更新しています。\n終わると自動で始められるようになります。\n（セーブは消えません）', T(15, '#fff4e6', { align: 'center', lineSpacing: 4 })).setOrigin(0.5).setDepth(92));
+      const dots = this.add.text(w / 2, h / 2 + 66, '', T(16, '#cfc2e6')).setOrigin(0.5).setDepth(92);
       objs.push(dots);
       this.hideInput(true);
       let n = 0;
@@ -785,9 +785,9 @@
       const sp = GD.SPECIES[this.saveData.sp];
       const dim = this.add.rectangle(0, 0, w, h, 0x1d1020, 0.6).setOrigin(0).setInteractive().setDepth(50);
       const box = this.add.container(0, 0).setDepth(51);
-      box.add(panel(this, x, y, pw, ph, { alpha: 1 }));
-      box.add(this.add.text(w / 2, y + 34, '初めからにする？', TO(24, '#fff8ea', '#4a3a2e', 6)).setOrigin(0.5));
-      box.add(this.add.text(w / 2, y + 72, `今のセーブ（${this.saveData.ev ? sp.evoName : sp.name} Lv${this.saveData.lv}）は消えます`, T(14, '#c0392b', { align: 'center', wordWrap: { width: pw - 30 } })).setOrigin(0.5));
+      box.add(nightFrame(this, x, y, pw, ph, { alpha: 0.92, fill: 0x0c0818 }));
+      box.add(this.add.text(w / 2, y + 34, '初めからにする？', TO(24, '#fff8ea', '#0a0614', 6)).setOrigin(0.5));
+      box.add(this.add.text(w / 2, y + 72, `今のセーブ（${this.saveData.ev ? sp.evoName : sp.name} Lv${this.saveData.lv}）は消えます`, T(14, '#ff8a7a', { align: 'center', wordWrap: { width: pw - 30 } })).setOrigin(0.5));
       this.hideInput(true);
       const close = () => { [dim, box, b1, b2].forEach(o => o.destroy()); this.confirmBox = null; this.hideInput(false); };
       const b1 = button(this, w / 2 - 80, y + ph - 44, 140, 48, '初めから', () => { close(); this.go(false); }, { color: C.blue, dark: C.blueDark, size: 20 }).setDepth(52);
@@ -845,27 +845,26 @@
       const gridH = tmp.height; tmp.destroy();
       const ph = 200 + gridH + 150 + 56;
       const x = w / 2 - pw / 2, y = Math.max(10, h / 2 - ph / 2);
-      UI.nightFrame(this, x - 7, y - 7, pw + 14, ph + 14, { alpha: 0.88, r: 22, gem: 9 });
-      panel(this, x, y, pw, ph, { color: 0xf3ecf6, alpha: 1, border: 0x3a2a5a, shadow: 0 });
+      UI.nightFrame(this, x, y, pw, ph, { alpha: 0.9, fill: 0x0c0818, r: 18, gem: 9 });
       const title = this.add.text(w / 2, y + 38, 'やられた…', TO(40, '#c8d8ff', '#3a2a40', 8)).setOrigin(0.5).setScale(0.3);
       this.tweens.add({ targets: title, scale: 1, duration: 400, ease: 'Back.out' });
       Sfx.play('lose');
       const by = d.by ? `${d.by} に倒された` : '敵の群れにやられた';
-      this.add.text(w / 2, y + 80, by, T(16, C.soft)).setOrigin(0.5);
-      this.add.text(w / 2, y + 112, `スコア ${Number(d.sc || 0).toLocaleString()}　撃破 ${d.k || 0}　倒したプレイヤー ${d.pk || 0}`, T(16, C.brownCss)).setOrigin(0.5);
+      this.add.text(w / 2, y + 80, by, T(16, '#cfc2e6')).setOrigin(0.5);
+      this.add.text(w / 2, y + 112, `スコア ${Number(d.sc || 0).toLocaleString()}　撃破 ${d.k || 0}　倒したプレイヤー ${d.pk || 0}`, T(16, '#fff4e6')).setOrigin(0.5);
       const best = parseInt(store.get('best', '0'), 10) || 0;
       if ((d.sc || 0) > best) {
         store.set('best', d.sc);
         const nb = this.add.text(w / 2, y + 142, `ベストスコア更新！ ${Number(d.sc).toLocaleString()}`, TO(18, '#ffe07a', '#4a3a2e', 5)).setOrigin(0.5);
         this.tweens.add({ targets: nb, scale: 1.08, duration: 500, yoyo: true, repeat: -1 });
       }
-      this.add.text(w / 2, y + 172, '次のモンスターをえらんで再出撃！', T(14, C.soft)).setOrigin(0.5);
-      this.lockMsg = this.add.text(w / 2, y + 192 + gridH + 10, '', T(12, '#c0392b')).setOrigin(0.5, 0);
+      this.add.text(w / 2, y + 172, '次のモンスターをえらんで再出撃！', T(14, '#cfc2e6')).setOrigin(0.5);
+      this.lockMsg = this.add.text(w / 2, y + 192 + gridH + 10, '', T(12, '#ff8a7a')).setOrigin(0.5, 0);
       this.picker = monsterPicker(this, w / 2, y + 192, pw - 30, this.sp, k => {
         if (!Unlock.ok(k)) { this.lockMsg.setText(`🔒 ${GD.SPECIES[k].name} はガチャで手に入ります`); return; }
         this.lockMsg.setText(''); this.sp = k; store.set('sp', k); this.picker.set(k); sb.set(k);
       });
-      const sb = starInfo(this, w / 2, y + ph - 186, pw);
+      const sb = starInfo(this, w / 2, y + ph - 186, pw, { dark: true });
       sb.set(this.sp);
       const b1 = button(this, w / 2, y + ph - 70, Math.min(300, pw - 40), 50, '再出撃！', () => this.respawn(), { color: C.orange, dark: C.orangeDark, size: 22 });
       const route = window.__lastRoute && window.__lastRoute.r && window.__lastRoute.r.length > 2 ? window.__lastRoute : null;

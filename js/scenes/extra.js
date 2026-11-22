@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const { TR, TB, button } = UI;
-  const INK = '#3a2414', SOFT = '#6a4a2a';
+  const INK = '#fff4e6', SOFT = '#cfc2e6';
   const lsGet = (k, d) => { try { return localStorage.getItem('nakama_' + k) || d; } catch (e) { return d; } };
   const lsSet = (k, v) => { try { localStorage.setItem('nakama_' + k, v); } catch (e) { /* noop */ } };
   const pct = v => Math.round(v * 100) + '%';
@@ -19,7 +19,7 @@
     let dyn = [];
     const clear = () => { dyn.forEach(o => o.active && o.destroy()); dyn = []; };
     const D = o => { dyn.push(o); if (o.setDepth) o.setDepth(Math.max(o.depth || 0, 63)); return o; };
-    const ptsText = add(scene.add.text(w / 2, y + 50, '読み込み中…', TR(small ? 18 : 21, '#0a5a9a', '#ffffff', 5)).setOrigin(0.5).setDepth(62));
+    const ptsText = add(scene.add.text(w / 2, y + 50, '読み込み中…', TR(small ? 18 : 21, '#7ae8ff', '#0a0614', 5)).setOrigin(0.5).setDepth(62));
     const top = y + 132, bottom = y + ph - 70;
     let sel = scene.sp;
 
@@ -135,7 +135,7 @@
       let yy = top;
       const pvH = small ? 120 : 150;
       const g = D(scene.add.graphics());
-      g.fillStyle(0x4a7a3a, 1); g.fillRoundedRect(x + 18, yy, pw - 36, pvH, 14);
+      g.fillStyle(0x1e2c34, 1); g.fillRoundedRect(x + 18, yy, pw - 36, pvH, 14); g.lineStyle(1.5, 0xffffff, 0.5); g.strokeRoundedRect(x + 18, yy, pw - 36, pvH, 14);
       const pcx = w / 2, pcy = yy + pvH - 26;
       const ring = cse.ring ? GD.COSMETICS.ring[cse.ring - 1] : null;
       g.lineStyle(4, ring ? ring.col : 0xffd84f, 1); g.strokeEllipse(pcx, pcy, 110, 34);
