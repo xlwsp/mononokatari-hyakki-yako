@@ -209,6 +209,19 @@ AWAKE_MAX = 100                      # 覚醒の上限（js/sim.js と同じ）
 # 着せ替えの値段（js/sim.js の COSMETICS と同じ順）
 COSMETICS = {'tint': [3000, 2000, 2000, 2000, 8000], 'ring': [1500, 1500, 1500, 3000], 'kfx': [2000, 2000, 2000], 'nm': [500, 500, 2000, 5000]}
 COS_SLOTS = ['tint', 'ring', 'kfx', 'nm']
+COSMETICS['pin'] = [1500, 1000, 800, 1200, 800, 1500]   # ピンズ（エモートに追加。js/sim.js の PINS と同じ順）
+# 使い捨ての道具（js/sim.js の CONSUMABLES と同じ）
+CONSUMABLES = {'heal': 150, 'inv': 250, 'warp': 120, 'stone': 300, 'poison': 250}
+CONS_SLOTS = 3
+CONS_MAX = 99
+# 妖怪ごとの称号（js/sim.js の SPECIES_ACH と同じ順）
+SPECIES_ACH = [('gekomaru', 'k', 5000), ('suzune', 'dist', 1000000), ('maimai', 'hl', 100000), ('rangyo', 'lv', 300),
+               ('kodama', 'pk', 50), ('kohaku', 'dg', 300), ('kuroro', 'b', 50), ('uroko', 'su', 3000),
+               ('komori', 'sa', 100000), ('toosibi', 'k', 10000), ('nejimaru', 'su', 3000), ('hakua', 'sn', 3000),
+               ('sinonome', 'rv', 20)]
+SP_STATS = ('hl', 'sa', 'su', 'dist', 'dg', 'sn', 'rv')
+SPECIES_LIST = [x[0] for x in SPECIES_ACH]
+REC_RUNS = 60   # 戦績：最近のプレイを何件まで覚えるか
 # 実績（js/sim.js の ACHIEVEMENTS と同じ順）：(id, 数えるもの, 目標, ごほうび)
 ACHIEVEMENTS = [
     ('k1', 'k', 1000, 300), ('k2', 'k', 10000, 1000), ('k3', 'k', 100000, 3000),
@@ -216,7 +229,8 @@ ACHIEVEMENTS = [
     ('bb', 'bb', 1, 1500), ('bt', 'bt', 5, 1000), ('l1', 'lv', 100, 800), ('l2', 'lv', 200, 2000),
     ('t1', 't', 36000, 1000), ('c1', 'ch', 13, 1500), ('c2', 's5', 5, 2000),
     ('i1', 'it', 25, 1000), ('i2', 'it', 50, 3000), ('a1', 'aw', 10, 1000), ('a2', 'aw', 50, 3000), ('w1', 'w1', 1, 0),
-]        # むずかしさごとのごほうび
+]
+ACHIEVEMENTS += [('sp_' + sp, sp + ':' + stat, goal, 1500) for sp, stat, goal in SPECIES_ACH]        # むずかしさごとのごほうび
 LOGIN_BASE, LOGIN_STEP = 100, 50     # ログインボーナス：1日目100P、連続で+50P（7日目以降400P）
 # 妖怪ガチャ（js/sim.js の STARTERS / CHARA_RARITY / CHARA_RATES / STAR_NEED と同じ内容）
 STARTERS = ['gekomaru', 'maimai', 'suzune']
@@ -313,7 +327,8 @@ class Profiles:
             return
         p['pts'] -= price
         own.append(key)
-        p.setdefault('cse', {})[slot] = idx  # 買ったらすぐ着る
+        if slot != 'pin':
+            p.setdefault('cse', {})[slot] = idx  # 買ったらすぐ着る
         self.dirty = True
 
     def cos_equip(self, tok, slot, idx):
@@ -336,6 +351,73 @@ class Profiles:
         elif 1 <= idx <= len(ACHIEVEMENTS) and ACHIEVEMENTS[idx - 1][0] in p.get('ach', []):
             p['tl'] = idx
         self.dirty = True
+
+    # ---------- 使い捨ての道具（道具屋） ----------
+    def cons_buy(self, tok, k, n):
+        p = self.get(tok)
+        if not tok or k not in CONSUMABLES or not isinstance(n, int) or not (1 <= n <= 10):
+            return 'ng'
+        cons = p.setdefault('cons', {})
+        n = min(n, CONS_MAX - cons.get(k, 0))
+        cost = CONSUMABLES[k] * n
+        if n <= 0 or p['pts'] < cost:
+            return 'ng'
+        p['pts'] -= cost
+        cons[k] = cons.get(k, 0) + n
+        bag = p.setdefault('bag', [])
+        if k not in bag and len(bag) < CONS_SLOTS:
+            bag.append(k)  # 買ったらすぐ持っていく（空きがあれば）
+        self.dirty = True
+        return 'ok'
+
+    def cons_bag(self, tok, bag):
+        p = self.get(tok)
+        if not tok or not isinstance(bag, list):
+            return
+        out = []
+        for k in bag:
+            if k in CONSUMABLES and k not in out:
+                out.append(k)
+        p['bag'] = out[:CONS_SLOTS]
+        self.dirty = True
+
+    def use_cons(self, tok, k):
+        if not tok:
+            return
+        cons = self.get(tok).setdefault('cons', {})
+        if cons.get(k, 0) > 0:
+            cons[k] -= 1
+            self.dirty = True
+
+    # ---------- 戦績（1回のプレイ＝やられるまで） ----------
+    def add_run(self, tok, d):
+        if not tok or not isinstance(d, dict):
+            return
+        sp = d.get('sp')
+        if sp not in SPECIES_LIST:
+            return
+        num = lambda k: max(0, int(d.get(k) or 0))
+        run = {'sp': sp, 'lv': num('lv'), 'ev': 1 if d.get('ev') else 0, 'sc': num('sc'), 'k': num('k'), 'pk': num('pk'),
+               'b': num('b'), 't': num('t'), 'by': str(d.get('by') or '')[:12], 'at': int(time.time())}
+        rec = self.get(tok).setdefault('rec', {})
+        runs = rec.setdefault('runs', [])
+        runs.append(run)
+        del runs[:-REC_RUNS]
+        for key in ('sc', 'pk'):  # スコア・プレイヤーキルの上位10件はずっと残す
+            top = rec.setdefault('top_' + key, [])
+            top.append(run)
+            top.sort(key=lambda r: (-r[key], -r['sc']))
+            del top[10:]
+        b = rec.setdefault('best', {}).setdefault(sp, {})
+        for key in ('lv', 'sc', 'pk', 'k', 't'):
+            b[key] = max(b.get(key, 0), run[key])
+        b['n'] = b.get('n', 0) + 1
+        self.dirty = True
+
+    def records(self, tok):
+        if not tok:
+            return {}
+        return self.get(tok).get('rec', {})
 
     # ---------- 実績 ----------
     def stats(self, tok):
@@ -390,7 +472,8 @@ class Profiles:
         p = self.get(tok)
         out = {'pts': p['pts'], 'inv': p['inv'], 'eq': p['eq'], 'cost': GACHA_COST, 'chars': p['chars'],
                'aw': p.get('aw', {}), 'cos': p.get('cos', []), 'cse': p.get('cse', {}), 'tl': p.get('tl', 0),
-               'ach': p.get('ach', []), 'st': self.stats(tok) if tok else {}}
+               'ach': p.get('ach', []), 'st': self.stats(tok) if tok else {},
+               'cons': p.get('cons', {}), 'bag': p.get('bag', [])}
         if tok:
             dy = self.daily(tok)
             out['dy'] = {'st': dy['st'], 'm': dy['m'], 'lbn': LOGIN_BASE + LOGIN_STEP * (min(dy['st'], 7) - 1)}
@@ -552,6 +635,9 @@ class Profiles:
         cse = d.get('cse', {})
         out['cs'] = [cse.get(k, 0) for k in COS_SLOTS]  # 着せ替え
         out['tl'] = d.get('tl', 0)  # 称号
+        cons = d.get('cons', {})
+        out['cn'] = [k for k in d.get('bag', []) if cons.get(k, 0) > 0][:CONS_SLOTS]  # 持っていく道具
+        out['pn'] = [i for i in range(1, len(COSMETICS['pin']) + 1) if 'pin:%d' % i in d.get('cos', [])]  # ピンズ
         return out
 
     def flush(self):
@@ -652,6 +738,7 @@ class World:
         self.proc = None
         self.seed = 0
         self.joins, self.leaves, self.respawns, self.choices = [], [], [], []
+        self.uses, self.emos = [], []
         self.inputs = {}
         self.members = set()
         self.maint = os.path.exists(MAINT_FILE)
@@ -698,6 +785,8 @@ class World:
             if self.leaves: cmd['leave'] = self.leaves; self.leaves = []
             if self.respawns: cmd['respawn'] = self.respawns; self.respawns = []
             if self.choices: cmd['ch'] = self.choices; self.choices = []
+            if self.uses: cmd['use'] = self.uses; self.uses = []
+            if self.emos: cmd['emo'] = self.emos; self.emos = []
             if self.inputs: cmd['in'] = self.inputs; self.inputs = {}
             # jsc は入力を UTF-8 として読まないので、日本語は \u エスケープで渡す
             self.proc.stdin.write((json.dumps(cmd, ensure_ascii=True, separators=(',', ':')) + '\n').encode())
@@ -726,6 +815,17 @@ class World:
                     c = clients.get(pid)
                     if got and c:
                         c.send({'t': 'note', 'k': 'drop', 'it': got})
+                    continue
+                if line.startswith('!U\t'):  # 使い捨ての道具を使った
+                    _, pid, k = line.split('\t', 2)
+                    profiles.use_cons(world.toks.get(pid), k)
+                    continue
+                if line.startswith('!R\t'):  # 1回のプレイの記録（戦績）
+                    _, pid, js = line.split('\t', 2)
+                    try:
+                        profiles.add_run(world.toks.get(pid), json.loads(js))
+                    except Exception as e:
+                        log('run error:', repr(e))
                     continue
                 if line.startswith('!K\t'):  # 大妖を倒した
                     _, pid = line.split('\t', 1)
@@ -756,6 +856,19 @@ class World:
                                 if dl.get(key):
                                     profiles.add_stat(tok, key, dl[key])
                             profiles.add_stat(tok, 'lv', dl['lv'], mx=True)
+                            # 妖怪ごとの数（妖怪ごとの称号用）
+                            sp = cur.get('sp')
+                            if sp in SPECIES_LIST:
+                                for key in ('k', 'b', 'pk'):
+                                    if dl.get(key):
+                                        profiles.add_stat(tok, sp + ':' + key, dl[key])
+                                profiles.add_stat(tok, sp + ':lv', dl['lv'], mx=True)
+                                st, st0 = cur.get('st') or {}, (last.get('st') or {}) if last.get('sp') == sp else {}
+                                for key in SP_STATS:
+                                    v, v0 = float(st.get(key, 0) or 0), float(st0.get(key, 0) or 0)
+                                    d = v - v0 if v >= v0 else v
+                                    if d > 0:
+                                        profiles.add_stat(tok, sp + ':' + key, round(d, 1))
                             profiles.check_ach(tok)
                             for n in profiles.pop_inbox(tok):
                                 if c:
@@ -895,6 +1008,13 @@ def start_maint():
             leave(c)
 
 
+def safe_int(v):
+    try:
+        return int(v or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def handle_msg(c: Client, text: str):
     try:
         m = json.loads(text)
@@ -945,6 +1065,16 @@ def handle_msg(c: Client, text: str):
         log(c.name, 'joined', '(online %d)' % len(world.members))
         if CHAT_ON:
             c.send({'t': 'say', 'h': CHAT_LOG[-15:]})
+    elif t == 'use':
+        if c.joined:
+            world.uses.append([c.id, safe_int(m.get('i'))])
+    elif t == 'emo':
+        if c.joined and time.monotonic() - getattr(c, 'last_emo', 0) > 1:
+            c.last_emo = time.monotonic()
+            world.emos.append([c.id, safe_int(m.get('i'))])
+    elif t == 'rec?':
+        tok = m.get('tok')
+        c.send({'t': 'rec', 'd': profiles.records(tok if valid_tok(tok) else None)})
     elif t == 'respawn':
         if c.joined:
             sp = str(m.get('sp') or '')
@@ -966,7 +1096,7 @@ def handle_msg(c: Client, text: str):
                         o.send({'t': 'say', 'h': [row]})
     elif t == 'leave':
         leave(c)
-    elif t in ('prof?', 'gacha', 'equip', 'awake', 'cos', 'title'):
+    elif t in ('prof?', 'gacha', 'equip', 'awake', 'cos', 'title', 'cons', 'bag'):
         # ガチャ・装備（ロビーから）
         tok = m.get('tok')
         tok = tok if valid_tok(tok) else None
@@ -987,6 +1117,10 @@ def handle_msg(c: Client, text: str):
                 profiles.cos_equip(tok, m.get('slot'), m.get('i'))
         elif t == 'title':
             profiles.set_title(tok, m.get('i'))
+        elif t == 'cons':
+            got = profiles.cons_buy(tok, m.get('k'), m.get('n'))
+        elif t == 'bag':
+            profiles.cons_bag(tok, m.get('bag'))
         lb = profiles.login_bonus(tok) if t == 'prof?' else None
         if tok:
             profiles.check_ach(tok)

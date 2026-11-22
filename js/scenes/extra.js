@@ -124,9 +124,13 @@
     };
 
     // ---------- 着せ替え ----------
-    let pending = null; // 「買う？」の確認中のもの
+    let pending = null; // 「買う？」の確認中のもの（試着中）
+    let achTab = lsGet('xa', 'all');
     const drawCos = () => {
-      const own = new Set(prof.cos || []), cse = prof.cse || {};
+      const own = new Set(prof.cos || []), cse0 = prof.cse || {};
+      // 試着：まだ買っていない物をえらぶと、買う前にプレビューで見られる
+      const tryOn = pending && !pending.startsWith('pin:') ? pending.split(':') : null;
+      const cse = Object.assign({}, cse0, tryOn ? { [tryOn[0]]: +tryOn[1] } : {});
       // 上：プレビュー（今えらんでいる妖怪に着せた見た目）
       let yy = top;
       const pvH = small ? 120 : 150;
@@ -148,10 +152,35 @@
       const name = (scene.registry && scene.registry.get && scene.registry.get('name')) || lsGet('name', 'あなた');
       const nt = D(scene.add.text(pcx, yy + 8, `${tl ? '【' + tl.title + '】' : ''}${name}`, TR(16, nm && nm.css ? nm.css : '#ffffff', '#2a1a20', 4)).setOrigin(0.5, 0));
       if (nm && !nm.css) { const o = { h: 0 }; scene.tweens.add({ targets: o, h: 1, duration: 1500, repeat: -1, onUpdate: () => { if (!nt.active) return; const c = Phaser.Display.Color.HSVToRGB(o.h, 0.55, 1); nt.setColor(Phaser.Display.Color.RGBToString(c.r, c.g, c.b)); } }); }
-      D(scene.add.text(x + 30, yy + 8, '見た目だけ変わる（強さは同じ）', TR(11, '#e8ffe0', '#1a3010', 3)));
+      D(scene.add.text(x + 30, yy + 8, tryOn ? '👀 試着中（もう一度押すと買う）' : '見た目だけ変わる（強さは同じ）', TR(11, tryOn ? '#ffe07a' : '#e8ffe0', '#1a3010', 3)));
+      if (tryOn && tryOn[0] === 'kfx' && window.FX && FX.confetti) {
+        const col = [0xffd84f, 0xff9ad0, 0x9ad8ff][+tryOn[1] - 1] || 0xffffff;
+        scene.time.delayedCall(120, () => { if (img.active) FX.confetti(scene, pcx, pcy - 50, 40, col); });
+      }
+      const pinTry = pending && pending.startsWith('pin:') ? GD.PINS[+pending.split(':')[1] - 1] : null;
+      if (pinTry) D(scene.add.text(pcx + 70, pcy - pvH * 0.55, `${pinTry.e} ${pinTry.t}`, TR(15, '#2a1a20', null, 0, { backgroundColor: '#fff8f0', padding: { x: 8, y: 4 } })).setOrigin(0, 0.5));
       yy += pvH + 10;
       // 下：種類ごとの品物
-      const rowH = Math.min(78, (bottom - yy) / GD.COS_SLOTS.length);
+      const rowH = Math.min(74, (bottom - yy) / (GD.COS_SLOTS.length + 1));
+      // ピンズ（ゲーム中のエモートに追加される。何個でも持てる）
+      {
+        const ry = yy + GD.COS_SLOTS.length * rowH;
+        D(scene.add.text(x + 24, ry + 2, 'ピンズ（ゲーム中の💬エモートに追加）', TR(small ? 13 : 15, INK)));
+        const bw = (pw - 48) / GD.PINS.length - 6, bh = rowH - 30;
+        GD.PINS.forEach((pin, j) => {
+          const i = j + 1, key = `pin:${i}`, has = own.has(key);
+          const bx = x + 24 + j * (bw + 6) + bw / 2, by = ry + 24 + bh / 2;
+          const label = has ? `${pin.e} ✔` : pending === key ? '買う？' : `${pin.e}\n${pin.price.toLocaleString()}P`;
+          const b = D(button(scene, bx, by, bw, bh, label, () => {
+            if (busy || has) return;
+            Sfx.play('click');
+            if (pending !== key) { pending = key; draw(); return; }
+            pending = null;
+            act(Net.cosmetic('pin', i, true).then(p => { if (p) Sfx.play('legend'); return p; }));
+          }, { color: has ? 0x6a8a4a : pending === key ? 0xe0503e : 0x5a4a6a, dark: 0x2a1f30, size: Math.min(small ? 12 : 15, bw / 4.5) }));
+          if (!has && prof.pts < pin.price && pending !== key) b.setAlpha(0.6);
+        });
+      }
       GD.COS_SLOTS.forEach((slot, si) => {
         const ry = yy + si * rowH;
         D(scene.add.text(x + 24, ry + 2, GD.COS_SLOT_NAME[slot], TR(small ? 13 : 15, INK)));
@@ -192,12 +221,20 @@
       D(scene.add.text(w / 2, yy + 22, `📖 図鑑　妖怪 ${ownCh}/${totalCh}　★5 ${s5}/${totalCh}　装備 ${itKinds}/${totalIt}　｜　称号 ${have.size}/${GD.ACHIEVEMENTS.length}`, TR(small ? 11.5 : 15, '#fff8ea', '#1a1020', 3)).setOrigin(0.5));
       yy += 54;
       if (prof.tl) D(button(scene, x + pw - 100, yy - 76, 140, 32, '称号をはずす', () => act(Net.title(0)), { color: 0x8a7e6e, dark: 0x4a4038, size: 13 }));
-      // 一覧（2列）
-      const cols = small ? 1 : 2, list = GD.ACHIEVEMENTS;
+      // 共通の称号 / 妖怪ごとの称号
+      ['共通', '妖怪ごと'].forEach((l, i) => {
+        const on = (achTab === 'sp') === (i === 1);
+        const b = D(button(scene, w / 2 + (i ? 70 : -70), yy + 14, 130, 30, l, () => { achTab = i ? 'sp' : 'all'; lsSet('xa', achTab); Sfx.play('click'); draw(); }, { night: true, accent: on ? 0xffd76a : undefined, size: 14 }));
+        if (!on) b.setAlpha(0.7);
+      });
+      yy += 36;
+      const idx = GD.ACHIEVEMENTS.map((a, i) => i).filter(i => !!GD.ACHIEVEMENTS[i].sp === (achTab === 'sp'));
+      const cols = small ? 1 : 2, list = idx.map(i => GD.ACHIEVEMENTS[i]);
       const rows = Math.ceil(list.length / cols);
       const cw = (pw - 36 - (cols - 1) * 8) / cols, rh = Math.min(64, (bottom - yy) / rows);
-      list.forEach((a, i) => {
-        const c = Math.floor(i / rows), r = i % rows;
+      list.forEach((a, li) => {
+        const i = idx[li];
+        const c = Math.floor(li / rows), r = li % rows;
         const bx = x + 18 + c * (cw + 8), by = yy + r * rh;
         const got = have.has(a.id), on = prof.tl === i + 1;
         const v = st[a.stat] || 0, k = Math.min(1, v / a.goal);
@@ -207,12 +244,13 @@
         const fs = Math.min(small ? 13 : 15, rh * 0.3);
         D(scene.add.text(bx + 10, by + 6, `${got ? '🏅' : '🔒'}【${a.title}】`, TR(fs, got ? '#ffe07a' : '#c8b8a8', '#1a1020', 3)));
         D(scene.add.text(bx + cw - 10, by + 6, a.pts ? `+${a.pts}P` : '', TR(fs * 0.85, '#9aff7a', '#1a1020', 3)).setOrigin(1, 0));
-        D(scene.add.text(bx + 10, by + rh * 0.5, `${GD.ACH_STAT_NAME[a.stat]} ${goalText(a.stat, a.goal)}`, TR(fs * 0.78, '#e8d8c0', '#1a1020', 2)));
+        const sk = a.sp ? a.stat.split(':')[1] : a.stat;
+        D(scene.add.text(bx + 10, by + rh * 0.5, `${a.sp ? GD.SPECIES[a.sp].name + 'で ' : ''}${GD.ACH_STAT_NAME[sk]} ${goalText(sk, a.goal)}`, TR(fs * 0.78, '#e8d8c0', '#1a1020', 2)));
         if (!got) {
           const gw = cw * 0.38, gx = bx + cw - gw - 10, gy = by + rh * 0.55;
           gg.fillStyle(0x0c0816, 1); gg.fillRoundedRect(gx, gy, gw, 8, 4);
           if (k > 0) { gg.fillStyle(0xf0b030, 1); gg.fillRoundedRect(gx, gy, Math.max(8, gw * k), 8, 4); }
-          D(scene.add.text(gx + gw / 2, gy - 1, `${statText(a.stat, Math.min(v, a.goal))}`, TR(9.5, '#fff', '#1a1020', 2)).setOrigin(0.5, 1));
+          D(scene.add.text(gx + gw / 2, gy - 1, `${statText(sk, Math.floor(Math.min(v, a.goal)))}`, TR(9.5, '#fff', '#1a1020', 2)).setOrigin(0.5, 1));
         } else if (!on) {
           D(scene.add.text(bx + cw - 10, by + rh * 0.5, 'タップでつける', TR(fs * 0.75, '#ffd76a', '#1a1020', 2)).setOrigin(1, 0));
         }

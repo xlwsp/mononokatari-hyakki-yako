@@ -36,6 +36,8 @@ for (;;) {
     if (cmd.respawn) cmd.respawn.forEach(function (r) { sim.respawn(r[0], r[1], r[2] || null); });
     if (cmd.in) for (var id in cmd.in) sim.setInput(id, cmd.in[id][0], cmd.in[id][1], cmd.in[id][2]);
     if (cmd.ch) cmd.ch.forEach(function (c) { sim.choose(c[0], c[1], c[2]); });
+    if (cmd.use) cmd.use.forEach(function (u) { sim.useCons(u[0], u[1]); });
+    if (cmd.emo) cmd.emo.forEach(function (u) { sim.emote(u[0], u[1]); });
     sim.step(GD.TICK);
     if (sim.tick % 40 === 0) humans.forEach(saveLine);
     humans.forEach(function (id) { // やられた瞬間のスコアも記録
@@ -50,11 +52,13 @@ for (;;) {
       if (e.e === 'pt') print('!P\t' + e.p + '\t' + e.n); // ガチャポイント
       else if (e.e === 'btk' && humans.indexOf(e.k) >= 0) print('!B\t' + e.k); // 賞金首を倒した → 装備ドロップ
       else if (e.e === 'bbk' && humans.indexOf(e.p) >= 0) print('!K\t' + e.p); // 大妖を倒した（実績）
+      else if (e.e === 'cuse') print('!U\t' + e.p + '\t' + e.k); // 使い捨ての道具を使った
+      else if (e.e === 'run' && humans.indexOf(e.p) >= 0) print('!R\t' + e.p + '\t' + JSON.stringify(e.d)); // 1回のプレイの記録
     });
     // 毎日のお題用：5秒ごとに、倒した数などの今の値
     if (sim.tick % 100 === 0) humans.forEach(function (id) {
       var p = sim.pmap.get(id);
-      if (p) print('!M\t' + id + '\t' + JSON.stringify({ k: p.kills, b: p.bossKills, pk: p.pkills, lv: p.lv, a: p.alive ? 1 : 0 }));
+      if (p) print('!M\t' + id + '\t' + JSON.stringify({ k: p.kills, b: p.bossKills, pk: p.pkills, lv: p.lv, a: p.alive ? 1 : 0, sp: p.sp, st: p.st }));
     });
     humans.forEach(function (id) {
       var s = sim.snapshotFor(base, id);

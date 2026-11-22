@@ -128,6 +128,44 @@
   };
   const SPECIES_KEYS = Object.keys(SPECIES);
 
+  // 進化すると覚える2つ目のスキル（自動で発動）
+  const EVO_SKILLS = {
+    gekomaru: { id: 'e_wave', name: 'ガマの大津波', cd: 9, desc: '全方位にベロを伸ばして貫く' },
+    suzune: { id: 'e_gale', name: '鈴鳴り旋風', cd: 8, desc: 'まわりを切り裂き、少し足が速くなる' },
+    maimai: { id: 'e_grove', name: '森の恵み', cd: 10, desc: '回復しつつ、まわりの敵を根で止める' },
+    rangyo: { id: 'e_gold', name: '黄金の雨', cd: 11, desc: 'まわりに金の雨を降らせて経験値もばらまく' },
+    kodama: { id: 'e_rend', name: '百裂ひっかき', cd: 8, desc: 'ひっかき乱舞を2回連続で放つ' },
+    kohaku: { id: 'e_illusion', name: '狐火の幻', cd: 12, desc: '2.5秒すがたを消し、まわりの敵をはじく' },
+    kuroro: { id: 'e_rain', name: '八咫の矢雨', cd: 9, desc: 'たくさんの敵に貫く矢を降らせる' },
+    uroko: { id: 'e_coil', name: '大蛇の締めつけ', cd: 10, desc: 'まわりの敵を締めつけて動けなくする' },
+    komori: { id: 'e_ward', name: '森の結界', cd: 12, desc: 'まわりの敵をはじき飛ばし、小さなバリアを張る' },
+    toosibi: { id: 'e_chain', name: '業火連爆', cd: 9, desc: 'まわりで3回つづけて大爆発' },
+    nejimaru: { id: 'e_turret', name: 'からくり砲台', cd: 8, desc: '全方位にパーツを2重に撃つ' },
+    hakua: { id: 'e_howl', name: '白狼の遠吠え', cd: 11, desc: '広い範囲の敵を気絶させる' },
+    sinonome: { id: 'e_kagura', name: '神楽の舞', cd: 14, desc: '大きく回復し、2秒間ダメージを受けない' },
+  };
+  // スキルのダメージの基準（画面の「スキル威力」の表示用。回復などは割合で表示）
+  const SKILL_BASE = { tongue: 32, frenzy: 14, moon: 16, flock: 15, venom: 24, nova: 28, drone: 11, roar: 24, bless: 14 };
+  const SKILL_PCT = { heal: ['回復', 0.11, 0.15], shell: ['バリア', 0.14, 0.2], wind: ['加速', 0.45, 0.45], lucky: ['経験値', 0, 0] };
+
+  // 使い捨ての道具（ロビーの道具屋で買う。1回のプレイで1つにつき1回だけ使える）
+  const CONSUMABLES = [
+    { id: 'heal', name: '回復薬', icon: '🧪', price: 150, desc: 'HPを50%回復' },
+    { id: 'inv', name: '透明化ポーション', icon: '👻', price: 250, desc: '6秒間すがたを消す（敵にも人にも狙われない）' },
+    { id: 'warp', name: 'ランダムワープ', icon: '🌀', price: 120, desc: 'マップのどこかへ一瞬で移動' },
+    { id: 'stone', name: '石化の札', icon: '🪨', price: 300, desc: 'まわりの敵と人を3秒間 石にする' },
+    { id: 'poison', name: '毒ポーション', icon: '☠', price: 250, desc: 'まわりに毒の霧。敵と人をじわじわ削る' },
+  ];
+  const CONS_SLOTS = 3; // 持っていける種類の数
+
+  // エモート（無料）とピンズ（やりこみで買う）
+  const EMOTES = ['👍 いいね！', '😂 わはは', '😡 むかっ', '😭 えーん', '🙏 ありがとう', '⚔ 勝負だ！', '🏃 にげろ！', '🤝 GG'];
+  const PINS = [
+    { id: 'crown', e: '👑', t: 'ひれふせ！', price: 1500 }, { id: 'fire', e: '🔥', t: 'もえてきた！', price: 1000 },
+    { id: 'sleep', e: '💤', t: 'ねむい…', price: 800 }, { id: 'cool', e: '😎', t: 'よゆう', price: 1200 },
+    { id: 'dango', e: '🍡', t: 'おだんごタイム', price: 800 }, { id: 'ghost', e: '👻', t: 'うらめしや〜', price: 1500 },
+  ];
+
   // 敵（番号は描画側と共通。4番はボス）
   const ENEMY_TYPES = ['slime', 'bat', 'wisp', 'brute', 'boss', 'shroom', 'beetle', 'gold', 'golem',
     'kedama', 'kasa', 'chochin', 'nezumi', 'hitodama', 'daruma', // 9〜14は弱い雑魚（群れで出る）
@@ -439,6 +477,8 @@
         atkCd: 0, scd: rand(1, 3), iframe: 2, choices: [], chSeq: p.chSeq || 0, chT: 0,
         tpT: 0, protT: PROTECT_TIME, revived: false, hyT: 0,
         shield: 0, shieldT: 0, hasteT: 0, deadT: 0, killedBy: null,
+        scd2: 3, hurtAcc: 0, invT: 0, stoneT: 0, emo: -1, emoT: 0, emoCd: 0, lifeT: 0, consUsed: [],
+        st: { hl: 0, sa: 0, su: 0, dist: 0, dg: 0, sn: 0, rv: 0 }, route: [], marks: [], routeT: 0,
         ai: { t: 0, dx: 0, dy: 0, wx: 0, wy: 0 }, cards: {}, cardsV: (p.cardsV || 0) + 1,
       });
       p.tp = (p.tp || 0) + 1;
@@ -612,6 +652,7 @@
           p.mhp *= 2.5; p.hp = p.mhp; // HP2.5倍＆全回復
           p.spd *= 1.15; p.magnet *= 1.3; p.regen += 3; // 足が速く、吸い寄せ範囲も広く、自然回復も
           this.ev({ e: 'evo', p: p.id, sp: p.sp, x: r1(p.x), y: r1(p.y) });
+          this.mark(p, 'evo');
         }
       }
     }
@@ -651,9 +692,24 @@
         }
         if (p.shieldT > 0) { p.shieldT -= dt; if (p.shieldT <= 0) p.shield = 0; }
         if (p.protT > 0) p.protT -= dt;
+        if (p.invT > 0) p.invT -= dt;
+        if (p.stoneT > 0) p.stoneT -= dt;
+        if (p.emoT > 0) p.emoT -= dt;
+        if (p.emoCd > 0) p.emoCd -= dt;
+        p.hurtAcc = (p.hurtAcc || 0) * Math.max(0, 1 - dt / 2); // 2秒くらいで忘れる
+        p.lifeT = (p.lifeT || 0) + dt;
+        // 通った道（終わったあとに地図で見られる）
+        if (p.human) {
+          p.routeT = (p.routeT || 0) - dt;
+          if (p.routeT <= 0) {
+            p.routeT = 1.5;
+            p.route.push(Math.round(p.x), Math.round(p.y));
+            if (p.route.length > 1600) p.route = p.route.filter((v, i) => (i >> 1) % 2 === 0); // 長くなったら間引く
+          }
+        }
         const rg = 0.005 * Math.min(20, (p.cards && p.cards.regen) || 0) + (p.evo ? 0.005 : 0);
         if (p.woundT > 0) p.woundT -= dt; // 妖気の傷：自然回復しない
-        else if (rg > 0) p.hp = Math.min(p.mhp, p.hp + p.mhp * rg * dt);
+        else if (rg > 0) this.healP(p, p.mhp * rg * dt);
       }
 
       for (const p of this.players) this.movePlayer(p, dt);
@@ -687,8 +743,10 @@
       if (!p.alive) return;
       if (p.iframe > 0) p.iframe -= dt;
       if (p.tpT > 0) p.tpT -= dt;
-      if (p.tpT > 0) {
-        // はじき飛ばされた直後は少しだけ停止
+      const ox = p.x, oy = p.y;
+      if (p.tpT > 0 || p.stoneT > 0) {
+        // はじき飛ばされた直後・石になっている間は止まる
+        if (p.stoneT > 0 && p.human) { p.tx = p.x; p.ty = p.y; }
       } else if (p.bot) {
         this.botThink(p, dt);
       } else if (p.tx !== null) {
@@ -699,6 +757,7 @@
       p.x = clamp(p.x, EDGE, WORLD.w - EDGE);
       p.y = clamp(p.y, EDGE, WORLD.h - EDGE);
       resolve(this.map, p, 16);
+      if (p.st) { const d = Math.hypot(p.x - ox, p.y - oy); if (d < 400) p.st.dist += d; }
     }
 
     kill(p, killer) {
@@ -706,12 +765,20 @@
       // よみがえりの鈴：一度だけ復活
       if (SPECIES[p.sp].trait.id === 'revive' && !p.revived && chance(0.3 + 0.1 * p.traitLv + (p.evo ? 0.15 : 0))) {
         p.revived = true;
-        p.hp = p.mhp * 0.5; p.iframe = 2;
+        p.hp = p.mhp * 0.5; p.iframe = 2; p.st.rv++;
         this.ev({ e: 'rv', p: p.id, x: r1(p.x), y: r1(p.y) });
         return;
       }
       p.alive = false; p.hp = 0; p.deadT = 0; p.choices.length = 0; p.poisonT = 0;
       p.killedBy = killer ? killer.name : null;
+      this.mark(p, 'dead');
+      if (killer && killer.alive) this.mark(killer, 'pk');
+      // 終わったあとに見る「通った道」と「1回のプレイの記録」
+      if (p.human) {
+        p.route.push(Math.round(p.x), Math.round(p.y));
+        this.ev({ e: 'rt', p: p.id, r: p.route, m: p.marks, w: [WORLD.w, WORLD.h] });
+        this.ev({ e: 'run', p: p.id, d: { sp: p.sp, lv: p.lv, ev: p.evo, sc: p.score, k: p.kills, pk: p.pkills, b: p.bossKills, t: Math.round(p.lifeT || 0), by: p.killedBy || '' } });
+      }
       const tr = SPECIES[p.sp].trait.id, w = this.traitPow(p);
       if (killer && killer.alive) {
         // 倒した側は相手の経験値を吸収
@@ -753,7 +820,7 @@
 
     // ---------- プレイヤー同士の体当たり（ぶつかるとお互いにダメージ） ----------
     updateBumps(dt) {
-      const al = this.players.filter(p => p.alive && !isProtected(p));
+      const al = this.players.filter(p => p.alive && !isProtected(p) && !(p.invT > 0));
       al.sort((a, b) => a.x - b.x);
       let maxR = 0;
       for (const q of al) maxR = Math.max(maxR, this.radius(q));
@@ -804,7 +871,7 @@
       if (ta === 'first' && this.time - atk.lastBump > 3) { dmg *= 1 + Math.min(1, 0.5 * wa); note = '先制！'; }
       if (ta === 'luck' && chance(Math.min(0.6, 0.32 * wa))) { dmg *= 2; note = '会心！'; }
       atk.lastBump = this.time;
-      if (td === 'hop' && chance(Math.min(0.5, 0.2 * wd))) return { dmg: 0, note: 'よけた！' };
+      if (td === 'hop' && chance(Math.min(0.5, 0.2 * wd))) { def.st.dg++; return { dmg: 0, note: 'よけた！' }; }
       if (td === 'guard') dmg *= 1 - Math.min(0.45, 0.2 * wd);
       this.hurtPlayer(def, dmg);
       def.iframe = Math.max(def.iframe, 0.2);
@@ -838,8 +905,9 @@
       let target = null, tw = 0, best = Infinity;
       // 同じくらいか少し弱い相手に体当たりしにいく。ずっと格下（6レベル以上下）は狙わない。強い相手・HPが少ないときは逃げる
       const my = p.lv + (p.evo ? 10 : 0), healthy = p.hp > p.mhp * 0.45;
+      let danger = 0;
       for (const q of this.players) {
-        if (q === p || !q.alive) continue;
+        if (q === p || !q.alive || q.invT > 0) continue;
         const dx = q.x - p.x, dy = q.y - p.y;
         if (Math.abs(dx) > 900 || Math.abs(dy) > 900) continue;
         const d = Math.hypot(dx, dy) || 1;
@@ -848,6 +916,7 @@
         else if ((their > my + 3 || p.hp < p.mhp * 0.35) && !isProtected(q) && !isProtected(p) && d < 450) {
           const w = (1 - d / 520) * 3;
           fx -= dx / d * w; fy -= dy / d * w;
+          danger = Math.max(danger, w);
         }
       }
       // 経験値ジェム・ゴールドスライム
@@ -879,8 +948,15 @@
       ai.dy += (fy - ai.dy) * 0.25;
       const ml = Math.hypot(ai.dx, ai.dy);
       const sp = ml > 1 ? 1 / ml : 1;
-      p.x += ai.dx * sp * p.espd * dt;
-      p.y += ai.dy * sp * p.espd * dt;
+      // ダッシュ：強い相手から逃げるとき・HPが少なくて囲まれたとき・獲物に追いつけそうなとき（スタミナは人と同じ）
+      const tgtP = target && target.mhp ? target : null;
+      const tgtD = tgtP ? Math.hypot(tgtP.x - p.x, tgtP.y - p.y) : Infinity;
+      const hurtRun = p.hp < p.mhp * 0.35 && (fx * fx + fy * fy) > 0.5;
+      if (!p.dashIn && !p.staLock && p.sta >= DASH_TIME * 0.6 && (danger > 1.2 || hurtRun || (tgtD > 140 && tgtD < 420 && chance(0.04)))) p.dashIn = true;
+      else if (p.dashIn && (p.sta < DASH_TIME * 0.15 || (!hurtRun && danger <= 0.4 && tgtD > 520))) p.dashIn = false;
+      const dm = p.dashing ? DASH_MUL : 1;
+      p.x += ai.dx * sp * p.espd * dm * dt;
+      p.y += ai.dy * sp * p.espd * dm * dt;
     }
     nearEnemies(x, y, r) { const out = []; this.enemiesIn(x, y, r, e => out.push(e)); return out; }
     nearGems(x, y, r) {
@@ -1305,6 +1381,7 @@
         if (isBigOne(e)) { this.moveBig(e, dt); continue; }
         if (!e.tgt) continue;
         if (e.stunT > 0) { e.stunT -= dt; continue; }
+        if (e.tgt.invT > 0) continue; // すがたを消した人は見失う
         if (e.ty === 7) {
           // ゴールドスライム：プレイヤーから逃げ回り、しばらくすると消える
           e.life -= dt;
@@ -1417,9 +1494,17 @@
       if (p.shield > 0) {
         const a = Math.min(p.shield, dmg);
         p.shield -= a; dmg -= a;
+        if (p.st) p.st.sa += a;
         if (p.shield <= 0) { p.shield = 0; p.shieldT = 0; }
       }
       p.hp -= dmg;
+      p.hurtAcc = (p.hurtAcc || 0) + dmg; // 最近受けたダメージ（甲羅バリアの合図）
+    }
+    // 回復（実際に回復した量を数える）
+    healP(p, amt) {
+      const before = p.hp;
+      p.hp = Math.min(p.mhp, p.hp + amt);
+      if (p.st) p.st.hl += p.hp - before;
     }
 
     // 攻撃の倍率：★と覚醒
@@ -1435,6 +1520,10 @@
       p.aw = item ? clamp(item.aw | 0, 0, AWAKE_MAX) : 0;
       p.cs = item && Array.isArray(item.cs) ? item.cs.slice(0, 4).map(v => clamp(v | 0, 0, 99)) : null;
       p.tl = item ? clamp(item.tl | 0, 0, 99) : 0;
+      // 持ってきた使い捨ての道具（このプレイで1回ずつ）と、買ったピンズ
+      p.cons = item && Array.isArray(item.cn) ? item.cn.filter(k => CONSUMABLES.some(c => c.id === k)).slice(0, CONS_SLOTS) : [];
+      p.consUsed = [];
+      p.pins = item && Array.isArray(item.pn) ? item.pn.map(v => v | 0).filter(v => v >= 1 && v <= PINS.length) : [];
       p.itDef = 0; p.itRef = 0; p.itXp = 1; p.itMag = 0; p.itCd = 1; p.itPow = 1; p.itCdMul = 1; p.combo = 0;
       if (!item || item.t === undefined || item.t === null) return;
       const t = item.t | 0, r = item.r | 0;
@@ -1459,7 +1548,7 @@
       return ITEMS[it.t].dmg * RARITIES[it.r].pow * (p.itPow || 1) * this.lvMul(p) * p.dmgMul * Math.sqrt(p.skillPow) * this.atkB(p);
     }
     // 撃てる相手（守られている人・生まれたての人・自分は撃たない）
-    foeOk(p, q) { return q !== p && q.alive && !isProtected(q) && !isProtected(p); }
+    foeOk(p, q) { return q !== p && q.alive && !isProtected(q) && !isProtected(p) && !(q.invT > 0); }
     nearestFoe(p, range) {
       let best = range * range, bt = null;
       for (const q of this.players) {
@@ -1477,7 +1566,7 @@
     // 攻撃（通常攻撃・装備）がプレイヤーに当たった。pct = 相手の最大HPに対する割合
     pvpHit(p, q, pct, slow) {
       if (!this.foeOk(p, q)) return;
-      if (SPECIES[q.sp].trait.id === 'hop' && chance(Math.min(0.5, 0.2 * this.traitPow(q)))) { this.ev({ e: 'ih', a: p.id, b: q.id, d: 0, x: r1(q.x), y: r1(q.y) }); return; }
+      if (SPECIES[q.sp].trait.id === 'hop' && chance(Math.min(0.5, 0.2 * this.traitPow(q)))) { q.st.dg++; this.ev({ e: 'ih', a: p.id, b: q.id, d: 0, x: r1(q.x), y: r1(q.y) }); return; }
       const rel = clamp(this.lvMul(p) / this.lvMul(q), 0.5, 1.5);
       const dmg = q.mhp * pct * rel * this.atkB(p);
       const before = q.hp;
@@ -1594,6 +1683,7 @@
         this.enemiesIn(p.x, p.y, pr, e => {
           if (e.stunT <= 0 && e.dmg && (!hitBy || (isBigOne(e) && !isBigOne(hitBy)))) hitBy = e; // 大妖・ヌシに重なっていたらそちらを優先
         });
+        if (hitBy && p.invT > 0 && !isBigOne(hitBy)) hitBy = null; // すがたを消している間はふつうの敵に当たらない
         if (hitBy) {
           // Lv100以上：1回で受けるダメージは最大HPの6%（ボスは12%）まで。囲まれると危ないが一瞬では溶けない
           const raw = dmgFor(hitBy, p);
@@ -1608,11 +1698,20 @@
         }
       }
       const def = SPECIES[p.sp];
+      if (p.stoneT > 0) return; // 石になっている間は攻撃もスキルもできない
       // スキル
       p.scd -= dt;
       if (p.scd <= 0) {
-        if (this.useSkill(p, def)) p.scd = Math.max(def.skill.minCd || 0, def.skill.cd * p.skillCd * (p.evo ? 0.6 : 1) * starBonus(p.star).cd);
+        if (this.useSkill(p, def)) { p.scd = Math.max(def.skill.minCd || 0, def.skill.cd * p.skillCd * (p.evo ? 0.6 : 1) * starBonus(p.star).cd); p.st.su++; }
         else p.scd = 0.3;
+      }
+      // 進化スキル
+      if (p.evo) {
+        p.scd2 -= dt;
+        if (p.scd2 <= 0) {
+          if (this.useEvoSkill(p)) { p.scd2 = this.evoCd(p); p.st.su++; }
+          else p.scd2 = 0.4;
+        }
       }
       // 通常攻撃（モンスターごとに違う）
       p.atkCd -= dt;
@@ -1639,6 +1738,129 @@
       p.atkCd = a.cd * p.rateMul;
     }
 
+    evoCd(p) { return EVO_SKILLS[p.sp].cd * Math.max(0.5, p.skillCd) * starBonus(p.star).cd; }
+    // スキルの強さ（攻撃系の倍率）
+    skillPw(p) { return p.skillPow * this.lvMul(p) * (p.evo ? 1.3 : 1) * starBonus(p.star).skill * awakeBonus(p.aw); }
+    // 進化スキル。発動したら true
+    useEvoSkill(p) {
+      const es = EVO_SKILLS[p.sp];
+      if (!es) return false;
+      const pw = this.skillPw(p), area = p.areaMul, fx = p.x, fy = p.y;
+      const sk = (k, r) => this.ev({ e: 'sk', k, p: p.id, sp: p.sp, x: r1(fx), y: r1(fy), r, en: es.name });
+      const anyNear = r => !!this.nearestEnemy(fx, fy, r);
+      const ring = (n, speed, dmg, rr, life, pierce, kind, off) => { for (let i = 0; i < n; i++) this.spawnProj(p, fx, fy, (i / n + (off || 0)) * Math.PI * 2, speed, dmg, rr, life, pierce, kind); };
+      switch (es.id) {
+        case 'e_wave': if (!anyNear(420)) return false; ring(8, 950, 30 * pw, 13, 0.55, 99, 'tongue'); sk('tongue', 0); return true;
+        case 'e_gale': {
+          if (!anyNear(240)) return false;
+          const r = 240 * area; this.enemiesIn(fx, fy, r, e => this.damage(e, 26 * pw, p)); p.hasteT = Math.max(p.hasteT, 2); sk('moon', r); return true;
+        }
+        case 'e_grove': {
+          if (p.hp >= p.mhp * 0.8 && !anyNear(220)) return false;
+          this.healP(p, p.mhp * 0.12 * (p.woundT > 0 ? 0.5 : 1));
+          const r = 250 * area; this.enemiesIn(fx, fy, r, e => { this.damage(e, 18 * pw, p); if (!isBoss(e)) { e.stunT = Math.max(e.stunT || 0, 1.2); p.st.sn++; } });
+          sk('heal', r); return true;
+        }
+        case 'e_gold': {
+          if (!anyNear(300)) return false;
+          const r = 280 * area; this.enemiesIn(fx, fy, r, e => this.damage(e, 22 * pw, p));
+          for (let i = 0; i < 6; i++) this.dropGem(fx + rand(-140, 140), fy + rand(-140, 140), (1 + Math.floor(p.lv / 5)) * Math.min(2, p.skillPow));
+          sk('lucky', r); return true;
+        }
+        case 'e_rend': if (!anyNear(230)) return false; ring(16, 540, 15 * pw, 9, 0.45, 1, 'kodama'); ring(16, 600, 15 * pw, 9, 0.45, 1, 'kodama', 0.5 / 16); sk('frenzy', 0); return true;
+        case 'e_illusion': {
+          if (!anyNear(200) && !this.nearestFoe(p, 300)) return false;
+          p.invT = Math.max(p.invT, 2.5);
+          const r = 200 * area;
+          this.enemiesIn(fx, fy, r, e => { this.damage(e, 14 * pw, p); if (!isBoss(e)) { const dx = e.x - fx, dy = e.y - fy, d = Math.hypot(dx, dy) || 1; e.x += dx / d * 120; e.y += dy / d * 120; } });
+          sk('moon', r); return true;
+        }
+        case 'e_rain': {
+          const list = this.nearEnemies(fx, fy, 520);
+          if (!list.length) return false;
+          list.sort((a, b) => ((a.x - fx) ** 2 + (a.y - fy) ** 2) - ((b.x - fx) ** 2 + (b.y - fy) ** 2));
+          list.slice(0, 14).forEach(e => this.spawnProj(p, fx, fy, Math.atan2(e.y - fy, e.x - fx), 820, 16 * pw, 8, 0.85, 3, 'kuroro'));
+          sk('flock', 0); return true;
+        }
+        case 'e_coil': {
+          if (!anyNear(220)) return false;
+          const r = 230 * area; this.enemiesIn(fx, fy, r, e => { this.damage(e, 20 * pw, p, 3); if (!isBoss(e)) { e.stunT = Math.max(e.stunT || 0, 1.8); p.st.sn++; } });
+          sk('venom', r); return true;
+        }
+        case 'e_ward': {
+          if (!anyNear(200) && (p.hurtAcc || 0) < p.mhp * 0.05) return false;
+          const r = 210 * area;
+          this.enemiesIn(fx, fy, r, e => { this.damage(e, 18 * pw, p); if (!isBoss(e)) { const dx = e.x - fx, dy = e.y - fy, d = Math.hypot(dx, dy) || 1; e.x += dx / d * 150; e.y += dy / d * 150; } });
+          if (!(p.shield > 0)) { p.shield = p.mhp * 0.08; p.shieldT = 3; }
+          sk('shell', r); return true;
+        }
+        case 'e_chain': {
+          const t = this.nearestEnemy(fx, fy, 380);
+          if (!t) return false;
+          const r = 170 * area;
+          for (let k = 0; k < 3; k++) {
+            const bx = t.x + rand(-120, 120), by = t.y + rand(-120, 120);
+            this.enemiesIn(bx, by, r, e => this.damage(e, 22 * pw, p));
+            this.ev({ e: 'sk', k: 'nova', p: p.id, sp: p.sp, x: r1(bx), y: r1(by), r, en: k ? undefined : es.name });
+          }
+          return true;
+        }
+        case 'e_turret': if (!anyNear(360)) return false; ring(18, 560, 11 * pw, 8, 0.9, 1, 'nejimaru'); ring(18, 420, 11 * pw, 8, 0.9, 1, 'nejimaru', 0.5 / 18); sk('drone', 0); return true;
+        case 'e_howl': {
+          if (!anyNear(320)) return false;
+          const r = 400 * area; this.enemiesIn(fx, fy, r, e => { this.damage(e, 20 * pw, p); if (!isBoss(e)) { e.stunT = Math.max(e.stunT || 0, 2.5); p.st.sn++; } });
+          sk('roar', r); return true;
+        }
+        case 'e_kagura': {
+          if (p.hp >= p.mhp * 0.6) return false;
+          this.healP(p, p.mhp * 0.35 * (p.woundT > 0 ? 0.5 : 1));
+          p.iframe = Math.max(p.iframe, 2);
+          const r = 260 * area; this.enemiesIn(fx, fy, r, e => this.damage(e, 16 * pw, p));
+          sk('bless', r); return true;
+        }
+      }
+      return false;
+    }
+
+    // ---------- 使い捨ての道具・エモート ----------
+    useCons(id, i) {
+      const p = this.pmap.get(id);
+      if (!p || !p.alive || !p.cons) return;
+      i = i | 0;
+      const k = p.cons[i];
+      if (!k || p.consUsed.includes(k)) return;
+      p.consUsed.push(k);
+      const R = 320;
+      switch (k) {
+        case 'heal': this.healP(p, p.mhp * 0.5 * (p.woundT > 0 ? 0.5 : 1)); break;
+        case 'inv': p.invT = 6; break;
+        case 'warp': {
+          const pos = this.spawnPos();
+          p.x = pos.x; p.y = pos.y; p.tx = p.x; p.ty = p.y; p.tp++; p.iframe = Math.max(p.iframe, 1.5);
+          break;
+        }
+        case 'stone':
+          this.enemiesIn(p.x, p.y, R, e => { if (!isBoss(e)) e.stunT = Math.max(e.stunT || 0, 3); });
+          for (const q of this.players) if (this.foeOk(p, q) && Math.hypot(q.x - p.x, q.y - p.y) < R) { q.stoneT = 3; q.tp++; }
+          break;
+        case 'poison':
+          this.enemiesIn(p.x, p.y, R, e => this.damage(e, 30 * this.skillPw(p), p, 4));
+          for (const q of this.players) if (this.foeOk(p, q) && Math.hypot(q.x - p.x, q.y - p.y) < R) { q.poisonT = 5; q.poisonDps = q.mhp * 0.035; q.poisonBy = p; }
+          break;
+      }
+      this.ev({ e: 'cu', p: p.id, k, x: r1(p.x), y: r1(p.y), r: R, g: 1 });
+      this.ev({ e: 'cuse', p: p.id, k }); // サーバーが持ち物を1つ減らす
+    }
+    emote(id, i) {
+      const p = this.pmap.get(id);
+      if (!p || !p.alive || p.emoCd > 0) return;
+      i = i | 0;
+      if (i < 0 || (i >= EMOTES.length && !(p.pins || []).includes(i - EMOTES.length + 1)) || i >= EMOTES.length + PINS.length) return;
+      p.emo = i; p.emoT = 2.6; p.emoCd = 1.5;
+    }
+    // 記録用：通った道の上のできごと
+    mark(p, k) { if (p && p.human && p.marks.length < 200) p.marks.push([k, Math.round(p.x), Math.round(p.y), Math.round(p.lifeT || 0)]); }
+
     // スキル発動。発動したら true
     useSkill(p, def) {
       const id = def.skill.id, evo = p.evo;
@@ -1664,7 +1886,7 @@
         case 'heal':
           if (p.hp >= p.mhp * 0.9) return false;
           // 回復量は最大HPの11%（進化15%）。強化カードの伸びはゆるやか
-          p.hp = Math.min(p.mhp, p.hp + (p.woundT > 0 ? 0.5 : 1) * p.mhp * (evo ? 0.15 : 0.11) * (1 + Math.min(1, (p.skillPow - 1) * 0.3)) * starBonus(p.star).skill ** 0.5);
+          this.healP(p, (p.woundT > 0 ? 0.5 : 1) * p.mhp * (evo ? 0.15 : 0.11) * (1 + Math.min(1, (p.skillPow - 1) * 0.3)) * starBonus(p.star).skill ** 0.5);
           sk(0);
           return true;
         case 'lucky': {
@@ -1710,6 +1932,9 @@
         }
         case 'shell':
           if (p.shield > 0) return false;
+          // 最近の2秒くらいで最大HPの1割以上ダメージを受けたときだけ張る（むだ打ちしない）
+          if ((p.hurtAcc || 0) < p.mhp * 0.1) return false;
+          p.hurtAcc = 0;
           // バリアは最大HPの14%（進化20%）を4秒
           p.shield = p.mhp * (evo ? 0.2 : 0.14) * (1 + Math.min(0.8, (p.skillPow - 1) * 0.25)) * starBonus(p.star).skill ** 0.5;
           p.shieldT = 4;
@@ -1732,13 +1957,13 @@
         case 'roar': {
           if (!anyNear(260)) return false;
           const r = (evo ? 330 : 265) * area;
-          this.enemiesIn(fx, fy, r, e => { this.damage(e, 24 * pw, p); if (!isBoss(e)) e.stunT = evo ? 2.2 : 1.5; });
+          this.enemiesIn(fx, fy, r, e => { this.damage(e, 24 * pw, p); if (!isBoss(e)) { e.stunT = evo ? 2.2 : 1.5; p.st.sn++; } });
           sk(r);
           return true;
         }
         case 'bless': {
           if (p.hp >= p.mhp * 0.95 && !anyNear(200)) return false;
-          p.hp = Math.min(p.mhp, p.hp + p.mhp * (evo ? 0.3 : 0.2));
+          this.healP(p, p.mhp * (evo ? 0.3 : 0.2) * (p.woundT > 0 ? 0.5 : 1));
           const r = 240 * area;
           this.enemiesIn(fx, fy, r, e => this.damage(e, 14 * pw, p));
           sk(r);
@@ -1768,7 +1993,7 @@
         if (e.ty === 15) this.bigDefeated(e, owner);
         else if (isNushi(e)) this.nushiDefeated(e, owner);
         else if (e.ty === 4) {
-          if (owner) owner.bossKills++;
+          if (owner) { owner.bossKills++; this.mark(owner, 'boss'); }
           for (let i = 0; i < 24; i++) this.dropGem(e.x + rand(-90, 90), e.y + rand(-90, 90), 4 + Math.floor(e.xp));
         } else if (FB_R[e.ty] !== undefined) {
           // フィールドボス：経験値の玉をどさっと
@@ -1896,6 +2121,7 @@
         bt: p.tpT > 0 ? 1 : 0, tp: p.tp, iv: p.iframe > 0 ? 1 : 0, bn: this.bounty === p ? 1 : 0,
         it: p.item ? p.item.t * 8 + p.item.r : -1,
         ds: p.dashing ? 1 : undefined, wd: p.woundT > 0 ? 1 : undefined, aw: p.aw || undefined, cs: p.cs && p.cs.some(v => v) ? p.cs : undefined, tl: p.tl || undefined,
+        hd: p.invT > 0 ? 1 : undefined, so: p.stoneT > 0 ? 1 : undefined, em: p.emoT > 0 ? p.emo : undefined,
       };
     }
 
@@ -1929,7 +2155,7 @@
       if (half) { s.q = []; s.e = []; }
       for (const p of base.P) {
         if (p.id === id || inR(p.x, p.y, R + 200)) s.p.push(p);
-        else if (half && p.a && (inR(p.x, p.y, RADAR_R) || p.bn)) s.q.push([p.id, p.x, p.y, p.lv + (p.ev ? 10 : 0), p.bn ? 1 : 0, p.b ? 0 : 1]); // 賞金首はどこにいても映る
+        else if (half && p.a && !p.hd && (inR(p.x, p.y, RADAR_R) || p.bn)) s.q.push([p.id, p.x, p.y, p.lv + (p.ev ? 10 : 0), p.bn ? 1 : 0, p.b ? 0 : 1]); // 賞金首はどこにいても映る
       }
       if (half) {
         s.f = []; // レーダー用：遠くのボスとゴールドスライム
@@ -1969,6 +2195,12 @@
         hy: me.hyT ? Math.ceil(me.hyT) : 0, pt: Math.max(0, Math.ceil(this.paradeT)),
         cd: me.cardsV !== me.cardsSent || this.tick % 40 === 0 ? (me.cardsSent = me.cardsV, me.cards) : undefined,
         st: { dmg: me.dmgMul, rate: me.rateMul, extra: me.extra, pierce: me.pierce, sp: me.skillPow, tl: me.traitLv, bump: Math.round(this.bumpPower(me)) },
+        // 左下に出す強さ：通常攻撃1発のダメージと弾の数、スキルの威力
+        ad: Math.round(SPECIES[me.sp].atk.dmg * me.dmgMul * this.lvMul(me) * this.atkB(me)), an: (SPECIES[me.sp].atk.n || 1) + me.extra,
+        sd: SKILL_BASE[SPECIES[me.sp].skill.id] ? Math.round(SKILL_BASE[SPECIES[me.sp].skill.id] * this.skillPw(me)) : 0,
+        sc2: me.evo ? Math.round(clamp(me.scd2 / this.evoCd(me), 0, 1) * 100) / 100 : undefined,
+        cn: me.cons && me.cons.length ? me.cons.map(k => [k, me.consUsed.includes(k) ? 1 : 0]) : undefined,
+        pn: me.pins && me.pins.length ? me.pins : undefined, ivt: me.invT > 0 ? Math.ceil(me.invT) : undefined,
       };
       if (this.tick % 10 === 0) {
         const rank = base.LB.indexOf(me);
@@ -2066,7 +2298,16 @@
     { id: 'a2', stat: 'aw', goal: 50, title: '真なる覚醒', pts: 3000 },
     { id: 'w1', stat: 'w1', goal: 1, title: '週間王者', pts: 0 },
   ];
-  const ACH_STAT_NAME = { k: '倒した敵', b: 'たおしたボス', pk: 'たおしたプレイヤー', bb: '大妖の討伐', bt: '賞金首の討伐', lv: '最高レベル', t: '遊んだ時間', ch: '持っている妖怪', s5: '★5の妖怪', it: '集めた装備', aw: '覚醒の合計', w1: '週間ランキング1位' };
+  // 妖怪ごとの称号（その妖怪で遊んだときだけ数える）。server.py と同じ順
+  const SPECIES_ACH = [
+    ['gekomaru', 'k', 5000, '大食らい'], ['suzune', 'dist', 1000000, '韋駄天'], ['maimai', 'hl', 100000, 'タフネス'],
+    ['rangyo', 'lv', 300, '大器晩成'], ['kodama', 'pk', 50, '辻斬り'], ['kohaku', 'dg', 300, '月下の舞'],
+    ['kuroro', 'b', 50, '千里眼'], ['uroko', 'su', 3000, '毒蛇の主'], ['komori', 'sa', 100000, '鉄壁の守護者'],
+    ['toosibi', 'k', 10000, '業火'], ['nejimaru', 'su', 3000, 'からくり師'], ['hakua', 'sn', 3000, '白き王'],
+    ['sinonome', 'rv', 20, '不死鳥'],
+  ];
+  for (const [sp, stat, goal, title] of SPECIES_ACH) ACHIEVEMENTS.push({ id: 'sp_' + sp, stat: sp + ':' + stat, goal, title, pts: 1500, sp });
+  const ACH_STAT_NAME = { hl: '回復した量', sa: 'バリアで防いだダメージ', su: 'スキルを使った回数', dist: '走った距離', dg: 'よけた回数', sn: '気絶させた敵', rv: '復活した回数', k: '倒した敵', b: 'たおしたボス', pk: 'たおしたプレイヤー', bb: '大妖の討伐', bt: '賞金首の討伐', lv: '最高レベル', t: '遊んだ時間', ch: '持っている妖怪', s5: '★5の妖怪', it: '集めた装備', aw: '覚醒の合計', w1: '週間ランキング1位' };
 
   // ＋強化：同じ装備が2個目で+1…最大+5。1つにつき威力・効果 +12%
   const ITEM_PLUS_MAX = 5, ITEM_PLUS_STEP = 0.12;
@@ -2115,7 +2356,7 @@
 
   // セーブする項目（レベル・経験値・強化の状態など）
   const SAVE_KEYS = ['lv', 'xp', 'txp', 'evo', 'hp', 'mhp', 'kills', 'score', 'bossKills', 'pkills', 'pkScore', 'spd',
-    'hpCards', 'dmgMul', 'rateMul', 'extra', 'pierce', 'skillPow', 'skillCd', 'areaMul', 'magnet', 'regen', 'bumpMul', 'traitLv', 'revived', 'cards'];
+    'hpCards', 'dmgMul', 'rateMul', 'extra', 'pierce', 'skillPow', 'skillCd', 'areaMul', 'magnet', 'regen', 'bumpMul', 'traitLv', 'revived', 'cards', 'lifeT'];
 
   // ---------- 妖怪ガチャと★（server.py と同じ内容） ----------
   // はじめから持っている妖怪。ほかはガチャで手に入る
@@ -2141,6 +2382,7 @@
   const UNLOCK_AT = {}; UNLOCKS.forEach(([k, v]) => { UNLOCK_AT[k] = v; });
 
   global.GD = {
+    EVO_SKILLS, SKILL_BASE, SKILL_PCT, CONSUMABLES, CONS_SLOTS, EMOTES, PINS, SPECIES_ACH,
     UNLOCKS, UNLOCK_AT, ITEMS, RARITIES, ORBIT_SPEED, RIFT_LV, NUSHI_NAME, DASH_TIME, DASH_RECHARGE, DASH_MUL, itemCount, itemShow, itemInfo, isCombo, AWAKE_MAX, awakeCost, awakeBonus, AWAKE_COLORS, COSMETICS, COS_SLOTS, COS_SLOT_NAME, ACHIEVEMENTS, ACH_STAT_NAME, ITEM_PLUS_MAX, ITEM_PLUS_STEP, STARTERS, CHARA_RARITY, CHARA_RATES, STAR_NEED, starOf, starBonus,
     WORLD, TICK, EDGE, VIEW_R, RADAR_R, MAX_PLAYERS, EVOLVE_LV, PROTECT_TIME, NEWBIE_LV, generateMap, resolve, auraTier,
     SPECIES, SPECIES_KEYS, ENEMY_TYPES, ENEMIES, UPGRADES, COLORS, upgradeText,

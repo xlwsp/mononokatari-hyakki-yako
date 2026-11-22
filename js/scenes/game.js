@@ -548,6 +548,7 @@
       const o = this.pSprites.get(id);
       if (!o || id === this.myId) return;
       ['glow', 'rays', 'shadow', 'ring', 'body', 'bubble', 'name'].forEach(k => o[k].destroy());
+      if (o.emo) o.emo.destroy();
       this.clearOrbit(o);
       this.pSprites.delete(id);
     }
@@ -589,11 +590,15 @@
         const cy = y - D / 2 - 4 - bob;
         o.body.setFlipX(o.flip).setPosition(x, y + 2 - bob).setDepth(y).setRotation(moving ? Math.sin(o.walk) * 0.08 : 0);
         if (!this.tweens.isTweening(o.body)) o.body.setScale(o.base * squash, o.base / squash);
-        o.body.setAlpha(alive ? (pb.iv ? (Math.floor(time / 80) % 2 ? 0.55 : 1) : 1) : 0.25);
+        // すがたを消している（透明化）：自分はうっすら、ほかの人にはほとんど見えない
+        const hid = alive && pb.hd && !isMe;
+        o.body.setAlpha(!alive ? 0.25 : pb.hd ? (isMe ? 0.4 : 0.06) : pb.iv ? (Math.floor(time / 80) % 2 ? 0.55 : 1) : 1);
+        o.shadow.setVisible(!hid);
         o.pb = pb;
         // 着せ替え：妖怪の色
         const tintC = cs[0] ? GD.COSMETICS.tint[cs[0] - 1] : null;
-        if (tintC) o.body.setTint(tintC.col >= 0 ? tintC.col : Phaser.Display.Color.HSVToRGB((time / 2000) % 1, 0.35, 1).color);
+        if (pb.so) o.body.setTint(0x8c8c94); // 石になっている
+        else if (tintC) o.body.setTint(tintC.col >= 0 ? tintC.col : Phaser.Display.Color.HSVToRGB((time / 2000) % 1, 0.35, 1).color);
         else if (o.body.isTinted) o.body.clearTint();
         const sw = D * 0.95;
         o.shadow.setPosition(x, y - 2).setDisplaySize(sw, sw * 0.3).setDepth(y - 2);
@@ -663,10 +668,20 @@
         const ach = pb.tl ? GD.ACHIEVEMENTS[pb.tl - 1] : null;
         const nmC = cs[3] ? GD.COSMETICS.nm[cs[3] - 1] : null;
         const nameCol = pb.bn ? '#ffd84f' : nmC ? (nmC.css || (c => Phaser.Display.Color.RGBToString(c.r, c.g, c.b))(Phaser.Display.Color.HSVToRGB((time / 1500) % 1, 0.55, 1))) : ncol;
-        o.name.setPosition(x, ny - 6).setText(`${ach ? '【' + ach.title + '】' : ''}${pb.bn ? '💰' : ''}${pb.n}${pb.aw ? ' ✦' + pb.aw : ''}${pb.wd ? ' 💔' : ''}${pb.b ? ' 🤖' : ''}${pb.pr ? ' 🛡' : ''}`).setColor(nameCol);
-        o.name.setVisible(alive);
+        o.name.setPosition(x, ny - 6).setText(`${ach ? '【' + ach.title + '】' : ''}${pb.bn ? '💰' : ''}${pb.n}${pb.aw ? ' ✦' + pb.aw : ''}${pb.wd ? ' 💔' : ''}${pb.b ? ' 🤖' : ''}${pb.pr ? ' 🛡' : ''}${pb.so ? ' 🪨' : ''}${pb.hd ? ' 👻' : ''}`).setColor(nameCol);
+        o.name.setVisible(alive && !hid);
+        // エモート・ピンズ（頭の上のふきだし）
+        if (pb.em !== undefined && alive && !hid) {
+          const label = pb.em < GD.EMOTES.length ? GD.EMOTES[pb.em] : (pin => (pin ? pin.e + ' ' + pin.t : ''))(GD.PINS[pb.em - GD.EMOTES.length]);
+          if (!o.emo) {
+            o.emo = this.add.text(0, 0, '', TR(17, '#2a1a20', null, 0, { backgroundColor: '#fff8f0', padding: { x: 10, y: 5 } })).setOrigin(0.5, 1).setDepth(FX_DEPTH + 1);
+            o.emo.setScale(0.3); this.tweens.add({ targets: o.emo, scale: 1, duration: 220, ease: 'Back.out' });
+          }
+          if (o.emo.text !== label) o.emo.setText(label);
+          o.emo.setPosition(x, ny - 30).setVisible(true);
+        } else if (o.emo) { o.emo.destroy(); o.emo = null; }
         // HPバー
-        if (alive) {
+        if (alive && !hid) {
           const bw = Math.max(46, D * 0.9), bx = x - bw / 2, by = ny - 2;
           this.overlay.fillStyle(0x0b0f1c, 0.85); this.overlay.fillRoundedRect(bx - 2, by - 2, bw + 4, 9, 4);
           this.overlay.fillStyle(isMe ? 0x7cdc6a : 0xe8615a, 1); this.overlay.fillRoundedRect(bx, by, bw * Phaser.Math.Clamp(pb.hp / pb.mhp, 0, 1), 5, 2);
@@ -912,11 +927,24 @@
       if (ev.k === 'shell') this.burst(ev.x, ev.y - 30, 0x8fd8ff, 18);
       if (ev.p === this.myId) {
         const now = this.time.now;
-        if (!this.lastSkillText || now - this.lastSkillText > 350) {
+        if (ev.en || !this.lastSkillText || now - this.lastSkillText > 350) {
           this.lastSkillText = now;
-          this.floatText(ev.x, ev.y - 100, def.skill.name + '！', '#ffffff', 16);
+          this.floatText(ev.x, ev.y - 100, (ev.en || def.skill.name) + '！', ev.en ? '#ffd76a' : '#ffffff', ev.en ? 20 : 16);
         }
       }
+    }
+
+    // 使い捨ての道具の演出
+    consFx(ev) {
+      const C = { heal: 0x7cff8a, inv: 0xc8b8ff, warp: 0x7ae8ff, stone: 0xb8b0a0, poison: 0x9a5aff };
+      const col = C[ev.k] || 0xffffff, it = GD.CONSUMABLES.find(c => c.id === ev.k);
+      if (ev.k === 'stone' || ev.k === 'poison') {
+        const c = this.add.circle(ev.x, ev.y, ev.r, col, ev.k === 'poison' ? 0.35 : 0.25).setStrokeStyle(5, col, 0.9).setDepth(FX_DEPTH - 6).setScale(0.15);
+        this.tweens.add({ targets: c, scale: 1, duration: 380, ease: 'Quad.out' });
+        this.tweens.add({ targets: c, alpha: 0, delay: ev.k === 'poison' ? 1600 : 700, duration: 700, onComplete: () => c.destroy() });
+      }
+      this.burst(ev.x, ev.y - 30, col, 22);
+      if (it && ev.p === this.myId) { this.floatText(ev.x, ev.y - 110, it.icon + ' ' + it.name + '！', '#ffffff', 18); Sfx.play(ev.k === 'heal' ? 'cap' : 'skill'); }
     }
 
     // ---------- イベント処理 ----------
@@ -930,6 +958,8 @@
       const me = this.myId;
       for (const ev of s.ev) {
         switch (ev.e) {
+          case 'cu': this.consFx(ev); break; // 使い捨ての道具
+          case 'rt': if (ev.p === me) window.__lastRoute = ev; break; // 通った道（やられた画面で見る）
           case 'sh': this.spawnProj(ev, age); if (ev.o === me) Sfx.shoot(ev.k); break; // 自分の攻撃を放つ音
           case 'pd': this.freeProj(ev.id); break;
           case 'h': {

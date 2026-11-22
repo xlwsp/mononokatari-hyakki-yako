@@ -51,6 +51,8 @@
       this.skIcon = this.add.image(0, 0, 'ic_gekomaru').setDepth(3);
       this.skName = this.add.text(0, 0, '', TO(13, '#ffffff', '#1a1020', 3)).setOrigin(0, 0.5).setDepth(3);
       this.skSub = this.add.text(0, 0, '', T(11, '#bfe8ff')).setOrigin(0, 0.5).setDepth(3);
+      this.skPow = this.add.text(0, 0, '', TR(11.5, '#ffe07a', '#10141f', 3)).setOrigin(0, 0.5).setDepth(3);
+      this.sk2Txt = this.add.text(0, 0, '進化技', TR(9.5, '#ffd76a', '#10141f', 3)).setOrigin(0.5).setDepth(3).setVisible(false);
       this.skZone = this.add.zone(0, 0, 10, 10).setInteractive({ useHandCursor: true }).setDepth(5);
       this.skZone.on('pointerdown', () => this.showInfo());
       this.skZone.on('pointerover', () => this.showInfo());
@@ -115,11 +117,99 @@
       this.setupChat();
       this.setupFeed();
       this.setupDash();
+      this.setupItems();
       this.layout();
       this.onResize = () => { this.layout(); if (this.cards) { this.hideCards(); this.cardSeq = -1; } };
       this.scale.on('resize', this.onResize);
       this.events.once('shutdown', () => this.scale.off('resize', this.onResize));
       this.ready = true;
+    }
+
+    // ---------- 使い捨ての道具（Z / X / C）とエモート（E） ----------
+    setupItems() {
+      this.itG = this.add.graphics().setDepth(6);
+      this.itSlots = [0, 1, 2].map(i => {
+        const t = this.add.text(0, 0, '', { fontSize: '22px' }).setOrigin(0.5).setDepth(7);
+        const k = this.add.text(0, 0, ['Z', 'X', 'C'][i], TR(10, '#fff8ea', '#10141f', 3)).setOrigin(0.5).setDepth(7);
+        const z = this.add.zone(0, 0, 10, 10).setInteractive({ useHandCursor: true }).setDepth(8);
+        z.on('pointerdown', () => this.useItem(i));
+        return { t, k, z };
+      });
+      this.emoTxt = this.add.text(0, 0, '💬', { fontSize: '22px' }).setOrigin(0.5).setDepth(7);
+      this.emoZone = this.add.zone(0, 0, 50, 50).setInteractive({ useHandCursor: true }).setDepth(8);
+      this.emoZone.on('pointerdown', () => this.toggleEmotes());
+      this.emoPanel = null;
+      this.input.keyboard.on('keydown', e => {
+        if (e.repeat || this.cards) return;
+        const ae = document.activeElement; if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return;
+        const k = e.key.toLowerCase();
+        const i = ['z', 'x', 'c'].indexOf(k);
+        if (i >= 0) { this.useItem(i); return; }
+        if (k === 'e') { this.toggleEmotes(); return; }
+        if (this.emoPanel && /^[1-9]$/.test(k)) { const b = this.emoPanel.list[+k - 1]; if (b) b.go(); }
+      });
+    }
+    useItem(i) {
+      const me = this.gs.me, cn = me && me.cn;
+      if (!cn || !cn[i] || cn[i][1] || !me.a) return;
+      this.gs.session.useItem(i);
+      Sfx.play('click');
+    }
+    toggleEmotes() {
+      if (this.emoPanel) { this.emoPanel.objs.forEach(o => o.destroy()); this.emoPanel = null; return; }
+      const me = this.gs.me;
+      if (!me || !me.a) return;
+      Sfx.play('click');
+      const list = GD.EMOTES.map((t, i) => ({ i, t }));
+      (me.pn || []).forEach(n => { const pin = GD.PINS[n - 1]; if (pin) list.push({ i: GD.EMOTES.length + n - 1, t: pin.e + ' ' + pin.t }); });
+      const L = this.L, cols = 2, bw = Math.min(150, (L.w - 40) / 2), bh = 34, gap = 6;
+      const rows = Math.ceil(list.length / cols);
+      const pw = cols * bw + gap * (cols + 1), ph = rows * (bh + gap) + gap + 24;
+      const ex = this.emoPos ? this.emoPos.x : L.w / 2, ey = this.emoPos ? this.emoPos.y : L.h / 2;
+      const px = Phaser.Math.Clamp(ex - pw / 2, 8, L.w - pw - 8), py = Phaser.Math.Clamp(ey - 40 - ph, 8, L.h - ph - 8);
+      const objs = [UI.nightFrame(this, px, py, pw, ph, { alpha: 0.82 }).setDepth(60)];
+      objs.push(this.add.text(px + pw / 2, py + 6, 'エモート（E で閉じる）', TR(11, '#d8ccf0', '#0a0614', 3)).setOrigin(0.5, 0).setDepth(61));
+      const btns = list.map((it, k) => {
+        const c = k % cols, r = Math.floor(k / cols);
+        const go = () => { this.gs.session.emote(it.i); this.toggleEmotes(); };
+        const b = button(this, px + gap + bw / 2 + c * (bw + gap), py + 24 + gap + bh / 2 + r * (bh + gap), bw, bh, `${k < 9 ? k + 1 + '. ' : ''}${it.t}`, go, { night: true, size: 13 }).setDepth(61);
+        b.go = go; objs.push(b); return b;
+      });
+      this.emoPanel = { objs, list: btns };
+    }
+    drawItems(me) {
+      const g = this.itG, dp = this.dashPos, L = this.L;
+      g.clear();
+      const cn = me.cn || [];
+      if (!dp) return;
+      const r = L.compact ? 22 : 25, step = r * 2 + 10;
+      // 置き場所：スマホ縦は ダッシュの上に縦に、それ以外は ダッシュの左に横に
+      const pos = i => (L.portrait ? { x: dp.cx, y: dp.cy - dp.R - 18 - r - i * step } : { x: dp.cx - dp.R - 18 - r - i * step, y: dp.cy });
+      this.itSlots.forEach((sl, i) => {
+        const it = cn[i], def = it && GD.CONSUMABLES.find(c => c.id === it[0]);
+        const show = !!def;
+        sl.t.setVisible(show); sl.k.setVisible(show && !L.compact); sl.z.setVisible(show);
+        if (!show) { sl.z.setPosition(-100, -100); return; }
+        const { x, y } = pos(i), used = it[1];
+        g.fillStyle(0x07050f, used ? 0.35 : 0.65); g.fillCircle(x, y, r);
+        g.lineStyle(2.5, 0xffffff, used ? 0.3 : 0.95); g.strokeCircle(x, y, r);
+        UI.cornerGems(g, x - r, y - r, r * 2, r * 2, 3);
+        sl.t.setPosition(x, y - 1).setText(def.icon).setAlpha(used ? 0.3 : 1);
+        sl.k.setPosition(x + r * 0.7, y + r * 0.7);
+        sl.z.setPosition(x, y).setSize(r * 2 + 6, r * 2 + 6);
+        if (sl.z.input) sl.z.input.hitArea.setTo(0, 0, r * 2 + 6, r * 2 + 6);
+      });
+      // エモートのボタン：道具の並びの先
+      const n = cn.length;
+      const e = L.portrait ? { x: dp.cx - dp.R - 18 - r, y: dp.cy } : pos(n);
+      this.emoPos = e;
+      g.fillStyle(0x07050f, 0.65); g.fillCircle(e.x, e.y, r);
+      g.lineStyle(2.5, 0xffffff, 0.95); g.strokeCircle(e.x, e.y, r);
+      this.emoTxt.setPosition(e.x, e.y - 1).setAlpha(me.a ? 1 : 0.4);
+      this.emoZone.setPosition(e.x, e.y).setSize(r * 2 + 6, r * 2 + 6);
+      if (this.emoZone.input) this.emoZone.input.hitArea.setTo(0, 0, r * 2 + 6, r * 2 + 6);
+      // 透明化の残り時間
+      if (me.ivt) { g.fillStyle(0xc8b8ff, 0.25); g.fillCircle(e.x, e.y, 4); }
     }
 
     // ---------- ダッシュボタンとスタミナゲージ ----------
@@ -148,6 +238,7 @@
       } else if (L.compact) {
         cx = L.mmX + L.mm / 2; cy = L.mmY - R - 16;
       } else { cx = L.mmX - R - 22; cy = L.h - R - 26; }
+      this.dashPos = { cx, cy, R };
       this.dashZone.setPosition(cx, cy).setSize(R * 2 + 16, R * 2 + 16);
       if (this.dashZone.input) this.dashZone.input.hitArea.setTo(0, 0, R * 2 + 16, R * 2 + 16);
       const sta = me.sta === undefined ? 1 : me.sta, lock = !!me.sl, on = !!this.gs.dashing;
@@ -368,6 +459,7 @@
       this.drawBigBoss(me);
       this.drawMinimap(s, me);
       this.drawDash(me);
+      this.drawItems(me);
 
       // レベルアップカード
       const ch = me.a ? me.ch : null;
@@ -419,10 +511,10 @@
     drawSkill(me) {
       const L = this.L, g = this.g;
       const def = GD.SPECIES[me.sp];
-      const w = Math.min(260, L.w - 120), h = 54;
+      const w = Math.min(me.ev ? 300 : 270, L.w - 120), h = 70;
       const x = L.portrait ? (L.w - w) / 2 + 30 : 12, y = L.h - h - 14;
       this.panelG(g, x, y, w, h);
-      const cx = x + 30, cy = y + h / 2;
+      const cx = x + 30, cy = y + 27;
       g.fillStyle(0x0b0f1c, 1); g.fillCircle(cx, cy, 23);
       const ready = me.scd <= 0.02;
       g.lineStyle(4, ready ? 0x7cff8a : 0x5a6a8a, 1); g.strokeCircle(cx, cy, 23);
@@ -435,6 +527,20 @@
       this.skIcon.setPosition(cx, cy).setScale(42 / this.skIcon.height);
       this.skName.setPosition(x + 60, cy - 9).setText(`${me.ev ? def.evoName : def.name}【${def.skill.name}】`);
       this.skSub.setPosition(x + 60, cy + 11).setText(ready ? 'スキル準備OK！（タップで説明）' : 'スキル チャージ中…');
+      // 通常攻撃とスキルの強さ
+      const pc = GD.SKILL_PCT[def.skill.id];
+      const skv = me.sd ? `✨スキル ${me.sd.toLocaleString()}` : pc ? `✨${pc[0]}${pc[1] ? ' ' + Math.round((me.ev ? pc[2] : pc[1]) * 100 * (me.st && me.st.sp ? Math.min(1.8, 1 + (me.st.sp - 1) * 0.3) : 1)) + '%' : ''}` : '';
+      this.skPow.setPosition(x + 10, y + h - 11).setText(`⚔通常 ${(me.ad || 0).toLocaleString()}${me.an > 1 ? '×' + me.an : ''}　${skv}`);
+      // 進化スキルのチャージ（右はしの小さな輪）
+      const es = me.ev ? GD.EVO_SKILLS[me.sp] : null;
+      this.sk2Txt.setVisible(!!es);
+      if (es) {
+        const ex = x + w - 22, ey = cy, er = 15, rd = (me.sc2 || 0) <= 0.02;
+        g.fillStyle(0x0b0f1c, 1); g.fillCircle(ex, ey, er);
+        g.lineStyle(3.5, rd ? 0xffd76a : 0x5a6a8a, 1); g.strokeCircle(ex, ey, er);
+        if (!rd) { g.lineStyle(3.5, 0xff9a3a, 1); g.beginPath(); g.arc(ex, ey, er, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - me.sc2)); g.strokePath(); }
+        this.sk2Txt.setPosition(ex, ey).setText(rd ? '進化\nOK' : '進化技');
+      }
       this.skZone.setPosition(x + w / 2, cy).setSize(w, h);
       if (this.skZone.input) this.skZone.input.hitArea.setTo(0, 0, w, h);
       this.skPos = { x, y, w };
@@ -498,7 +604,7 @@
       if (!me || !this.skPos) return;
       const d = GD.SPECIES[me.sp];
       if (this.info) this.info.forEach(o => o.destroy());
-      const w = Math.min(320, this.L.w - 20), h = 150;
+      const w = Math.min(340, this.L.w - 20), h = 170;
       const x = Phaser.Math.Clamp(this.skPos.x, 10, this.L.w - w - 10), y = this.skPos.y - h - 10;
       const g = this.add.graphics().setDepth(70);
       this.panelG(g, x, y, w, h, d.color);
@@ -506,7 +612,8 @@
       const lines = [
         this.add.text(x + 12, y + 10, `${me.ev ? d.evoName : d.name}（${d.role}）`, T(15, '#ffffff')).setDepth(71),
         this.add.text(x + 12, y + 34, `スキル【${d.skill.name}】${d.skill.desc}`, T(12, '#bfe8ff', { wordWrap: { width: w - 24, useAdvancedWrap: true } })).setDepth(71),
-        this.add.text(x + 12, y + 66, `特性【${d.trait.name}】${d.trait.desc}（覚醒Lv${st.tl || 1}）`, T(12, '#ffd9a0', { wordWrap: { width: w - 24, useAdvancedWrap: true } })).setDepth(71),
+        this.add.text(x + 12, y + 50, me.ev && GD.EVO_SKILLS[me.sp] ? `進化スキル【${GD.EVO_SKILLS[me.sp].name}】${GD.EVO_SKILLS[me.sp].desc}` : `進化（Lv${GD.EVOLVE_LV}）すると新しいスキル【${(GD.EVO_SKILLS[me.sp] || {}).name}】を覚える`, T(12, '#ffd76a', { wordWrap: { width: w - 24, useAdvancedWrap: true } })).setDepth(71),
+        this.add.text(x + 12, y + 82, `特性【${d.trait.name}】${d.trait.desc}（覚醒Lv${st.tl || 1}）`, T(12, '#ffd9a0', { wordWrap: { width: w - 24, useAdvancedWrap: true } })).setDepth(71),
         this.add.text(x + 12, y + h - 26, `体当たり ${st.bump || 0}　攻撃×${(st.dmg || 1).toFixed(2)}　弾+${st.extra || 0}　スキル×${(st.sp || 1).toFixed(2)}`, T(11, '#ffe07a')).setDepth(71),
       ];
       this.info = [g, ...lines];
@@ -523,6 +630,7 @@
       g.fillStyle(0x34406a, 0.55); g.fillRoundedRect(x + 3, y + 3, w - 6, Math.min(h * 0.42, 30), { tl: r - 2, tr: r - 2, bl: 4, br: 4 });
       g.lineStyle(3, accent || 0xf0c35a, 1); g.strokeRoundedRect(x, y, w, h, r);
       g.lineStyle(1.2, 0xfff3c0, 0.35); g.strokeRoundedRect(x + 4, y + 4, w - 8, h - 8, r - 4);
+      if (w > 60 && h > 40) UI.cornerGems(g, x + 1, y + 1, w - 2, h - 2, 4); // 角の◆（ロビーの枠とおそろい）
     }
     bar(g, x, y, w, h, v, col, back) {
       v = Phaser.Math.Clamp(v || 0, 0, 1);

@@ -59,6 +59,8 @@
       this.lastSend = now; this.lastDash = !!dash;
       this.relay.send(dash ? { t: 'in', x: Math.round(x), y: Math.round(y), d: 1 } : { t: 'in', x: Math.round(x), y: Math.round(y) });
     }
+    useItem(i) { this.relay.send({ t: 'use', i }); }
+    emote(i) { this.relay.send({ t: 'emo', i }); }
     say(text) { this.relay.send({ t: 'say', m: String(text).slice(0, 60) }); }
     choose(seq, idx) { this.relay.send({ t: 'ch', s: seq, i: idx }); }
     respawn(sp) { this.sp = sp; this.relay.send({ t: 'respawn', sp }); }
@@ -132,6 +134,11 @@
   const awaken = sp => ask('awake', 'prof', { sp });
   const cosmetic = (slot, i, buy) => ask('cos', 'prof', { slot, i, buy: buy ? 1 : 0 });
   const title = i => ask('title', 'prof', { i });
+  // 道具屋：買う（n個）／持っていく道具をえらぶ（最大3種類）
+  const consBuy = (k, n) => ask('cons', 'prof', { k, n: n || 1 });
+  const consBag = bag => ask('bag', 'prof', { bag });
+  // 戦績（{best, runs, top_sc, top_pk}）
+  const records = () => ask('rec?', 'rec');
   // ご意見・バグ報告を運営に送る（{ok} か {wait}）
   const feedback = d => ask('fb', 'fbok', d);
   // サーバーの様子（{maint: true/false}）
@@ -156,5 +163,5 @@
     });
   }
 
-  window.Net = { Relay, Session, connect, saveInfo, highScores, profile, gacha, equip, awaken, cosmetic, title, feedback, ping };
+  window.Net = { Relay, Session, connect, saveInfo, highScores, profile, gacha, equip, awaken, cosmetic, title, feedback, ping, consBuy, consBag, records };
 })();

@@ -467,9 +467,9 @@
         NB(lx, y, colW, bh, 'やりこみ', () => this.openShop('extra'), { accent: 0xc07aff });
         // 右：名前とポイント → ★の情報 → 小さなボタン4つ
         const rx = w - M - colW;
-        const sbh = Phaser.Math.Clamp(bh * 0.82, 40, 64), sbw = (colW - gap) / 2;
-        const smallTop = bot - sbh * 2 - gap;
-        const small = [['キャラ一覧', openList], ['ランキング', () => this.showRanking()], ['お題', () => this.showDaily()], ['ご意見', () => this.openFeedback()]];
+        const sbh = Phaser.Math.Clamp(bh * 0.72, 38, 56), sbw = (colW - gap) / 2;
+        const smallTop = bot - sbh * 3 - gap * 2;
+        const small = [['道具屋', () => this.openShop('item')], ['戦績', () => this.openShop('rec')], ['キャラ一覧', openList], ['ランキング', () => this.showRanking()], ['お題', () => this.showDaily()], ['ご意見', () => this.openFeedback()]];
         small.forEach(([l, fn], i) => NB(rx + sbw / 2 + (i % 2) * (sbw + gap), smallTop + sbh / 2 + Math.floor(i / 2) * (sbh + gap), sbw, sbh, l, fn, { size: 20 }));
         const panH = smallTop - gap - top;
         nightFrame(this, rx, top, colW, panH);
@@ -478,7 +478,7 @@
         nameInput(rx + 16, py + 46, colW - 32, 42, 18);
         this.ptsText = this.add.text(rx + 18, py + 78, '', TR(15, '#7ae8ff', '#0a0614', 4)).setOrigin(0, 0);
         this.bestText = this.add.text(rx + 18, py + 100, `ベストスコア  ${best.toLocaleString()}`, TR(15, '#ffe7a8', '#0a0614', 4)).setOrigin(0, 0);
-        if (panH >= 250) this.starBox = starInfo(this, rx + colW / 2, py + 132, colW - 10, { dark: true });
+        if (panH >= 230) this.starBox = starInfo(this, rx + colW / 2, py + 132, colW - 10, { dark: true });
         // 真ん中
         const cx = w / 2, halfW = (w - colW * 2 - M * 4) / 2;
         const infoH = Phaser.Math.Clamp(Math.round(h * 0.14), 84, 116);
@@ -492,19 +492,18 @@
       } else {
         // ---------- スマホ（縦長）：上から ロゴ → 妖怪（◀ ▶）→ 説明 → 名前 → 出撃 → ★ → メニュー ----------
         const M = 12, pw = Math.min(560, w - M * 2), cx = w / 2;
-        const menuH = 50, menuY = h - 8 - menuH / 2;
+        const menuH = 42, menuGap = 6, menuY = h - 8 - menuH * 2 - menuGap;
         let y = bg.logoBottom + 2;
         this.ptsText = this.add.text(cx + 6, y, '', TR(13, '#7ae8ff', '#0a0614', 4)).setOrigin(0, 0);
         this.bestText = this.add.text(cx - 6, y, `ベスト ${best.toLocaleString()}`, TR(13, '#ffe7a8', '#0a0614', 4)).setOrigin(1, 0);
         y += 22;
         const infoH = 74, nameH = 44, btnH = 56, starH = 84;
-        const fixed = infoH + 8 + nameH + 10 + btnH + 10 + menuH + 16 + 20;
+        const fixed = infoH + 8 + nameH + 10 + btnH + 10 + menuH * 2 + menuGap + 16 + 20;
         let showStar = h - y - fixed - starH >= 150;
         const stageH = Math.min(300, h - y - fixed - (showStar ? starH : 0));
         const sTop = y, sBot = y + stageH;
         stage(cx, sTop, sBot - 18, Math.min(pw / 2, 220), bg.moonY, bg.moonR);
         NB(cx - pw / 2 + 24, sTop + 20, 46, 36, '📮', () => this.openFeedback(), { size: 18 });
-        NB(cx + pw / 2 - 30, sTop + 20, 58, 36, '一覧', openList, { size: 16 });
         y = sBot + 4;
         infoBox(cx, y, pw, infoH, false);
         y += infoH + 8;
@@ -518,9 +517,10 @@
         y += btnH + 10;
         if (showStar) { nightFrame(this, cx - pw / 2, y, pw, starH - 4, { gem: 4 }); this.starBox = starInfo(this, cx, y + 6, pw, { dark: true }); }
         this.msgText = this.add.text(cx, sTop + 4, this.notice || '', TR(15, '#fff', '#0a0614', 5, { align: 'center', wordWrap: { width: w - 30 } })).setOrigin(0.5, 0).setDepth(5);
-        const menu = [['召喚', () => this.openShop('gacha')], ['装備', () => this.openShop('equip')], ['やりこみ', () => this.openShop('extra')], ['順位', () => this.showRanking()], ['お題', () => this.showDaily()]];
-        const mw = (w - 16 - 6 * (menu.length - 1)) / menu.length;
-        menu.forEach(([l, fn], i) => NB(8 + mw / 2 + i * (mw + 6), menuY, mw, menuH, l, fn, { size: 18 }));
+        const menu = [['召喚', () => this.openShop('gacha')], ['装備', () => this.openShop('equip')], ['道具屋', () => this.openShop('item')], ['やりこみ', () => this.openShop('extra')],
+          ['戦績', () => this.openShop('rec')], ['順位', () => this.showRanking()], ['お題', () => this.showDaily()], ['一覧', openList]];
+        const mw = (w - 16 - 6 * 3) / 4;
+        menu.forEach(([l, fn], i) => NB(8 + mw / 2 + (i % 4) * (mw + 6), menuY + menuH / 2 + Math.floor(i / 4) * (menuH + menuGap), mw, menuH, l, fn, { size: 17 }));
       }
       this.goBtn = null;
       this.setSave(this.saveData === undefined ? null : this.saveData, this.saveData === undefined);
@@ -689,7 +689,7 @@
     }
     openShop(kind) {
       if (this.rankBox || this.confirmBox || this.nameAsk || this.connecting || this.shopBox || this.maintBox) return;
-      if (kind === 'gacha') Shop.openGacha(this); else if (kind === 'extra') Extra.open(this); else Shop.openEquip(this);
+      if (kind === 'gacha') Shop.openGacha(this); else if (kind === 'extra') Extra.open(this); else if (kind === 'item') Records.openItemShop(this); else if (kind === 'rec') Records.openRecords(this); else Shop.openEquip(this);
     }
 
     // メンテナンス中：遊べないようにして、終わったら自動で最新版を読み込み直す
@@ -845,7 +845,8 @@
       const gridH = tmp.height; tmp.destroy();
       const ph = 200 + gridH + 150 + 56;
       const x = w / 2 - pw / 2, y = Math.max(10, h / 2 - ph / 2);
-      panel(this, x, y, pw, ph);
+      UI.nightFrame(this, x - 7, y - 7, pw + 14, ph + 14, { alpha: 0.88, r: 22, gem: 9 });
+      panel(this, x, y, pw, ph, { color: 0xf3ecf6, alpha: 1, border: 0x3a2a5a, shadow: 0 });
       const title = this.add.text(w / 2, y + 38, 'やられた…', TO(40, '#c8d8ff', '#3a2a40', 8)).setOrigin(0.5).setScale(0.3);
       this.tweens.add({ targets: title, scale: 1, duration: 400, ease: 'Back.out' });
       Sfx.play('lose');
@@ -867,14 +868,20 @@
       const sb = starInfo(this, w / 2, y + ph - 186, pw);
       sb.set(this.sp);
       const b1 = button(this, w / 2, y + ph - 70, Math.min(300, pw - 40), 50, '再出撃！', () => this.respawn(), { color: C.orange, dark: C.orangeDark, size: 22 });
-      const b2 = button(this, w / 2, y + ph - 22, 140, 32, 'タイトルへ', () => this.toTitle(), { color: C.gray, dark: C.grayDark, size: 14 });
+      const route = window.__lastRoute && window.__lastRoute.r && window.__lastRoute.r.length > 2 ? window.__lastRoute : null;
+      const b2 = button(this, w / 2 - (route ? 78 : 0), y + ph - 22, 140, 32, 'タイトルへ', () => this.toTitle(), { color: C.gray, dark: C.grayDark, size: 14 });
+      if (route) button(this, w / 2 + 78, y + ph - 22, 140, 32, '🗺 通った道', () => Records.openRoute(this, route, d.session.seed), { night: true, size: 14 });
       keyNav(this, [b1, b2], { delay: 600 });
     }
     respawn() {
+      if (this.routeBox) return;
+      window.__lastRoute = null;
       this.d.session.respawn(this.sp);
       this.scene.stop();
     }
     toTitle() {
+      if (this.routeBox) return;
+      window.__lastRoute = null;
       this.d.session.leave();
       this.scene.stop('Game');
       this.scene.stop('UI');
