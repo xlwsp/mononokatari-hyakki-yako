@@ -139,6 +139,11 @@
       this.emoZone = this.add.zone(0, 0, 50, 50).setInteractive({ useHandCursor: true }).setDepth(8);
       this.emoZone.on('pointerdown', () => this.toggleEmotes());
       this.emoPanel = null;
+      // ロックオン（Q）：近くの人・ボス・強敵をねらい続ける
+      this.lockTxt = this.add.text(0, 0, '🎯', { fontSize: '20px' }).setOrigin(0.5).setDepth(7);
+      this.lockSub = this.add.text(0, 0, 'OFF', TR(10, '#fff8ea', '#10141f', 3)).setOrigin(0.5).setDepth(7);
+      this.lockZone = this.add.zone(0, 0, 50, 50).setInteractive({ useHandCursor: true }).setDepth(8);
+      this.lockZone.on('pointerdown', () => this.toggleLock());
       this.input.keyboard.on('keydown', e => {
         if (e.repeat || this.cards) return;
         const ae = document.activeElement; if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return;
@@ -146,6 +151,7 @@
         const i = ['z', 'x', 'c'].indexOf(k);
         if (i >= 0) { this.useItem(i); return; }
         if (k === 'e') { this.toggleEmotes(); return; }
+        if (k === 'q') { this.toggleLock(); return; }
         if (this.emoPanel && /^[1-9]$/.test(k)) { const b = this.emoPanel.list[+k - 1]; if (b) b.go(); }
       });
     }
@@ -154,6 +160,14 @@
       if (!cn || !cn[i] || cn[i][1] || !me.a) return;
       this.gs.session.useItem(i);
       Sfx.play('click');
+    }
+    toggleLock() {
+      const me = this.gs.me;
+      if (!me || !me.a) return;
+      const on = !me.lk;
+      this.gs.setLock(on);
+      Sfx.play('click');
+      this.banner(on ? '🎯 ロックオン ON：近くの人・ボス・強敵をねらう' : 'ロックオン OFF', on ? '#ffd27a' : '#cfc2e6');
     }
     toggleEmotes() {
       if (this.emoPanel) { this.emoPanel.objs.forEach(o => o.destroy()); this.emoPanel = null; return; }
@@ -208,6 +222,16 @@
       this.emoTxt.setPosition(e.x, e.y - 1).setAlpha(me.a ? 1 : 0.4);
       this.emoZone.setPosition(e.x, e.y).setSize(r * 2 + 6, r * 2 + 6);
       if (this.emoZone.input) this.emoZone.input.hitArea.setTo(0, 0, r * 2 + 6, r * 2 + 6);
+      // ロックオン：スマホ縦はエモートの左、それ以外はダッシュの上
+      const lp = L.portrait ? { x: e.x - step, y: e.y } : { x: dp.cx, y: dp.cy - dp.R - 16 - r };
+      const lk = !!me.lk;
+      g.fillStyle(lk ? 0x4a2a08 : 0x07050f, lk ? 0.85 : 0.65); g.fillCircle(lp.x, lp.y, r);
+      g.lineStyle(2.5, lk ? 0xffc040 : 0xffffff, 0.95); g.strokeCircle(lp.x, lp.y, r);
+      if (lk) { g.lineStyle(1.5, 0xffc040, 0.5); g.strokeCircle(lp.x, lp.y, r + 4); }
+      this.lockTxt.setPosition(lp.x, lp.y - 4).setAlpha(me.a ? 1 : 0.4);
+      this.lockSub.setPosition(lp.x, lp.y + r * 0.55).setText((lk ? 'ON' : 'OFF') + (L.compact ? '' : ' Q')).setColor(lk ? '#ffd27a' : '#fff8ea');
+      this.lockZone.setPosition(lp.x, lp.y).setSize(r * 2 + 6, r * 2 + 6);
+      if (this.lockZone.input) this.lockZone.input.hitArea.setTo(0, 0, r * 2 + 6, r * 2 + 6);
       // 透明化の残り時間
       if (me.ivt) { g.fillStyle(0xc8b8ff, 0.25); g.fillCircle(e.x, e.y, 4); }
     }

@@ -738,7 +738,7 @@ class World:
         self.proc = None
         self.seed = 0
         self.joins, self.leaves, self.respawns, self.choices = [], [], [], []
-        self.uses, self.emos = [], []
+        self.uses, self.emos, self.locks = [], [], []
         self.inputs = {}
         self.members = set()
         self.maint = os.path.exists(MAINT_FILE)
@@ -787,6 +787,7 @@ class World:
             if self.choices: cmd['ch'] = self.choices; self.choices = []
             if self.uses: cmd['use'] = self.uses; self.uses = []
             if self.emos: cmd['emo'] = self.emos; self.emos = []
+            if self.locks: cmd['lock'] = self.locks; self.locks = []
             if self.inputs: cmd['in'] = self.inputs; self.inputs = {}
             # jsc は入力を UTF-8 として読まないので、日本語は \u エスケープで渡す
             self.proc.stdin.write((json.dumps(cmd, ensure_ascii=True, separators=(',', ':')) + '\n').encode())
@@ -1068,6 +1069,9 @@ def handle_msg(c: Client, text: str):
     elif t == 'use':
         if c.joined:
             world.uses.append([c.id, safe_int(m.get('i'))])
+    elif t == 'lock':
+        if c.joined:
+            world.locks.append([c.id, 1 if m.get('on') else 0])
     elif t == 'emo':
         if c.joined and time.monotonic() - getattr(c, 'last_emo', 0) > 1:
             c.last_emo = time.monotonic()

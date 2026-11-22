@@ -76,6 +76,8 @@
       this.dashHold = false; // スマホのダッシュボタン（HUDが押している間 true にする）
 
       this.session.onSnapshot = s => this.onSnap(s);
+      // ロックオンの設定はこの端末で覚えておく
+      try { if (localStorage.getItem('nakama_lock') === '1') this.session.lock(true); } catch (e) { /* noop */ }
       this.session.onLost = msg => this.lost(msg);
 
       this.applyZoom();
@@ -404,6 +406,7 @@
         this.cameras.main.setZoom(this.baseZoom * this.zoomCur * this.punch);
       }
       this.renderPlayers(a, b, al, dt, time);
+      this.renderLock(time);
       this.updateProjs(dt);
       this.updateGround();
       if (this.frame % 3 === 1) this.updateChunks();
@@ -553,6 +556,31 @@
       this.pSprites.delete(id);
     }
 
+    setLock(on) {
+      this.session.lock(on);
+      if (this.me) this.me.lk = on ? 1 : undefined;
+      try { localStorage.setItem('nakama_lock', on ? '1' : '0'); } catch (e) { /* noop */ }
+    }
+    // ロックオン中の相手に照準を描く
+    renderLock(time) {
+      const me = this.me, lt = me && me.a && me.lk && me.lt;
+      if (!lt) return;
+      const o = lt[0] ? this.pSprites.get(lt[1]) : this.eSprites.get(lt[1]);
+      if (!o || o.lx == null || o.ly == null) return;
+      let x = o.lx, y, R;
+      if (lt[0]) { y = o.ly - (o.dh || 60) * 0.45; R = Math.max(34, (o.dh || 60) * 0.55); }
+      else { const h = o.img ? o.img.displayHeight : 80; y = o.ly - h * 0.45; R = Math.max(34, h * 0.55); }
+      const g = this.overlay, z = this.cameras.main.zoom, w = 3 / z;
+      const pulse = 1 + Math.sin(time / 120) * 0.06, rr = R * pulse;
+      g.lineStyle(w, 0xff4a3a, 0.95); g.strokeCircle(x, y, rr);
+      g.lineStyle(w * 0.6, 0xffd27a, 0.8); g.strokeCircle(x, y, rr * 0.55);
+      const a = time / 600;
+      for (let i = 0; i < 4; i++) {
+        const t = a + i * Math.PI / 2, c = Math.cos(t), s2 = Math.sin(t);
+        g.lineStyle(w, 0xff4a3a, 0.95);
+        g.lineBetween(x + c * rr * 0.75, y + s2 * rr * 0.75, x + c * rr * 1.3, y + s2 * rr * 1.3);
+      }
+    }
     renderPlayers(a, b, al, dt, time) {
       const am = this.pmap(a);
       const seen = new Set();
@@ -806,7 +834,7 @@
         else if (ty === 1) o.img.setScale(s, s * (1 + wob * 1.5));
         else o.img.setScale(s);
         const lift = ty === 1 || ty === 2 || ty === 13 || ty === 16 || ty === 17 ? 14 + wob * 40 : ty === 19 ? Math.abs(wob) * 90 : ty === 10 || ty === 27 ? Math.abs(wob) * 140 : ty === 26 ? 10 + wob * 30 : ty === 11 ? 6 + wob * 30 : 0; // 浮く・跳ねる
-        o.img.setPosition(x, y - lift).setDepth(y);
+        o.img.setPosition(x, y - lift).setDepth(y); o.ly = y - lift;
         o.shadow.setPosition(x, y + 2).setDepth(y - 1);
         if (FIELD_BOSS[ty] && Math.random() < 0.06 * FIELD_BOSS[ty]) this.burst(x + Phaser.Math.Between(-60, 60), y - Phaser.Math.Between(20, 140), ENEMY_BURST[ty], 1); // ボスの妖気
         if ((ty === 28 || ty === 29) && Math.random() < 0.25) this.burst(x + Phaser.Math.Between(-110, 110), y - Phaser.Math.Between(40, 260), ENEMY_BURST[ty], 1); // ヌシの妖気

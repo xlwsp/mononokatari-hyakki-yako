@@ -37,6 +37,7 @@ for (;;) {
     if (cmd.in) for (var id in cmd.in) sim.setInput(id, cmd.in[id][0], cmd.in[id][1], cmd.in[id][2]);
     if (cmd.ch) cmd.ch.forEach(function (c) { sim.choose(c[0], c[1], c[2]); });
     if (cmd.use) cmd.use.forEach(function (u) { sim.useCons(u[0], u[1]); });
+    if (cmd.lock) cmd.lock.forEach(function (u) { sim.setLock(u[0], u[1]); });
     if (cmd.emo) cmd.emo.forEach(function (u) { sim.emote(u[0], u[1]); });
     sim.step(GD.TICK);
     if (sim.tick % 40 === 0) humans.forEach(saveLine);

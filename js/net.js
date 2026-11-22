@@ -61,6 +61,7 @@
     }
     useItem(i) { this.relay.send({ t: 'use', i }); }
     emote(i) { this.relay.send({ t: 'emo', i }); }
+    lock(on) { this.relay.send({ t: 'lock', on: on ? 1 : 0 }); }
     say(text) { this.relay.send({ t: 'say', m: String(text).slice(0, 60) }); }
     choose(seq, idx) { this.relay.send({ t: 'ch', s: seq, i: idx }); }
     respawn(sp) { this.sp = sp; this.relay.send({ t: 'respawn', sp }); }

@@ -19,6 +19,9 @@
   const EVOLVE_LV = 30;        // このレベルで進化（進化するとものすごく強くなる）
   const PROTECT_TIME = 10;     // 出撃直後は体当たりされない
   const NEWBIE_LV = 1;         // （レベルによる保護はなし）
+  const LOCK_R = 620;          // ロックオン：この距離までの人・ボス・強敵をねらう
+  const NA_HARD_MUL = 10;      // 通常攻撃の弾：ボス・強敵へのダメージ倍率
+  const NA_PVP_MUL = 10;       // 通常攻撃の弾：人へのダメージ倍率
   const PVP_SHOT = 0.06;       // 通常攻撃が人に当たったとき：1秒あたり相手の最大HPの約6%（連射カードで増える）
   const BUMP_CD = 0.55;        // 同じ相手への体当たりの間隔（秒）
   const ELITE_LV = 12;         // このレベルから「強敵」が混ざる
@@ -265,6 +268,7 @@
   const isNushi = e => e.ty === 28 || e.ty === 29;
   const isBigOne = e => e.ty === 15 || isNushi(e); // 大妖とヌシ（突進などの特別な動き）
   const isBoss = e => e.ty === 4 || isBigOne(e) || FB_R[e.ty] !== undefined; // 押し返し・気絶が効かない
+  const isHard = e => e.el || isBoss(e); // ボス・強敵（ロックオンの対象・通常攻撃が大きく効く）
   const isWorldBoss = e => e.ty === 4 || isBigOne(e); // 誰もいなくても消えない
   const dmgFor = (e, p) => (e.lvd > 1 ? e.dmg * Math.min(1, dmgCurve(p.lv) / e.lvd) : e.dmg);
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -573,6 +577,37 @@
       this.setItem(p, item);
       this.ev({ e: 'spawn', p: id, x: r1(p.x), y: r1(p.y) });
     }
+    // 強いBot：1位の人の50〜70%のレベルのBotを5〜10人くらいいるようにする（ばちばち戦えるように）
+    topLv(skip) { let m = 1; for (const q of this.players) if (q !== skip && q.alive && q.lv > m) m = q.lv; return m; }
+    boostBot(p) {
+      const top = this.topLv(p);
+      if (top < 20) return;
+      if (!this.strongWant || chance(0.05)) this.strongWant = randInt(5, 10);
+      const strong = this.players.filter(q => q.bot && q.alive && q !== p && q.lv >= top * 0.45).length;
+      if (strong >= this.strongWant) return;
+      const want = Math.max(2, Math.round(top * rand(0.5, 0.7)));
+      const n0 = this.events.length;
+      let guard = 0;
+      while (p.lv < want && guard++ < 1200) {
+        p.xp = p.xpn; this.addXpRaw(p);
+        while (p.choices.length) { const c = p.choices[0]; if (!c.o.length) p.choices.shift(); else this.choose(p.id, c.s, randInt(0, c.o.length - 1)); }
+      }
+      this.events.length = n0; // 一気に上げたぶんのレベルアップ演出は出さない
+      p.hp = p.mhp;
+    }
+    // 定期的に：強いBotが足りないとき、人から離れた弱いBotを強いBotとして出しなおす
+    refillStrong() {
+      const top = this.topLv();
+      if (top < 20) return;
+      if (!this.strongWant) this.strongWant = randInt(5, 10);
+      const strong = this.players.filter(q => q.bot && q.alive && q.lv >= top * 0.45).length;
+      if (strong >= this.strongWant) return;
+      const far = q => this.players.every(h => !h.human || !h.alive || Math.hypot(h.x - q.x, h.y - q.y) > 1500);
+      const weak = this.players.filter(q => q.bot && q.alive && q.lv < top * 0.3 && far(q)).sort((a, b) => a.lv - b.lv)[0];
+      if (!weak) return;
+      this.resetPlayer(weak); this.boostBot(weak);
+      this.ev({ e: 'spawn', p: weak.id, x: r1(weak.x), y: r1(weak.y) });
+    }
     removeBot() {
       const bots = this.players.filter(p => p.bot);
       if (!bots.length) return;
@@ -585,7 +620,7 @@
       const want = clamp(BOT_TARGET - humans, 0, MAX_PLAYERS - humans);
       if (bots < want) {
         const name = BOT_NAMES[this.botSeq % BOT_NAMES.length] + (this.botSeq >= BOT_NAMES.length ? Math.floor(this.botSeq / BOT_NAMES.length) + 1 : '');
-        this.addPlayer('bot' + (this.botSeq++), name, true);
+        this.boostBot(this.addPlayer('bot' + (this.botSeq++), name, true));
       } else if (bots > want) this.removeBot();
     }
 
@@ -635,6 +670,9 @@
       if (p.itXp) v *= p.itXp; // 打ち出の小槌
       v *= this.riftBonus(p); // 妖気の渦の中
       p.xp += v; p.txp += v;
+      this.addXpRaw(p);
+    }
+    addXpRaw(p) {
       while (p.xp >= p.xpn) {
         p.xp -= p.xpn;
         p.lv++;
@@ -662,6 +700,7 @@
       this.time += dt;
       this.tick++;
       if (this.tick % 10 === 0) this.manageBots();
+      if (this.tick % 120 === 60) this.refillStrong();
 
       // 速さ：レベルが上がると速くなる（大きくなってカメラが引いても遅く感じないように）。Lv30で頭打ち。
       // 格下は「いちばん強い人との差」の半分だけ底上げ + 最大15%速い（一方的に追いかけられないように）
@@ -732,7 +771,7 @@
       for (const p of this.players) {
         if (!p.alive) {
           p.deadT += dt;
-          if (p.bot && p.deadT > 3) this.resetPlayer(p);
+          if (p.bot && p.deadT > 3) { this.resetPlayer(p); this.boostBot(p); }
           continue;
         }
         p.score = p.kills * 5 + Math.floor(p.txp) * 2 + p.bossKills * 300 + p.pkScore;
@@ -1549,6 +1588,32 @@
     }
     // 撃てる相手（守られている人・生まれたての人・自分は撃たない）
     foeOk(p, q) { return q !== p && q.alive && !isProtected(q) && !isProtected(p) && !(q.invT > 0); }
+    // ロックオン：オンのとき、近くの人・ボス・強敵をねらい続ける（離れたら近くの別の相手へ）
+    setLock(id, on) { const p = this.pmap.get(id); if (p) { p.lock = !!on; p.lockOn = null; } }
+    lockTarget(p) {
+      if (!p.lock) return null;
+      const R2 = LOCK_R * LOCK_R;
+      let t = p.lockOn;
+      if (t) {
+        const isP = this.pmap.get(t.id) === t;
+        if ((isP ? !this.foeOk(p, t) : t.dead) || (t.x - p.x) ** 2 + (t.y - p.y) ** 2 >= R2) t = null;
+      }
+      if (!t) {
+        let best = R2;
+        for (const q of this.players) {
+          if (!this.foeOk(p, q)) continue;
+          const d = (q.x - p.x) ** 2 + (q.y - p.y) ** 2;
+          if (d < best) { best = d; t = q; }
+        }
+        this.enemiesIn(p.x, p.y, LOCK_R, e => {
+          if (e.dead || !isHard(e)) return;
+          const d = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
+          if (d < best) { best = d; t = e; }
+        });
+      }
+      p.lockOn = t;
+      return t;
+    }
     nearestFoe(p, range) {
       let best = range * range, bt = null;
       for (const q of this.players) {
@@ -1612,7 +1677,8 @@
       const range = def.range || 520;
       if (def.kind === 'shot') {
         // 狙う相手：弓は人を優先、ほかは敵を優先
-        let tg = def.hunt ? this.nearestFoe(p, range) : null;
+        let tg = this.lockTarget(p);
+        if (!tg && def.hunt) tg = this.nearestFoe(p, range);
         if (!tg) tg = this.nearestEnemy(p.x, p.y, range);
         if (!tg && def.pvp && !def.radial) tg = this.nearestFoe(p, range);
         if (!tg && !def.radial) { p.itCd = 0.2; return; }
@@ -1718,9 +1784,12 @@
       if (p.atkCd > 0) return;
       const a = def.atk;
       // 近くの敵か、近くのプレイヤー（近い方）をねらう
-      let t = this.nearestEnemy(p.x, p.y, 420);
-      const foe = this.nearestFoe(p, 420);
-      if (foe && (!t || (foe.x - p.x) ** 2 + (foe.y - p.y) ** 2 < (t.x - p.x) ** 2 + (t.y - p.y) ** 2)) t = foe;
+      let t = this.lockTarget(p);
+      if (!t) {
+        t = this.nearestEnemy(p.x, p.y, 420);
+        const foe = this.nearestFoe(p, 420);
+        if (foe && (!t || (foe.x - p.x) ** 2 + (foe.y - p.y) ** 2 < (t.x - p.x) ** 2 + (t.y - p.y) ** 2)) t = foe;
+      }
       if (!t) { p.atkCd = 0.1; return; }
       const dmg = a.dmg * p.dmgMul * this.lvMul(p) * this.atkB(p);
       const base = Math.atan2(t.y - p.y, t.x - p.x);
@@ -1733,7 +1802,8 @@
         this.spawnProj(p, p.x, p.y, ang, a.speed, dmg, a.r, a.life, (a.pierce || 0) + p.pierce, p.sp, a.aoe, a.slow);
         // 通常攻撃もプレイヤーに当たる：どの妖怪でも1秒あたりの対人ダメージがだいたい同じになるよう、間隔と弾数でならす
         const pr = this.projs[this.projs.length - 1];
-        pr.pv = PVP_SHOT * a.cd * Math.sqrt(p.dmgMul) * (p.bot ? 0.8 : 1); pr.vh = vh;
+        pr.pv = PVP_SHOT * NA_PVP_MUL * a.cd * Math.sqrt(p.dmgMul) * (p.bot ? 0.8 : 1); pr.vh = vh;
+        pr.na = 1; // 通常攻撃の弾（ボス・強敵に大ダメージ）
       }
       p.atkCd = a.cd * p.rateMul;
     }
@@ -2033,10 +2103,10 @@
           if ((e.x - pr.x) ** 2 + (e.y - pr.y) ** 2 >= rr * rr) return;
           if (pr.aoe) {
             this.ev({ e: 'bm', x: r1(pr.x), y: r1(pr.y), r: pr.aoe });
-            this.enemiesIn(pr.x, pr.y, pr.aoe, e2 => this.damage(e2, pr.dmg, pr.o, pr.slow));
+            this.enemiesIn(pr.x, pr.y, pr.aoe, e2 => this.damage(e2, pr.dmg * (pr.na && isHard(e2) ? NA_HARD_MUL : 1), pr.o, pr.slow));
             gone = true; return false;
           }
-          this.damage(e, pr.dmg, pr.o, pr.slow);
+          this.damage(e, pr.dmg * (pr.na && isHard(e) ? NA_HARD_MUL : 1), pr.o, pr.slow);
           pr.pierce--;
           if (pr.pierce < 0) { gone = true; return false; }
           (pr.hit || (pr.hit = new Set())).add(e.id);
@@ -2201,6 +2271,7 @@
         sc2: me.evo ? Math.round(clamp(me.scd2 / this.evoCd(me), 0, 1) * 100) / 100 : undefined,
         cn: me.cons && me.cons.length ? me.cons.map(k => [k, me.consUsed.includes(k) ? 1 : 0]) : undefined,
         pn: me.pins && me.pins.length ? me.pins : undefined, ivt: me.invT > 0 ? Math.ceil(me.invT) : undefined,
+        lk: me.lock ? 1 : undefined, lt: me.lock && me.lockOn ? [this.pmap.get(me.lockOn.id) === me.lockOn ? 1 : 0, me.lockOn.id] : undefined,
       };
       if (this.tick % 10 === 0) {
         const rank = base.LB.indexOf(me);
