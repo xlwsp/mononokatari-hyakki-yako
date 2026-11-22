@@ -61,12 +61,23 @@
     const c = scene.add.container(x, y);
     const g = scene.add.graphics();
     const col = opt.color || C.green, dark = opt.dark || C.greenDark;
-    const txt = scene.add.text(0, 0, label, opt.brush
+    const txt = scene.add.text(0, 0, label, opt.night
+      ? Object.assign(TB(opt.size || Math.min(26, h * 0.42), '#fff8f0', '#0a0614', 3), { shadow: { offsetX: 0, offsetY: 0, color: 'rgba(190,150,255,0.85)', blur: 8, stroke: true, fill: false } })
+      : opt.brush
       ? Object.assign(TB(opt.size || Math.min(26, h * 0.42), '#fff', Tex.rgb(dark, -0.45), 4), { shadow: undefined })
       : TO(opt.size || Math.min(26, h * 0.42), '#fff', Tex.rgb(dark, -0.35), 4)).setOrigin(0.5);
     let hover = false, down = false, disabled = false, focused = false;
     const draw = () => {
       g.clear();
+      if (opt.night) { // 夜の枠：半透明の黒＋白い線＋角の◆
+        const dy = down ? 2 : 0, hl = (hover || focused) && !disabled;
+        frameDraw(g, -w / 2, -h / 2 + dy, w, h, {
+          glow: hl ? 0xb48cff : null, alpha: disabled ? 0.4 : hl ? 0.72 : 0.6,
+          tint: opt.accent, lineA: disabled ? 0.4 : 1, line: focused ? 0xffe7a0 : 0xffffff, inner: false,
+        });
+        txt.y = dy + (opt.labelDy || 0); txt.setAlpha(disabled ? 0.5 : 1);
+        return;
+      }
       const dy = down ? 4 : 0;
       const k = disabled ? 0x9c9488 : col, kd = disabled ? 0x6e675e : dark;
       if (focused && !disabled) {
@@ -105,6 +116,34 @@
     c.setDisabled = v => { disabled = v; draw(); };
     return c;
   }
+
+  // ---------- 夜の枠（タイトルのデザインに合わせた、半透明の黒＋白い線＋角の◆） ----------
+  function gem(g, x, y, s, col, a) {
+    g.fillStyle(col, a);
+    g.fillPoints([{ x, y: y - s }, { x: x + s, y }, { x, y: y + s }, { x: x - s, y }], true);
+  }
+  function cornerGems(g, x, y, w, h, s, col) {
+    for (const [cx, cy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
+      gem(g, cx, cy, s + 2, 0x0a0614, 0.9);
+      gem(g, cx, cy, s, col == null ? 0xfff6e6 : col, 1);
+    }
+  }
+  function frameDraw(g, x, y, w, h, opt = {}) {
+    const r = opt.r == null ? Math.min(14, h * 0.2) : opt.r;
+    if (opt.glow) { g.fillStyle(opt.glow, 0.22); g.fillRoundedRect(x - 6, y - 6, w + 12, h + 12, r + 6); }
+    g.fillStyle(opt.fill == null ? 0x07050f : opt.fill, opt.alpha == null ? 0.6 : opt.alpha);
+    g.fillRoundedRect(x, y, w, h, r);
+    if (opt.tint != null) { g.fillStyle(opt.tint, 0.18); g.fillRoundedRect(x, y, w, h, r); }
+    g.lineStyle(opt.lw || (h > 80 ? 3 : 2.5), opt.line || 0xffffff, opt.lineA == null ? 0.95 : opt.lineA);
+    g.strokeRoundedRect(x, y, w, h, r);
+    if (opt.inner !== false && h > 70 && w > 70) {
+      g.lineStyle(1, opt.line || 0xffffff, 0.2); g.strokeRoundedRect(x + 6, y + 6, w - 12, h - 12, Math.max(2, r - 5));
+    }
+    const s = opt.gem == null ? Phaser.Math.Clamp(Math.min(w, h) * 0.07, 4, 8) : opt.gem;
+    if (s) cornerGems(g, x + 1, y + 1, w - 2, h - 2, s, opt.gemCol);
+    return g;
+  }
+  function nightFrame(scene, x, y, w, h, opt = {}) { return frameDraw(scene.add.graphics(), x, y, w, h, opt); }
 
   // 矢印キーで選択、Enter / Space で決定
   function keyNav(scene, items, opt = {}) {
@@ -161,7 +200,7 @@
       objs.push(scene.add.image(it.x, it.y, it.k).setOrigin(0.5, 1).setScale(it.s).setFlipX(it.f));
     }
     // 少し暗くして文字を読みやすく
-    objs.push(scene.add.rectangle(0, 0, w, h, 0x1d2b17, opts.dim == null ? 0.25 : opts.dim).setOrigin(0));
+    objs.push(scene.add.rectangle(0, 0, w, h, 0x0a0c22, opts.dim == null ? 0.3 : opts.dim).setOrigin(0));
     return objs;
   }
 
@@ -177,5 +216,5 @@
     } catch (e) { /* noop */ }
   }
 
-  window.UI = { FONT, DISPLAY, BRUSH, C, T, TO, TB, TR, panel, button, keyNav, forestBackdrop, isMobile, mobileEnter };
+  window.UI = { FONT, DISPLAY, BRUSH, C, T, TO, TB, TR, panel, button, nightFrame, frameDraw, cornerGems, keyNav, forestBackdrop, isMobile, mobileEnter };
 })();

@@ -88,7 +88,7 @@
   function makeAll(scene) {
     // 地面タイル（継ぎ目なし）
     canvasTex(scene, 'ground', 256, 256, (ctx, w, h) => {
-      ctx.fillStyle = '#7db462'; ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#26363d'; ctx.fillRect(0, 0, w, h); // 夜の草地（月明かりの青みどり）
       let seed = 7;
       const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
       const wrap = (fn, x, y, m) => { for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) if (x + ox > -m && x + ox < w + m && y + oy > -m && y + oy < h + m) fn(x + ox, y + oy); };
@@ -96,19 +96,25 @@
         const x = rnd() * w, y = rnd() * h, r = 20 + rnd() * 40, light = rnd() < 0.5;
         wrap((xx, yy) => {
           const g = ctx.createRadialGradient(xx, yy, 0, xx, yy, r);
-          g.addColorStop(0, light ? 'rgba(170,215,120,0.28)' : 'rgba(80,140,70,0.22)');
+          g.addColorStop(0, light ? 'rgba(110,150,170,0.22)' : 'rgba(8,16,30,0.3)');
           g.addColorStop(1, 'rgba(0,0,0,0)');
           ctx.fillStyle = g; ctx.fillRect(xx - r, yy - r, r * 2, r * 2);
         }, x, y, r);
       }
       for (let i = 0; i < 140; i++) {
         const x = rnd() * w, y = rnd() * h, len = 4 + rnd() * 6, lean = (rnd() - 0.5) * 4;
-        const c = rnd() < 0.55 ? 'rgba(160,210,110,0.7)' : 'rgba(80,135,65,0.6)';
+        const c = rnd() < 0.55 ? 'rgba(120,165,170,0.55)' : 'rgba(18,34,44,0.6)';
         wrap((xx, yy) => {
           ctx.strokeStyle = c; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
           ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx + lean, yy - len); ctx.stroke();
         }, x, y, 12);
       }
+    });
+    // 画面のふちを少し暗くする（真ん中＝自分のまわりは暗くしない）
+    canvasTex(scene, 'vignette', 256, 256, (ctx) => {
+      const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 182);
+      g.addColorStop(0, 'rgba(6,6,24,0)'); g.addColorStop(0.55, 'rgba(6,6,24,0)'); g.addColorStop(1, 'rgba(6,6,24,0.62)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, 256, 256);
     });
     canvasTex(scene, 'patch', 128, 128, (ctx) => {
       const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);

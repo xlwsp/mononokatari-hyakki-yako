@@ -577,6 +577,18 @@ def process_creatures_v2():
             print('wrote', name + suf, 'from', src)
 
 
+# タイトル画面とロビーの背景（images/titlegamen.png, images/ホーム背景画面.png）
+def make_screens():
+    for src, out in [('titlegamen.png', 'title_main.jpg'), ('ホーム背景画面.png', 'home_bg.jpg')]:
+        path = os.path.join(SRC, src)
+        if not os.path.exists(path):
+            continue
+        im = Image.open(path).convert('RGB')
+        im = im.resize((1600, round(im.height * 1600 / im.width)), Image.LANCZOS)
+        im.save(os.path.join(OUT, out), quality=86, optimize=True)
+        print('wrote', out, im.size)
+
+
 if __name__ == '__main__':
     import sys as _sys
     args = _sys.argv[1:]
@@ -584,6 +596,8 @@ if __name__ == '__main__':
         make_bigboss_and_title()
     elif 'enemies' in args:  # 新しい敵だけ作り直す
         make_new_enemies()
+    elif 'screens' in args:  # タイトルとロビーの背景だけ
+        make_screens()
     elif 'v2' in args:  # キャラの新しい絵（〇〇02）だけ
         process_creatures_v2()
     else:

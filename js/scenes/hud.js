@@ -30,6 +30,7 @@
       this.g = this.add.graphics();
       this.mg = this.add.graphics().setDepth(2);
       this.hurt = this.add.rectangle(0, 0, 10, 10, 0xff3030, 0).setOrigin(0).setDepth(50);
+      this.vig = this.add.image(0, 0, 'vignette').setOrigin(0).setDepth(-10); // 夜のふち（真ん中は暗くしない）
       FX.emitters(this, 75);
 
       this.lvText = this.add.text(0, 0, '', TO(18, '#fff', '#7a4a1e', 4)).setOrigin(0.5).setDepth(3);
@@ -277,6 +278,7 @@
     }
 
     layout() {
+      if (this.vig) this.vig.setDisplaySize(this.scale.width, this.scale.height);
       const w = this.scale.width, h = this.scale.height;
       const portrait = h > w && w < 760; // スマホ縦画面
       const compact = w < 760;

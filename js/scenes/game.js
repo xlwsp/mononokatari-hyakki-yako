@@ -2,6 +2,12 @@
 (function () {
   'use strict';
   const { TO, TR } = UI;
+  // 夜の色：地面や木だけを月明かりの青に寄せる（キャラや敵は元の明るさのまま）
+  const NIGHT_PROP = 0x8a96c8, NIGHT_FLOWER = 0xb4b4e8;
+  const nightCol = c => {
+    const r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
+    return (Math.round(r * 0.38 + 10) << 16) | (Math.round(g * 0.48 + 16) << 8) | Math.round(b * 0.5 + 44);
+  };
   const lerp = (a, b, t) => a + (b - a) * t;
   const FX_DEPTH = 1000000;
   // 0〜14は昔の番号（もう出てこない。念のため用意された画像で表示）。7は金色の笠おばけ（逃げ回るボーナス）
@@ -33,10 +39,11 @@
     create() {
       const W = GD.WORLD.w, H = GD.WORLD.h;
       this.map = GD.generateMap(this.session.seed);
-      this.cameras.main.setBackgroundColor('#3f6b37');
+      this.cameras.main.setBackgroundColor('#1e2a33'); // 夜
       this.cameras.main.setBounds(-120, -120, W + 240, H + 240);
 
       this.buildWorld();
+      this.makeFireflies();
       FX.emitters(this, FX_DEPTH + 20); // 演出用の画像を先に用意
 
       this.pSprites = new Map();
@@ -165,20 +172,20 @@
         // 草の模様
         for (const [n] of around) for (const p of n.patches) {
           if (!near(p.x, p.y, p.rx)) continue;
-          im.setTexture('patch').setOrigin(0.5).setFlip(false, false).setDisplaySize(p.rx * 2, p.ry * 2).setTint(p.c).setAlpha(p.a);
+          im.setTexture('patch').setOrigin(0.5).setFlip(false, false).setDisplaySize(p.rx * 2, p.ry * 2).setTint(nightCol(p.c)).setAlpha(p.a);
           rt.batchDraw(im, p.x - tx, p.y - ty);
         }
         im.clearTint();
         rt.endDraw();
         // 小道
         g.clear();
-        g.fillStyle(0xb8975f, 0.55);
+        g.fillStyle(0x3e3c5a, 0.6); // 月明かりの石畳
         for (const p of d.dots) g.fillCircle(p[0] - tx, p[1] - ty, 46 * (p[2] > 1 ? p[2] : 1));
         rt.draw(g);
         g.clear();
-        g.fillStyle(0xdcc08a, 1);
+        g.fillStyle(0x55527a, 1);
         for (const p of d.dots) g.fillCircle(p[0] - tx, p[1] - ty, 38 * (p[2] > 1 ? p[2] : 1));
-        if (d.dots.some(p => p[2] > 1)) { g.fillStyle(0xe8d3a3, 0.7); g.fillCircle(GD.WORLD.w / 2 - tx, GD.WORLD.h / 2 - ty, 150); }
+        if (d.dots.some(p => p[2] > 1)) { g.fillStyle(0x6e6a98, 0.7); g.fillCircle(GD.WORLD.w / 2 - tx, GD.WORLD.h / 2 - ty, 150); }
         rt.draw(g);
         rt.beginDraw();
         // 影（木・茂み・石）と、地面に置くだけの花・小石
@@ -194,15 +201,16 @@
         }
         for (const p of flat) {
           if (!(p.k === 'flower1' || p.k === 'flower2' || p.k === 'rock')) continue;
-          im.setTexture(p.k).setOrigin(0.5, 1).setScale(p.s).setFlip(p.f, false).setAlpha(1);
+          im.setTexture(p.k).setOrigin(0.5, 1).setScale(p.s).setFlip(p.f, false).setAlpha(1).setTint(p.k === 'rock' ? NIGHT_PROP : NIGHT_FLOWER);
           rt.batchDraw(im, p.x - tx, p.y - ty);
         }
+        im.clearTint();
         rt.endDraw();
         // 茂みと木は、キャラとの前後関係があるので普通の画像のまま
         for (const p of d.props) {
           if (p.k === 'flower1' || p.k === 'flower2' || p.k === 'rock') continue;
           const src = this.textures.get(p.k).getSourceImage();
-          const img = this.add.image(p.x, p.y, p.k).setOrigin(0.5, 1).setScale(p.s).setFlipX(p.f).setDepth(p.y);
+          const img = this.add.image(p.x, p.y, p.k).setOrigin(0.5, 1).setScale(p.s).setFlipX(p.f).setDepth(p.y).setTint(NIGHT_PROP);
           objs.push(img);
           if (p.k.startsWith('tree')) trees.push({ img, x: p.x, y: p.y, w: src.width * p.s, h: src.height * p.s, a: 1 });
         }
@@ -222,7 +230,7 @@
         const k = cx + ',' + cy;
         if (!this.chunks.has(k)) this.makeChunk(k);
       }
-      cam.fadeIn(450, 20, 30, 20);
+      cam.fadeIn(450, 14, 16, 34);
     }
 
     updateChunks() {
@@ -245,6 +253,31 @@
       }
       this.trees = [];
       for (const c of this.chunks.values()) for (const t of c.trees) this.trees.push(t);
+    }
+
+    // ホタル・人魂：画面の中をふわふわ漂う光（夜の雰囲気）
+    makeFireflies() {
+      this.flies = [];
+      for (let i = 0; i < 26; i++) {
+        const f = this.add.image(0, 0, 'spark').setBlendMode(Phaser.BlendModes.ADD).setDepth(1e6 - 10)
+          .setTint(Phaser.Math.RND.pick([0xd8ff8a, 0xfff0a0, 0x9ad0ff, 0xc8a8ff])).setAlpha(0);
+        f.ph = Math.random() * 10; f.sp = 0.4 + Math.random() * 0.8; f.sz = 5 + Math.random() * 6; f.vx = (Math.random() - 0.5) * 30; f.vy = -6 - Math.random() * 14;
+        this.flies.push(f);
+      }
+    }
+    updateFlies(dt, now) {
+      if (!this.flies) return;
+      const v = this.cameras.main.worldView, z = this.cameras.main.zoom;
+      for (const f of this.flies) {
+        if (!f.placed || f.x < v.x - 60 || f.x > v.right + 60 || f.y < v.y - 60 || f.y > v.bottom + 60) {
+          f.placed = true; f.x = v.x + Math.random() * v.width; f.y = v.y + Math.random() * v.height;
+        }
+        f.ph += dt * f.sp;
+        f.x += (f.vx + Math.sin(f.ph * 1.7) * 18) * dt / Math.max(0.3, z);
+        f.y += (f.vy + Math.cos(f.ph * 1.3) * 12) * dt / Math.max(0.3, z);
+        const d = f.sz / z;
+        f.setDisplaySize(d, d).setAlpha(0.25 + 0.6 * Math.max(0, Math.sin(f.ph * 2.2)));
+      }
     }
 
     updateGround() {
@@ -321,6 +354,7 @@
     step(time, deltaMs) {
       const dt = Math.min(0.05, deltaMs / 1000);
       this.frame++;
+      this.updateFlies(dt, time);
       if (!this.snaps.length) return;
       const now = performance.now() / 1000;
       const rt = now + this.offset - this.delay;

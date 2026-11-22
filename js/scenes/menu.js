@@ -1,7 +1,7 @@
 // 起動・タイトル（モンスター選び）・やられた画面
 (function () {
   'use strict';
-  const { T, TO, TB, TR, C, panel, button, keyNav, forestBackdrop } = UI;
+  const { T, TO, TB, TR, C, panel, button, keyNav, forestBackdrop, nightFrame } = UI;
 
   // 名前の入力パネル：ゲーム画面（Phaser）とは別の、ふつうのWebページの入力欄。
   // 画面サイズが変わっても（スマホのキーボードが出ても）消えない。日本語の変換中の Enter では閉じない
@@ -12,7 +12,7 @@
     wrap.id = 'nameEditor';
     wrap.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(20,10,30,0.66);display:flex;align-items:flex-start;justify-content:center;padding-top:min(18vh,140px);';
     const box = document.createElement('div');
-    box.style.cssText = 'width:min(420px,calc(100vw - 32px));background:#f6ead0;border:4px solid #8a5a1a;border-radius:18px;padding:18px 18px 16px;box-shadow:0 10px 30px rgba(0,0,0,0.5);font-family:"M PLUS Rounded 1c",sans-serif;text-align:center;';
+    box.style.cssText = 'width:min(420px,calc(100vw - 32px));background:#f3ecf6;border:3px solid #3a2a5a;border-radius:18px;outline:3px solid #fff;outline-offset:4px;padding:18px 18px 16px;box-shadow:0 10px 30px rgba(0,0,0,0.5);font-family:"M PLUS Rounded 1c",sans-serif;text-align:center;';
     const title = document.createElement('div');
     title.textContent = opt.title || 'なまえ';
     title.style.cssText = 'font-weight:900;font-size:22px;color:#3a2414;margin-bottom:4px;';
@@ -90,16 +90,16 @@
     return `攻撃+${pct(b.atk - 1)}%　スキル威力+${pct(b.skill - 1)}%　待ち時間-${pct(1 - b.cd)}%　被ダメ-${pct(1 - b.def)}%${b.awake ? '　特性覚醒！' : ''}`;
   }
   // 選んだ妖怪の★と、次の★まで（ロビー・やられた画面で共通）
-  function starInfo(scene, cx, y, width) {
+  function starInfo(scene, cx, y, width, opt = {}) {
     const head = scene.add.text(cx, y, '', TR(18, '#c8901a', '#3a1e0a', 4)).setOrigin(0.5, 0);
     const gw = Math.min(340, width - 60), gx = cx - gw / 2, gy = y + 28;
     let gauge = [];
-    const sub = scene.add.text(cx, y + 52, '', TR(13, '#5a3a1a', null, 0, { align: 'center', wordWrap: { width: width - 30, useAdvancedWrap: true } })).setOrigin(0.5, 0);
+    const sub = scene.add.text(cx, y + 52, '', TR(13, opt.dark ? '#ece4fa' : '#5a3a1a', null, 0, { align: 'center', wordWrap: { width: width - 30, useAdvancedWrap: true } })).setOrigin(0.5, 0);
     return {
       set(k) {
         gauge.forEach(o => o.destroy()); gauge = [];
         if (!Unlock.ok(k)) {
-          head.setText(`🔒 ガチャで手に入る（レア度 ${RARE_NAME[GD.CHARA_RARITY[k] || 0]}）`).setColor('#8a5a5a');
+          head.setText(`🔒 ガチャで手に入る（レア度 ${RARE_NAME[GD.CHARA_RARITY[k] || 0]}）`).setColor(opt.dark ? '#d8b8c8' : '#8a5a5a');
           sub.setText('ガチャで同じ妖怪が出ると★が上がる（最大★5）').setY(y + 30);
           return;
         }
@@ -144,6 +144,29 @@
     }
     return objs;
   }
+  // ロビーの背景（月と妖怪の影のイラスト）。ロゴの下端と月の位置を返す
+  const HBG = { w: 1600, h: 899, logoB: 0.31, moonX: 0.5, moonY: 0.51, moonR: 0.2 };
+  function homeBackdrop(scene, wide) {
+    const w = scene.scale.width, h = scene.scale.height;
+    scene.cameras.main.setBackgroundColor('#1a1a28');
+    let sc, ox, oy;
+    if (wide) { sc = Math.max(w / HBG.w, h / HBG.h); ox = w / 2 - HBG.w * sc / 2; oy = h / 2 - HBG.h * sc / 2; }
+    else { sc = Math.max(w * 1.55 / HBG.w, Math.min(h * 0.42 / HBG.h, w * 2.2 / HBG.w)); ox = w / 2 - HBG.w * sc / 2; oy = 0; }
+    scene.add.image(ox, oy, 'home_bg').setOrigin(0).setScale(sc);
+    const ih = HBG.h * sc;
+    if (!wide && oy + ih < h) { // 絵の下は、なめらかに夜の色へ
+      const g = scene.add.graphics();
+      g.fillGradientStyle(0x1a1a28, 0x1a1a28, 0x1a1a28, 0x1a1a28, 0, 0, 1, 1);
+      g.fillRect(0, oy + ih * 0.7, w, ih * 0.3 + 1);
+      g.fillStyle(0x1a1a28, 1); g.fillRect(0, oy + ih, w, h - oy - ih);
+    }
+    // ただよう人魂（ひとだま）
+    for (let i = 0; i < 12; i++) {
+      const c = scene.add.circle(Phaser.Math.Between(0, w), h + 20, Phaser.Math.Between(2, 6), Phaser.Math.RND.pick([0xb8a0ff, 0x8ab8ff, 0xffe0b0]), 0.55).setBlendMode('ADD');
+      scene.tweens.add({ targets: c, y: -30, x: c.x + Phaser.Math.Between(-80, 80), alpha: 0, duration: Phaser.Math.Between(7000, 12000), delay: Phaser.Math.Between(0, 8000), repeat: -1 });
+    }
+    return { logoBottom: oy + HBG.logoB * ih, moonY: oy + HBG.moonY * ih, moonR: HBG.moonR * ih, moonX: ox + HBG.moonX * HBG.w * sc };
+  }
   const V = () => (window.GV && window.GV !== '__VERSION__' ? '?v=' + window.GV : '');
 
   // モンスター選びのグリッド（タイトルとやられた画面で共通）
@@ -181,6 +204,7 @@
       }
       return { k, ring, ic, x, y };
     });
+    if (opt.depth) objs.forEach(o => o.setDepth(opt.depth));
     const rows = Math.ceil(keys.length / cols);
     const api = {
       height: rows * size + (rows - 1) * gap,
@@ -210,7 +234,7 @@
     constructor() { super('Boot'); }
     preload() {
       const w = this.scale.width, h = this.scale.height;
-      this.cameras.main.setBackgroundColor('#5d8f4a');
+      this.cameras.main.setBackgroundColor('#141022');
       const label = this.add.text(w / 2, h / 2 - 30, 'よみこみ中…', TO(26)).setOrigin(0.5);
       const bar = this.add.graphics();
       this.load.on('progress', v => {
@@ -226,6 +250,8 @@
         this.load.image('ek_' + k, 'assets/ek_' + k + '.png' + V());
       }
       this.load.image('title_bg', 'assets/title_bg.jpg' + V());
+      this.load.image('title_main', 'assets/title_main.jpg' + V());
+      this.load.image('home_bg', 'assets/home_bg.jpg' + V());
       for (const k of GD.SPECIES_KEYS) {
         for (const suf of ['', '_e']) {
           this.load.image('cr_' + k + suf, 'assets/cr_' + k + suf + '.png' + V());
@@ -281,7 +307,7 @@
       wrap.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(20,10,30,0.66);display:flex;align-items:flex-start;justify-content:center;padding-top:min(8vh,60px);overflow:auto;';
       const F = '"M PLUS Rounded 1c",sans-serif';
       wrap.innerHTML = `
-        <div style="width:min(480px,calc(100vw - 28px));background:#f6ead0;border:4px solid #8a5a1a;border-radius:18px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-family:${F};color:#3a2414;">
+        <div style="width:min(480px,calc(100vw - 28px));background:#f3ecf6;border:3px solid #3a2a5a;border-radius:18px;outline:3px solid #fff;outline-offset:4px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-family:${F};color:#3a2414;">
           <div style="font-weight:900;font-size:22px;text-align:center">📮 ご意見・バグ報告</div>
           <div style="font-weight:800;font-size:12.5px;color:#6a4a2a;text-align:center;margin:4px 0 10px">運営に届きます。ほかのプレイヤーには見えません</div>
           <div id="fbKinds" style="display:flex;gap:6px;margin-bottom:10px"></div>
@@ -357,6 +383,7 @@
       this.infoLine.setScale(1);
       if (this.infoMaxH && this.infoLine.height > this.infoMaxH) this.infoLine.setScale(this.infoMaxH / this.infoLine.height);
       if (this.infoTitle.width > this.infoMaxW) this.infoTitle.setScale(this.infoMaxW / this.infoTitle.width); else this.infoTitle.setScale(1);
+      if (this.lockerNo && this.lockerNo.active) { const ks = PICK_KEYS(); this.lockerNo.setText(`◀ ${ks.indexOf(k) + 1} / ${ks.length} ▶　タップで一覧`); }
       if (this.preview) {
         this.preview.setTexture('cr_' + k).setTint(Unlock.ok(k) ? 0xffffff : 0x111111);
         const s = Math.min(this.previewH / this.preview.height, this.previewW / this.preview.width);
@@ -367,34 +394,23 @@
 
     build() {
       const w = this.scale.width, h = this.scale.height;
-      titleBackdrop(this, true);
-      // 横長で十分な広さ → 2段組（左：名前とえらぶ / 右：大きなモンスターと出撃ボタン）。それ以外は縦1列
+      // 横長で十分な広さ → ロッカー型（左右にメニュー・真ん中の月の前に妖怪）。それ以外は縦1列
       const two = w >= 760 && w / h >= 1.15;
-      const BR = (sz, col) => T(sz, col, { fontFamily: UI.BRUSH, fontStyle: 'normal' });
+      const bg = homeBackdrop(this, two);
       const best = parseInt(store.get('best', '0'), 10) || 0;
-      const narrow = !two;
-      const menu = [
-        [w < 560 ? '🏆順位' : '🏆 ランキング', () => this.showRanking(), 0xf0b030, 0xb07a18],
-        ['🎲 ガチャ', () => this.openShop('gacha'), 0xef7a6a, 0xb24a3e],
-        ['🛡 装備', () => this.openShop('equip'), 0x6fb6e8, 0x3f7fae],
-        [w < 560 ? '🏯やりこみ' : '🏯 やりこみ', () => this.openShop('extra'), 0xc06ad8, 0x7a3a8a],
-        ['📅 お題', () => this.showDaily(), 0x7ac85a, 0x4a8a34],
-      ];
-      const parchment = (x, y, pw, ph) => {
-        panel(this, x, y, pw, ph, { color: 0xf6ead0, alpha: 0.95, border: 0x8a5a1a, borderW: 4, shadow: 0.5 });
-        this.add.graphics().lineStyle(1.5, 0xc89a4a, 0.8).strokeRoundedRect(x + 6, y + 6, pw - 12, ph - 12, 13);
-      };
+      const NB = (x, y, bw, bh, label, fn, o = {}) => button(this, x, y, bw, bh, label, fn, Object.assign({ night: true }, o, { size: Math.min(o.size || 99, bh * 0.42, bw / Math.max(3, label.length * 0.95 + 0.6)) }));
+      const openList = () => this.openCharList();
       // 名前の欄：押すと入力パネルが開くボタン（画面の中に入力欄は置かない）
       const nameInput = (x, y, iw, ih, fs) => {
         this.input_ = { node: { value: store.get('name', ''), style: {} } }; // 名前の値（前と同じ形で読めるように）
         const g = this.add.graphics();
-        const draw = hov => { g.clear(); g.fillStyle(hov ? 0xfff6e0 : 0xffffff, 1); g.fillRoundedRect(x, y - ih / 2, iw, ih, 12); g.lineStyle(3, 0x4a3a2e, 1); g.strokeRoundedRect(x, y - ih / 2, iw, ih, 12); };
+        const draw = hov => { g.clear(); g.fillStyle(hov ? 0x2a2040 : 0x140e24, 0.9); g.fillRoundedRect(x, y - ih / 2, iw, ih, 10); g.lineStyle(2, 0xffffff, hov ? 1 : 0.7); g.strokeRoundedRect(x, y - ih / 2, iw, ih, 10); };
         draw(false);
-        const txt = this.add.text(x + 12, y, '', TR(fs, '#4a3a2e')).setOrigin(0, 0.5);
-        const pen = this.add.text(x + iw - 10, y, '✏️ 変える', TR(Math.max(12, fs - 5), '#c0501a')).setOrigin(1, 0.5);
+        const txt = this.add.text(x + 12, y, '', TR(fs, '#fff8f0')).setOrigin(0, 0.5);
+        const pen = this.add.text(x + iw - 10, y, '✏️ 変える', TR(Math.max(12, fs - 5), '#ffd68a')).setOrigin(1, 0.5);
         this.showName = () => {
           const v = this.input_.node.value.trim();
-          txt.setText(v || 'タップして名前を入力').setColor(v ? '#4a3a2e' : '#a89880');
+          txt.setText(v || 'タップして名前を入力').setColor(v ? '#fff8f0' : '#9a90b0');
           while (txt.width > iw - pen.width - 30 && txt.text.length > 1) txt.setText(txt.text.slice(0, -2) + '…');
         };
         this.showName();
@@ -402,147 +418,109 @@
         zone.on('pointerover', () => draw(true)); zone.on('pointerout', () => draw(false));
         zone.on('pointerup', () => { Sfx.init(); Sfx.play('click'); this.editName(); });
       };
-      const startButtons = (cx, by, bw, bh, fs) => {
-        const gap = 14;
-        this.contBtn = button(this, cx - bw / 2 - gap / 2, by, bw, bh, '続きから', () => this.go(true), { color: 0xd0503e, dark: 0x7a2418, size: fs, brush: true });
-        this.newBtn = button(this, cx + bw / 2 + gap / 2, by, bw, bh, '初めから', () => this.goNew(), { color: 0x6a54b0, dark: 0x352668, size: fs, brush: true });
-        const sub = TR(Math.max(12, fs * 0.5), '#fff8ea', '#2a160a', 4);
-        this.contInfo = this.add.text(cx - bw / 2 - gap / 2, by + bh / 2 + 6, '確認中…', sub).setOrigin(0.5, 0);
-        this.newInfo = this.add.text(cx + bw / 2 + gap / 2, by + bh / 2 + 6, '選んだ妖怪でLv1から', sub).setOrigin(0.5, 0);
+      // 真ん中の妖怪（ロッカー）：左右の ◀ ▶ で切り替え
+      const stage = (cx, top, bot, halfW, moonY, moonR) => {
+        this.previewH = bot - top; this.previewW = halfW * 1.5;
+        const glow = this.add.circle(cx, moonY, moonR, 0xc8a8ff, 0.16).setBlendMode('ADD');
+        this.tweens.add({ targets: glow, scale: 1.07, alpha: 0.26, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        this.add.image(cx, bot - 4, 'shadow').setDisplaySize(Math.min(300, halfW * 1.2), 54).setAlpha(0.9);
+        this.preview = this.add.image(cx, bot, 'cr_' + this.sp).setOrigin(0.5, 1);
+        this.tweens.add({ targets: this.preview, y: bot - 8, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        const step = d => { const keys = PICK_KEYS(); this.pick(keys[(keys.indexOf(this.sp) + d + keys.length) % keys.length]); };
+        const ay = top + (bot - top) * 0.55, as = Phaser.Math.Clamp(halfW * 0.16, 40, 60);
+        NB(cx - halfW + as / 2, ay, as, as * 1.25, '◀', () => step(-1), { size: as * 0.45 });
+        NB(cx + halfW - as / 2, ay, as, as * 1.25, '▶', () => step(1), { size: as * 0.45 });
+        // 何番目か
+        this.lockerNo = this.add.text(cx, bot + 6, '', TR(13, '#d8ccf0', '#0a0614', 3)).setOrigin(0.5, 0);
+        // 絵をタップしても一覧が開く
+        this.add.zone(cx, (top + bot) / 2, halfW * 1.2, bot - top).setInteractive({ useHandCursor: true }).on('pointerup', openList);
       };
+      const infoBox = (cx, y, iw, ih, big) => {
+        nightFrame(this, cx - iw / 2, y, iw, ih);
+        this.infoTitle = this.add.text(cx, y + 8, '', TB(big ? 26 : 19, '#fff4dc', '#0a0614', 4)).setOrigin(0.5, 0);
+        const ty = big ? 42 : 34;
+        this.infoLine = this.add.text(cx, y + ty + (ih - ty) / 2, '', TR(big ? 15 : 12.5, '#ece4fa', null, 0, { align: 'center', lineSpacing: big ? 5 : 2, wordWrap: { width: iw - 24, useAdvancedWrap: true } })).setOrigin(0.5);
+        this.infoMaxH = ih - ty - 8; this.infoMaxW = iw - 16;
+      };
+      const startBtn = (x, y, bw, bh, fs, cont) => {
+        const b = NB(x, y, bw, bh, cont ? '続きから' : '初めから', () => (cont ? this.go(true) : this.goNew()), { size: fs, accent: cont ? 0xff5a4a : 0x8a6aff, labelDy: -bh * 0.12 });
+        const t = this.add.text(x, y + bh * 0.27, cont ? '確認中…' : '選んだ妖怪でLv1から', TR(Math.max(11, fs * 0.46), '#e6dcf6', '#0a0614', 3)).setOrigin(0.5);
+        if (cont) { this.contBtn = b; this.contInfo = t; } else { this.newBtn = b; this.newInfo = t; }
+      };
+      this.picker = { cols: 1, set() {} };
 
       if (two) {
-        // ---------- パソコン（横長）：画面いっぱいの2段組 ----------
-        const M = Math.max(18, Math.round(w * 0.025));
-        // 上の帯：左にロゴ、右にメニューとスコア
-        const mbw = Phaser.Math.Clamp(Math.round(w * 0.105), 112, 165), mbh = Phaser.Math.Clamp(Math.round(h * 0.075), 48, 62);
-        const topH = Math.max(Phaser.Math.Clamp(Math.round(h * 0.15), 76, 130), M + mbh + 10 + 46);
-        const menuW = mbw * menu.length + 10 * (menu.length - 1);
-        const logoMax = Math.min(h * 0.085, (w - menuW - M * 3) / 7.2);
-        const logoSz = Phaser.Math.Clamp(Math.round(logoMax), 30, 76);
-        const logo = this.add.text(M, topH * 0.46, 'モノノカタリ', TB(logoSz, '#f8e6bc', '#2a160a', logoSz / 9 + 3)).setOrigin(0, 0.5);
-        this.add.text(M + logo.width / 2, topH * 0.46 + logoSz * 0.62, '― 百鬼夜行 ―', TB(Math.max(15, logoSz * 0.34), '#e0c0ff', '#1a0a2a', 4)).setOrigin(0.5, 0);
-        menu.forEach(([label, fn, col, dark], i) => {
-          button(this, w - M - menuW + mbw / 2 + i * (mbw + 10), M + mbh / 2, mbw, mbh, label, fn, { color: col, dark, size: Math.min(24, mbh * 0.42, mbw / 6), brush: true });
-        });
-        const stY = M + mbh + 10;
-        button(this, w - M - 88, h - M - 16, 176, 32, '📮 ご意見・バグ報告', () => this.openFeedback(), { color: 0x8a7e6e, dark: 0x4a4038, size: 14 });
-        this.ptsText = this.add.text(w - M, stY, '', TR(16, '#7ae8ff', '#10182a', 4)).setOrigin(1, 0);
-        this.bestText = this.add.text(w - M, stY + 22, `ベストスコア  ${best.toLocaleString()}`, TR(16, '#ffe7a8', '#2a160a', 4)).setOrigin(1, 0);
-
-        const bodyTop = topH + 8, helpH = 30, bodyBot = h - M - helpH;
-        const LW = Math.min(620, Math.round(w * 0.47)), lx = M;
-        const lh = bodyBot - bodyTop;
-        parchment(lx, bodyTop, LW, lh);
-        // 名前
-        const rowY = bodyTop + 38;
-        this.add.text(lx + 24, rowY, 'なまえ', BR(22, '#5a3a1a')).setOrigin(0, 0.5);
-        nameInput(lx + 110, rowY, LW - 140, 44, 19);
-        // 妖怪をえらぶ（大きなアイコン）
-        const pickTitleY = rowY + 48;
-        this.add.text(lx + LW / 2, pickTitleY, '― 妖怪をえらぶ ―', BR(21, '#5a3a1a')).setOrigin(0.5);
-        const gridTop = pickTitleY + 22;
-        const unlockH = h < 560 ? 0 : 82; // 低い画面では★の欄を省く
-        const gridRoom = bodyBot - 16 - unlockH - gridTop;
-        const pw = LW - 30;
-        // 2段で収まるいちばん大きなアイコン
-        const maxSize = Math.max(40, Math.min(84, Math.floor((gridRoom - 12) / 2), Math.floor((pw - 10) / 7) - 8));
-        this.picker = monsterPicker(this, lx + LW / 2, gridTop + Math.max(0, (gridRoom - (maxSize * 2 + 12)) / 2), pw, this.sp, k => this.pick(k), { cols: 7, maxSize });
-        if (unlockH) this.starBox = starInfo(this, lx + LW / 2, bodyBot - 10 - unlockH, LW);
-
-        // 右：選んだ妖怪を大きく＋説明＋出撃ボタン
-        const rx0 = lx + LW + M, rw = w - M - rx0, rcx = rx0 + rw / 2;
-        const bh = Phaser.Math.Clamp(Math.round(h * 0.085), 52, 72);
-        const bw = Math.min(260, (rw - 30) / 2);
-        const by = bodyBot - 22 - bh / 2;
-        startButtons(rcx, by, bw, bh, Math.round(bh * 0.46));
-        // 説明の板
-        const infoH = Phaser.Math.Clamp(Math.round(h * 0.13), 74, 110);
-        const iy = by - bh / 2 - 16 - infoH;
-        const iw = Math.min(rw, 560);
-        const ig = this.add.graphics();
-        ig.fillStyle(0x140a1e, 0.72); ig.fillRoundedRect(rcx - iw / 2, iy, iw, infoH, 14);
-        ig.lineStyle(2, 0xc89a4a, 0.8); ig.strokeRoundedRect(rcx - iw / 2, iy, iw, infoH, 14);
-        this.infoTitle = this.add.text(rcx, iy - 6, '', TB(Math.min(40, h * 0.05), '#fbeccb', '#2a160a', 5)).setOrigin(0.5, 1);
-        this.infoLine = this.add.text(rcx, iy + infoH / 2, '', TR(Math.min(17, h * 0.022), '#fff6e0', null, 0, { align: 'center', lineSpacing: 6, wordWrap: { width: iw - 30, useAdvancedWrap: true } })).setOrigin(0.5);
-        this.infoMaxH = infoH - 14; this.infoMaxW = rw;
-        // 大きなモンスター
-        const titleH = Math.min(40, h * 0.05) * 1.5 + 8;
-        const pBot = iy - titleH - 10, pTop = bodyTop + 6;
-        this.previewH = pBot - pTop; this.previewW = rw * 0.9;
-        if (this.previewH >= 90) {
-        const glow = this.add.circle(rcx, pBot - this.previewH * 0.45, Math.min(this.previewH, rw) * 0.42, 0xb070ff, 0.18).setBlendMode('ADD');
-        this.tweens.add({ targets: glow, scale: 1.08, alpha: 0.28, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-        this.add.image(rcx, pBot - 4, 'shadow').setDisplaySize(Math.min(300, rw * 0.5), 60).setAlpha(0.8);
-        this.preview = this.add.image(rcx, pBot, 'cr_' + this.sp).setOrigin(0.5, 1);
-        this.tweens.add({ targets: this.preview, y: pBot - 8, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-        } else this.preview = null; // 低すぎる画面ではモンスターの絵を省く
-        this.msgText = this.add.text(rcx, pTop + 10, this.notice || '', TR(17, '#fff', '#2a160a', 5, { align: 'center' })).setOrigin(0.5, 0).setDepth(5);
-        // 操作説明（下の帯）
-        if (h >= 520) this.add.text(w / 2, h - M - helpH / 2, '移動: WASD / 矢印 / ドラッグ　ダッシュ: Shift　攻撃とスキルは自動！　Lv30で進化',
-          TR(14, '#fff8ea', '#1a1020', 4)).setOrigin(0.5);
+        // ---------- パソコン（横長）：左右にメニュー、真ん中の月の前に妖怪 ----------
+        const M = Math.max(16, Math.round(w * 0.022));
+        const colW = Phaser.Math.Clamp(Math.round(w * 0.24), 230, 380);
+        const top = Math.max(bg.logoBottom + 12, h * 0.3);
+        const bot = h - M;
+        // 左：大きなボタン5つ
+        const gap = Phaser.Math.Clamp(h * 0.018, 8, 16);
+        const bh = Math.min(82, (bot - top - gap * 4) / 5);
+        const lx = M + colW / 2;
+        let y = top + bh / 2;
+        startBtn(lx, y, colW, bh, bh * 0.4, true); y += bh + gap;
+        startBtn(lx, y, colW, bh, bh * 0.4, false); y += bh + gap;
+        NB(lx, y, colW, bh, '召喚（ガチャ）', () => this.openShop('gacha'), { accent: 0xff7a9a }); y += bh + gap;
+        NB(lx, y, colW, bh, '装備', () => this.openShop('equip'), { accent: 0x6ab6ff }); y += bh + gap;
+        NB(lx, y, colW, bh, 'やりこみ', () => this.openShop('extra'), { accent: 0xc07aff });
+        // 右：名前とポイント → ★の情報 → 小さなボタン4つ
+        const rx = w - M - colW;
+        const sbh = Phaser.Math.Clamp(bh * 0.82, 40, 64), sbw = (colW - gap) / 2;
+        const smallTop = bot - sbh * 2 - gap;
+        const small = [['キャラ一覧', openList], ['ランキング', () => this.showRanking()], ['お題', () => this.showDaily()], ['ご意見', () => this.openFeedback()]];
+        small.forEach(([l, fn], i) => NB(rx + sbw / 2 + (i % 2) * (sbw + gap), smallTop + sbh / 2 + Math.floor(i / 2) * (sbh + gap), sbw, sbh, l, fn, { size: 20 }));
+        const panH = smallTop - gap - top;
+        nightFrame(this, rx, top, colW, panH);
+        const py = top + 16;
+        this.add.text(rx + 18, py + 4, 'なまえ', TB(17, '#fff4dc', '#0a0614', 3)).setOrigin(0, 0);
+        nameInput(rx + 16, py + 46, colW - 32, 42, 18);
+        this.ptsText = this.add.text(rx + 18, py + 78, '', TR(15, '#7ae8ff', '#0a0614', 4)).setOrigin(0, 0);
+        this.bestText = this.add.text(rx + 18, py + 100, `ベストスコア  ${best.toLocaleString()}`, TR(15, '#ffe7a8', '#0a0614', 4)).setOrigin(0, 0);
+        if (panH >= 250) this.starBox = starInfo(this, rx + colW / 2, py + 132, colW - 10, { dark: true });
+        // 真ん中
+        const cx = w / 2, halfW = (w - colW * 2 - M * 4) / 2;
+        const infoH = Phaser.Math.Clamp(Math.round(h * 0.14), 84, 116);
+        const iw = Math.min(halfW * 2, 560);
+        const iy = bot - infoH;
+        infoBox(cx, iy, iw, infoH, true);
+        const pBot = Math.min(bg.moonY + bg.moonR * 1.05, iy - 26);
+        stage(cx, Math.max(top - 20, bg.logoBottom - 10), pBot, Math.min(halfW, 300), bg.moonY, bg.moonR);
+        this.msgText = this.add.text(cx, top - 6, this.notice || '', TR(17, '#fff', '#0a0614', 5, { align: 'center', wordWrap: { width: halfW * 2 } })).setOrigin(0.5, 0).setDepth(5);
+        if (h >= 600) this.add.text(cx, h - 6, '移動: WASD / 矢印 / ドラッグ　ダッシュ: Shift　攻撃とスキルは自動！　Lv30で進化', TR(12, '#cfc4e8', '#0a0614', 3)).setOrigin(0.5, 1);
       } else {
-        // ---------- スマホ（縦長）：上から順に積む。高さを測って、重ならないように詰める ----------
-        const M = 12;
-        const menuH = 52, menuY = h - 10 - menuH / 2;       // 下：ランキング・ガチャ・装備
-        const pw = Math.min(560, w - M * 2), cx = w / 2;
-        const gw = pw - 24;
-        const cols = gw < 420 ? 5 : 7;
-        let iconMax = 58;
-        const pickerH = sz => { const n = Math.ceil(PICK_KEYS().length / cols), size = Math.min(sz, Math.floor((gw - 10) / cols) - 8); const gap = Math.floor((gw - cols * size) / (cols + 1)); return n * size + (n - 1) * gap; };
-        let logoSz = Phaser.Math.Clamp(Math.round(w * 0.11), 30, 56);
-        let showUnlock = true, showSub = true;
-        const infoH = 66, btnH = 54;
-        const need = () => (logoSz * 1.1 + (showSub ? logoSz * 0.5 : 0) + 26) + 14 +
-          (12 + 46 + 26 + pickerH(iconMax) + 10 + infoH + 10 + btnH + 26 + (showUnlock ? 82 : 0) + 10) + 10 + menuH + 10;
-        // 入りきらないときは、順に小さく・省く
-        if (need() > h) showSub = false;
-        if (need() > h) logoSz = 28;
-        if (need() > h) iconMax = 48;
-        if (need() > h) showUnlock = false;
-        if (need() > h) iconMax = 40;
-        let y = 8 + logoSz * 0.55;
-        button(this, 30, 24, 46, 34, '📮', () => this.openFeedback(), { color: 0x8a7e6e, dark: 0x4a4038, size: 18 });
-        const logo = this.add.text(cx, y, 'モノノカタリ', TB(logoSz, '#f8e6bc', '#2a160a', logoSz / 9 + 3)).setOrigin(0.5);
-        if (logo.width > w - 20) logo.setScale((w - 20) / logo.width);
-        y += logoSz * 0.55;
-        if (showSub) { this.add.text(cx, y + 2, '― 百鬼夜行 ―', TB(Math.max(14, logoSz * 0.36), '#e0c0ff', '#1a0a2a', 4)).setOrigin(0.5, 0); y += logoSz * 0.5; }
-        // スコアとポイント（ロゴの下に1行）
-        this.ptsText = this.add.text(cx + 6, y + 6, '', TR(14, '#7ae8ff', '#10182a', 4)).setOrigin(0, 0);
-        this.bestText = this.add.text(cx - 6, y + 6, `ベスト ${best.toLocaleString()}`, TR(14, '#ffe7a8', '#2a160a', 4)).setOrigin(1, 0);
-        y += 26 + 8;
-        // 紙のパネル
-        const py = y;
-        const panelBottom = menuY - menuH / 2 - 10;
-        const ph = panelBottom - py;
-        parchment(cx - pw / 2, py, pw, ph);
-        let iy = py + 12 + 20;
-        this.add.text(cx - pw / 2 + 16, iy, 'なまえ', BR(18, '#5a3a1a')).setOrigin(0, 0.5);
-        nameInput(cx - pw / 2 + 84, iy, pw - 100, 40, 17);
-        iy += 26 + 12;
-        this.add.text(cx, iy, '― 妖怪をえらぶ ―', BR(17, '#5a3a1a')).setOrigin(0.5);
-        iy += 14;
-        // 余った高さは、えらぶ欄と説明の間に配る
-        const spare = Math.max(0, panelBottom - (iy + pickerH(iconMax) + 10 + infoH + 10 + btnH + 26 + (showUnlock ? 82 : 0) + 6));
-        const extra = Math.min(spare / 3, 24);
-        this.picker = monsterPicker(this, cx, iy + extra, gw, this.sp, k => this.pick(k), { cols, maxSize: iconMax });
-        iy += extra + this.picker.height + 10 + extra;
-        this.infoTitle = this.add.text(cx, iy, '', TB(20, '#3a1e0a', '#f6ead0', 3)).setOrigin(0.5, 0);
-        this.infoTitle.setShadow(0, 0, 'rgba(0,0,0,0)', 0);
-        this.infoLine = this.add.text(cx, iy + 28 + (infoH - 28) / 2, '', TR(12.5, '#4a2e18', null, 0, { align: 'center', lineSpacing: 2, wordWrap: { width: gw, useAdvancedWrap: true } })).setOrigin(0.5);
-        this.infoMaxH = infoH - 28; this.infoMaxW = gw;
-        iy += infoH + 10 + extra;
-        const bw = Math.min(220, (pw - 50) / 2);
-        startButtons(cx, iy + btnH / 2, bw, btnH, 24);
-        for (const t of [this.contInfo, this.newInfo]) { t.setColor('#5a3a1a'); t.setStroke('#000', 0); t.setFontSize(12); }
-        iy += btnH + 26;
-        if (showUnlock) this.starBox = starInfo(this, cx, iy + 4, pw);
-        this.msgText = this.add.text(cx, py - 6, this.notice || '', TR(15, '#fff', '#2a160a', 5, { align: 'center', wordWrap: { width: w - 30 } })).setOrigin(0.5, 1).setDepth(5);
-        menu.forEach(([label, fn, col, dark], i) => {
-          const mw = (w - 24) / menu.length - 6;
-          button(this, 12 + mw / 2 + i * (mw + 9), menuY, mw, menuH, label, fn, { color: col, dark, size: Math.min(19, mw / 6.2), brush: true });
-        });
-        this.previewH = 0; this.preview = null;
+        // ---------- スマホ（縦長）：上から ロゴ → 妖怪（◀ ▶）→ 説明 → 名前 → 出撃 → ★ → メニュー ----------
+        const M = 12, pw = Math.min(560, w - M * 2), cx = w / 2;
+        const menuH = 50, menuY = h - 8 - menuH / 2;
+        let y = bg.logoBottom + 2;
+        this.ptsText = this.add.text(cx + 6, y, '', TR(13, '#7ae8ff', '#0a0614', 4)).setOrigin(0, 0);
+        this.bestText = this.add.text(cx - 6, y, `ベスト ${best.toLocaleString()}`, TR(13, '#ffe7a8', '#0a0614', 4)).setOrigin(1, 0);
+        y += 22;
+        const infoH = 74, nameH = 44, btnH = 56, starH = 84;
+        const fixed = infoH + 8 + nameH + 10 + btnH + 10 + menuH + 16 + 20;
+        let showStar = h - y - fixed - starH >= 150;
+        const stageH = Math.min(300, h - y - fixed - (showStar ? starH : 0));
+        const sTop = y, sBot = y + stageH;
+        stage(cx, sTop, sBot - 18, Math.min(pw / 2, 220), bg.moonY, bg.moonR);
+        NB(cx - pw / 2 + 24, sTop + 20, 46, 36, '📮', () => this.openFeedback(), { size: 18 });
+        NB(cx + pw / 2 - 30, sTop + 20, 58, 36, '一覧', openList, { size: 16 });
+        y = sBot + 4;
+        infoBox(cx, y, pw, infoH, false);
+        y += infoH + 8;
+        nightFrame(this, cx - pw / 2, y, pw, nameH, { gem: 4 });
+        this.add.text(cx - pw / 2 + 14, y + nameH / 2, 'なまえ', TB(16, '#fff4dc', '#0a0614', 3)).setOrigin(0, 0.5);
+        nameInput(cx - pw / 2 + 76, y + nameH / 2, pw - 86, 34, 16);
+        y += nameH + 10;
+        const bw = (pw - 10) / 2;
+        startBtn(cx - bw / 2 - 5, y + btnH / 2, bw, btnH, 24, true);
+        startBtn(cx + bw / 2 + 5, y + btnH / 2, bw, btnH, 24, false);
+        y += btnH + 10;
+        if (showStar) { nightFrame(this, cx - pw / 2, y, pw, starH - 4, { gem: 4 }); this.starBox = starInfo(this, cx, y + 6, pw, { dark: true }); }
+        this.msgText = this.add.text(cx, sTop + 4, this.notice || '', TR(15, '#fff', '#0a0614', 5, { align: 'center', wordWrap: { width: w - 30 } })).setOrigin(0.5, 0).setDepth(5);
+        const menu = [['召喚', () => this.openShop('gacha')], ['装備', () => this.openShop('equip')], ['やりこみ', () => this.openShop('extra')], ['順位', () => this.showRanking()], ['お題', () => this.showDaily()]];
+        const mw = (w - 16 - 6 * (menu.length - 1)) / menu.length;
+        menu.forEach(([l, fn], i) => NB(8 + mw / 2 + i * (mw + 6), menuY, mw, menuH, l, fn, { size: 18 }));
       }
       this.goBtn = null;
       this.setSave(this.saveData === undefined ? null : this.saveData, this.saveData === undefined);
@@ -555,6 +533,16 @@
       if (!window.__titleSeen && !this.notice) this.showSplash();
       if (this.notice && /メンテナンス/.test(this.notice)) this.showMaint();
       else Net.ping().then(r => { if (r && r.maint && this.sys.isActive()) this.showMaint(); }).catch(() => {});
+    }
+
+    // 妖怪の一覧（ロッカーの中身）。えらぶと真ん中に出る
+    openCharList() {
+      if (this.rankBox || this.shopBox || this.nameAsk || this.confirmBox || this.connecting) return;
+      const ui = Shop.overlay(this, '妖怪をえらぶ', 660, 520);
+      const { x, y, pw, ph, w, add } = ui;
+      const picker = monsterPicker(this, w / 2, y + 64, pw - 40, this.sp, k => { this.pick(k); ui.close(); }, { cols: pw < 480 ? 5 : 7, maxSize: 70, depth: 64 });
+      ui.onClose = () => picker.destroy();
+      add(this.add.text(w / 2, y + 64 + picker.height + 18, '🔒 はガチャ（召喚）で手に入る', TR(14, '#6a4a2a')).setOrigin(0.5, 0));
     }
 
     // ハイスコアランキング（全期間・人のプレイヤーだけ・1人1つの自己ベスト）
@@ -708,13 +696,22 @@
     // 最初に開いたときだけ：タイトルの絵を大きく見せる。タップでロビーへ
     showSplash() {
       const w = this.scale.width, h = this.scale.height;
-      const objs = titleBackdrop(this, false);
-      const subY = Math.min(h * 0.8, objs.bottom + 40), s = Math.min(1, w / 700);
-      const sub = this.add.text(w / 2, subY, '― 百 鬼 夜 行 ―', TB(40 * s + 14, '#e8c8ff', '#1a0a2a', 6)).setOrigin(0.5).setAlpha(0);
-      const tap = this.add.text(w / 2, Math.min(h - 30, subY + 52 * s + 26), UI.isMobile() ? 'タップしてはじめる' : 'クリック / Enter ではじめる', TB(20 * s + 8, '#fbeccb', '#2a160a', 4)).setOrigin(0.5).setAlpha(0);
-      objs.push(sub, tap);
-      this.tweens.add({ targets: sub, alpha: 1, duration: 1200, delay: 300 });
-      this.tweens.add({ targets: tap, alpha: { from: 0.25, to: 1 }, duration: 900, delay: 1200, yoyo: true, repeat: -1 });
+      const objs = [];
+      // タイトルの絵。ロゴが切れないように（縦長の画面では横幅に合わせ、すき間はぼかした絵でうめる）
+      const TW = 1600, TH = 900, cover = Math.max(w / TW, h / TH);
+      const sc = Math.max(Math.min(w / TW, h / TH), Math.min(cover, w / 1020));
+      if (sc < cover) {
+        const back = this.add.image(w / 2, h / 2, 'title_main').setScale(cover * 1.05);
+        if (back.preFX) back.preFX.addBlur(1, 3, 3, 1.5);
+        objs.push(back, this.add.rectangle(0, 0, w, h, 0x0a0614, 0.55).setOrigin(0));
+      }
+      const img = this.add.image(w / 2, h / 2, 'title_main').setScale(sc);
+      objs.push(img);
+      const bottom = h / 2 + TH / 2 * sc, s = Math.min(1, w / 700);
+      const ty = sc < cover ? Math.min(h - 40, bottom + 44) : h * 0.9;
+      const tap = this.add.text(w / 2, ty, UI.isMobile() ? 'タップしてはじめる' : 'クリック / Enter ではじめる', Object.assign(TB(20 * s + 10, '#fff8f0', '#0a0614', 4), { shadow: { offsetX: 0, offsetY: 0, color: 'rgba(190,150,255,0.9)', blur: 10, stroke: true, fill: false } })).setOrigin(0.5).setAlpha(0);
+      objs.push(tap);
+      this.tweens.add({ targets: tap, alpha: { from: 0.3, to: 1 }, duration: 900, delay: 900, yoyo: true, repeat: -1 });
       const all = this.add.container(0, 0, objs).setDepth(100);
       const zone = this.add.zone(0, 0, w, h).setOrigin(0).setInteractive().setDepth(101);
       this.hideInput(true);

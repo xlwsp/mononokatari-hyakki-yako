@@ -66,14 +66,14 @@
     const objs = [];
     const add = o => { objs.push(o); if (o.setDepth) o.setDepth(Math.max(o.depth || 0, 61)); return o; };
     add(scene.add.rectangle(0, 0, w, h, 0x0c0816, 0.78).setOrigin(0).setInteractive().setDepth(60));
-    add(panel(scene, x, y, pw, ph, { color: 0xf6ead0, alpha: 1, border: 0x8a5a1a, borderW: 4, shadow: 0.5 }).setDepth(61));
-    add(scene.add.graphics().lineStyle(1.5, 0xc89a4a, 0.9).strokeRoundedRect(x + 6, y + 6, pw - 12, ph - 12, 13).setDepth(61));
+    // 夜の枠（白い線＋角の◆）の中に、読みやすい紙の板
+    add(UI.nightFrame(scene, x - 7, y - 7, pw + 14, ph + 14, { alpha: 0.88, r: 22, gem: 9 }).setDepth(61));
+    add(panel(scene, x, y, pw, ph, { color: 0xf3ecf6, alpha: 1, border: 0x3a2a5a, borderW: 3, shadow: 0 }).setDepth(61));
+    add(scene.add.graphics().lineStyle(1.5, 0x9a88c0, 0.8).strokeRoundedRect(x + 6, y + 6, pw - 12, ph - 12, 13).setDepth(61));
     // 見出しの帯
     const bandW = Math.min(pw - 40, 380);
-    const band = add(scene.add.graphics().setDepth(61));
-    band.fillStyle(0x2a1430, 1); band.fillRoundedRect(w / 2 - bandW / 2, y - 18, bandW, 50, 14);
-    band.lineStyle(3, 0xd8a83a, 1); band.strokeRoundedRect(w / 2 - bandW / 2, y - 18, bandW, 50, 14);
-    add(scene.add.text(w / 2, y + 7, title, TB(w < 500 ? 24 : 28, '#fbeccb', '#2a160a', 5)).setOrigin(0.5).setDepth(62));
+    add(UI.nightFrame(scene, w / 2 - bandW / 2, y - 18, bandW, 50, { alpha: 0.95, fill: 0x120c24, gem: 6, inner: false }).setDepth(61));
+    add(scene.add.text(w / 2, y + 7, title, Object.assign(TB(w < 500 ? 24 : 28, '#fff8f0', '#0a0614', 4), { shadow: { offsetX: 0, offsetY: 0, color: 'rgba(190,150,255,0.85)', blur: 8, stroke: true, fill: false } })).setOrigin(0.5).setDepth(62));
     scene.hideInput && scene.hideInput(true);
     let onKey = null;
     const slot = opt.slot || 'shopBox';
@@ -91,7 +91,7 @@
       },
     };
     const cbw = Math.min(200, pw - 40);
-    add(button(scene, w / 2, y + ph - 34, cbw, 48, 'とじる', () => ui.close(), { color: 0x8a7e6e, dark: 0x4a4038, size: 22, brush: true }).setDepth(63));
+    add(button(scene, w / 2, y + ph - 34, cbw, 48, 'とじる', () => ui.close(), { night: true, size: 22 }).setDepth(63));
     onKey = e => { if (e.key === 'Escape') ui.close(); };
     scene.time.delayedCall(200, () => !ui.closed && scene.input.keyboard.on('keydown', onKey));
     scene[slot] = ui;
