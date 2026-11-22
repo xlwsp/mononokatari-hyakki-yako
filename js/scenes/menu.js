@@ -271,6 +271,60 @@
       this.events.once('shutdown', () => { this.scale.off('resize', this.onResize); this.saveName(); if (this.nameEditor && this.nameEditor.isOpen()) this.nameEditor.close(); });
     }
     saveName() { if (this.input_ && this.input_.node) store.set('name', this.input_.node.value); }
+    // ---------- ご意見・バグ報告（運営に送る。届いた内容はサーバーのPCでだけ見られる） ----------
+    openFeedback() {
+      if (document.getElementById('fbPanel') || this.connecting) return;
+      Sfx.init(); Sfx.play('click');
+      const kb = this.game.input.keyboard; if (kb) kb.enabled = false;
+      const wrap = document.createElement('div');
+      wrap.id = 'fbPanel';
+      wrap.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(20,10,30,0.66);display:flex;align-items:flex-start;justify-content:center;padding-top:min(8vh,60px);overflow:auto;';
+      const F = '"M PLUS Rounded 1c",sans-serif';
+      wrap.innerHTML = `
+        <div style="width:min(480px,calc(100vw - 28px));background:#f6ead0;border:4px solid #8a5a1a;border-radius:18px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-family:${F};color:#3a2414;">
+          <div style="font-weight:900;font-size:22px;text-align:center">📮 ご意見・バグ報告</div>
+          <div style="font-weight:800;font-size:12.5px;color:#6a4a2a;text-align:center;margin:4px 0 10px">運営に届きます。ほかのプレイヤーには見えません</div>
+          <div id="fbKinds" style="display:flex;gap:6px;margin-bottom:10px"></div>
+          <div id="fbStars" style="text-align:center;font-size:30px;margin-bottom:6px;cursor:pointer;user-select:none"></div>
+          <textarea id="fbText" maxlength="500" placeholder="ここに書いてね（500文字まで）" style="width:100%;box-sizing:border-box;height:150px;border-radius:12px;border:3px solid #4a3a2e;padding:10px;font-family:${F};font-weight:800;font-size:16px;color:#3a2414;resize:vertical;outline:none"></textarea>
+          <div id="fbMsg" style="font-weight:800;font-size:13px;color:#c0301a;min-height:18px;margin:4px 0"></div>
+          <div style="display:flex;gap:10px">
+            <button id="fbCancel" style="flex:1;height:48px;border-radius:12px;border:3px solid #2a1608;background:#b8ab98;color:#2a1608;font-family:${F};font-weight:900;font-size:18px">とじる</button>
+            <button id="fbSend" style="flex:1;height:48px;border-radius:12px;border:3px solid #2a1608;background:#ef7a6a;color:#fff8ea;font-family:${F};font-weight:900;font-size:18px">送信する</button>
+          </div>
+        </div>`;
+      document.body.appendChild(wrap);
+      const $ = id => wrap.querySelector('#' + id);
+      const KINDS = [['review', '⭐ レビュー'], ['idea', '🙏 改善してほしい'], ['bug', '🐞 バグ報告']];
+      let kind = 'idea', stars = 0;
+      const drawKinds = () => {
+        $('fbKinds').innerHTML = KINDS.map(([k, l]) => `<button data-k="${k}" style="flex:1;height:42px;border-radius:10px;border:3px solid #2a1608;background:${k === kind ? '#d8a020' : '#e8dcc0'};color:#2a1608;font-family:${F};font-weight:900;font-size:14px">${l}</button>`).join('');
+        $('fbKinds').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { kind = b.dataset.k; drawKinds(); }));
+        $('fbStars').style.display = kind === 'review' ? 'block' : 'none';
+        $('fbStars').innerHTML = [1, 2, 3, 4, 5].map(i => `<span data-s="${i}" style="color:${i <= stars ? '#f0a810' : '#c8b8a0'}">★</span>`).join('');
+        $('fbStars').querySelectorAll('span').forEach(sp => sp.addEventListener('click', () => { stars = +sp.dataset.s; drawKinds(); }));
+        $('fbText').placeholder = kind === 'bug' ? 'どこで・何をしたら・どうなったか を書いてね（500文字まで）' : kind === 'review' ? '遊んでみた感想を書いてね（500文字まで）' : '直してほしいところ・欲しい機能を書いてね（500文字まで）';
+      };
+      drawKinds();
+      const close = () => { if (kb) kb.enabled = true; wrap.remove(); };
+      $('fbCancel').addEventListener('click', close);
+      wrap.addEventListener('pointerdown', e => { if (e.target === wrap) close(); });
+      wrap.addEventListener('keydown', e => e.stopPropagation());
+      $('fbSend').addEventListener('click', () => {
+        const text = $('fbText').value.trim();
+        if (text.length < 2) { $('fbMsg').textContent = '内容を書いてね'; return; }
+        $('fbSend').disabled = true; $('fbMsg').style.color = '#6a4a2a'; $('fbMsg').textContent = '送信中…';
+        Net.feedback({ k: kind, st: kind === 'review' ? stars : 0, m: text, n: (this.input_ && this.input_.node.value.trim()) || '', ua: (navigator.userAgent || '').slice(0, 160), sc: `${window.innerWidth}x${window.innerHeight}` })
+          .then(r => {
+            if (r && r.ok) { $('fbMsg').style.color = '#2a7a2a'; $('fbMsg').textContent = '送信しました！ ありがとう！'; Sfx.play('cap'); setTimeout(close, 1200); }
+            else { $('fbSend').disabled = false; $('fbMsg').style.color = '#c0301a'; $('fbMsg').textContent = r && r.wait ? '少し時間をあけてから送ってね' : '送れませんでした'; }
+          })
+          .catch(() => { $('fbSend').disabled = false; $('fbMsg').style.color = '#c0301a'; $('fbMsg').textContent = 'サーバーにつながりません'; });
+      });
+      setTimeout(() => $('fbText').focus(), 50);
+      this.events.once('shutdown', () => { if (wrap.isConnected) close(); });
+    }
+
     // 名前の入力パネルを開く（then があれば決めたあとに呼ぶ）
     editName(opt = {}) {
       if (this.nameEditor && this.nameEditor.isOpen()) return;
@@ -372,6 +426,7 @@
           button(this, w - M - menuW + mbw / 2 + i * (mbw + 10), M + mbh / 2, mbw, mbh, label, fn, { color: col, dark, size: Math.min(24, mbh * 0.42, mbw / 6), brush: true });
         });
         const stY = M + mbh + 10;
+        button(this, w - M - 88, h - M - 16, 176, 32, '📮 ご意見・バグ報告', () => this.openFeedback(), { color: 0x8a7e6e, dark: 0x4a4038, size: 14 });
         this.ptsText = this.add.text(w - M, stY, '', TR(16, '#7ae8ff', '#10182a', 4)).setOrigin(1, 0);
         this.bestText = this.add.text(w - M, stY + 22, `ベストスコア  ${best.toLocaleString()}`, TR(16, '#ffe7a8', '#2a160a', 4)).setOrigin(1, 0);
 
@@ -424,7 +479,7 @@
         } else this.preview = null; // 低すぎる画面ではモンスターの絵を省く
         this.msgText = this.add.text(rcx, pTop + 10, this.notice || '', TR(17, '#fff', '#2a160a', 5, { align: 'center' })).setOrigin(0.5, 0).setDepth(5);
         // 操作説明（下の帯）
-        if (h >= 520) this.add.text(w / 2, h - M - helpH / 2, '移動: WASD / 矢印 / ドラッグ　　攻撃とスキルは自動！　　敵を倒してレベルアップ → Lv30で進化！　　他のプレイヤーには体当たり',
+        if (h >= 520) this.add.text(w / 2, h - M - helpH / 2, '移動: WASD / 矢印 / ドラッグ　ダッシュ: Shift　攻撃とスキルは自動！　Lv30で進化',
           TR(14, '#fff8ea', '#1a1020', 4)).setOrigin(0.5);
       } else {
         // ---------- スマホ（縦長）：上から順に積む。高さを測って、重ならないように詰める ----------
@@ -447,6 +502,7 @@
         if (need() > h) showUnlock = false;
         if (need() > h) iconMax = 40;
         let y = 8 + logoSz * 0.55;
+        button(this, 30, 24, 46, 34, '📮', () => this.openFeedback(), { color: 0x8a7e6e, dark: 0x4a4038, size: 18 });
         const logo = this.add.text(cx, y, 'モノノカタリ', TB(logoSz, '#f8e6bc', '#2a160a', logoSz / 9 + 3)).setOrigin(0.5);
         if (logo.width > w - 20) logo.setScale((w - 20) / logo.width);
         y += logoSz * 0.55;

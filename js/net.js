@@ -132,6 +132,8 @@
   const awaken = sp => ask('awake', 'prof', { sp });
   const cosmetic = (slot, i, buy) => ask('cos', 'prof', { slot, i, buy: buy ? 1 : 0 });
   const title = i => ask('title', 'prof', { i });
+  // ご意見・バグ報告を運営に送る（{ok} か {wait}）
+  const feedback = d => ask('fb', 'fbok', d);
   // サーバーの様子（{maint: true/false}）
   const ping = () => ask('ping', 'pong');
 
@@ -154,5 +156,5 @@
     });
   }
 
-  window.Net = { Relay, Session, connect, saveInfo, highScores, profile, gacha, equip, awaken, cosmetic, title, ping };
+  window.Net = { Relay, Session, connect, saveInfo, highScores, profile, gacha, equip, awaken, cosmetic, title, feedback, ping };
 })();

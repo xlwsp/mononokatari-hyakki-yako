@@ -812,6 +812,79 @@ class World:
 world = World()
 
 
+# ---------------- ご意見・バグ報告（このPCの tools/ にだけ保存。外には配信しない） ----------------
+FEEDBACK_FILE = os.path.join(ROOT, 'tools', 'feedback.jsonl')
+FEEDBACK_HTML = os.path.join(ROOT, 'tools', 'feedback.html')
+FB_KINDS = {'review': '⭐ レビュー', 'idea': '🙏 改善してほしい', 'bug': '🐞 バグ報告'}
+_fb_last = {}      # 端末ごとの前回の送信時刻（連投よけ）
+_fb_recent = []    # 最近1時間の送信時刻（全体の上限）
+
+
+def save_feedback(tok, m):
+    now = time.time()
+    key = tok or 'anon'
+    if now - _fb_last.get(key, 0) < 60:
+        return 'wait'
+    _fb_recent[:] = [t for t in _fb_recent if now - t < 3600]
+    if len(_fb_recent) >= 100:
+        return 'wait'
+    text = ''.join(ch for ch in str(m.get('m') or '') if ch >= ' ' or ch == '\n').strip()[:500]
+    if len(text) < 2:
+        return 'ng'
+    kind = m.get('k') if m.get('k') in FB_KINDS else 'idea'
+    try:
+        st = max(0, min(5, int(m.get('st') or 0)))
+    except (TypeError, ValueError):
+        st = 0
+    rec = {'t': time.strftime('%Y-%m-%d %H:%M:%S'), 'k': kind, 'st': st, 'm': text,
+           'n': str(m.get('n') or '')[:12], 'ua': str(m.get('ua') or '')[:160], 'sc': str(m.get('sc') or '')[:20]}
+    _fb_last[key] = now
+    _fb_recent.append(now)
+    with open(FEEDBACK_FILE, 'a', encoding='utf-8') as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + '\n')
+    write_feedback_html()
+    log('feedback:', kind, rec['n'], text[:40].replace('\n', ' '))
+    return 'ok'
+
+
+def write_feedback_html():
+    import html as _h
+    rows = []
+    try:
+        with open(FEEDBACK_FILE, encoding='utf-8') as f:
+            for line in f:
+                try:
+                    rows.append(json.loads(line))
+                except Exception:
+                    pass
+    except FileNotFoundError:
+        pass
+    col = {'review': '#d8a020', 'idea': '#3a8ae8', 'bug': '#d0503e'}
+    cards = []
+    for r in reversed(rows):
+        stars = ('★' * r.get('st', 0) + '☆' * (5 - r.get('st', 0))) if r.get('k') == 'review' and r.get('st') else ''
+        cards.append(
+            '<div class="c"><div class="h"><span class="k" style="background:%s">%s</span> <span class="s">%s</span>'
+            '<span class="n">%s</span><span class="t">%s</span></div><div class="m">%s</div><div class="u">%s ／ %s</div></div>' % (
+                col.get(r.get('k'), '#888'), _h.escape(FB_KINDS.get(r.get('k'), '')), stars, _h.escape(r.get('n') or '（名前なし）'),
+                _h.escape(r.get('t', '')), _h.escape(r.get('m', '')).replace('\n', '<br>'), _h.escape(r.get('sc', '')), _h.escape(r.get('ua', ''))))
+    count = {k: sum(1 for r in rows if r.get('k') == k) for k in FB_KINDS}
+    page = '''<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ご意見ボックス</title><style>
+body{margin:0;background:#f6ead0;color:#3a2414;font-family:"Hiragino Maru Gothic ProN","M PLUS Rounded 1c",sans-serif;padding:20px}
+h1{font-size:24px;margin:0 0 4px}.sum{color:#6a4a2a;margin-bottom:16px}
+.c{background:#fff;border:3px solid #8a5a1a;border-radius:14px;padding:12px 14px;margin:0 0 12px;max-width:860px}
+.h{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px}.k{color:#fff;border-radius:8px;padding:2px 8px;font-weight:bold;font-size:13px}
+.s{color:#e0a010}.n{font-weight:bold}.t{color:#8a7a6a;font-size:13px;margin-left:auto}.m{font-size:16px;line-height:1.6;white-space:normal}
+.u{color:#a09080;font-size:11px;margin-top:6px;word-break:break-all}
+</style></head><body><h1>📮 ご意見ボックス</h1><div class="sum">全%d件（レビュー %d ／ 改善してほしい %d ／ バグ報告 %d）　最終更新 %s　※新しい順。ページを再読み込みすると最新になります</div>%s</body></html>''' % (
+        len(rows), count['review'], count['idea'], count['bug'], time.strftime('%Y-%m-%d %H:%M:%S'), ''.join(cards) or '<p>まだ届いていません</p>')
+    tmp = FEEDBACK_HTML + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        f.write(page)
+    os.replace(tmp, FEEDBACK_HTML)
+
+
 def start_maint():
     """メンテナンス開始：遊んでいる人をロビーへ戻す（セーブは抜けるときに保存される）"""
     world.maint = True
@@ -919,6 +992,11 @@ def handle_msg(c: Client, text: str):
             profiles.check_ach(tok)
         box = profiles.pop_inbox(tok)
         c.send({'t': 'prof', 'd': dict(profiles.view(tok), got=got, lb=lb, box=box)})
+    elif t == 'fb':
+        # ご意見・バグ報告
+        tok = m.get('tok')
+        r = save_feedback(tok if valid_tok(tok) else None, m)
+        c.send({'t': 'fbok', 'd': {'ok': r == 'ok', 'wait': r == 'wait'}})
     elif t == 'ping':
         c.send({'t': 'pong', 'd': {'maint': world.maint}})
     elif t == 'hs?':

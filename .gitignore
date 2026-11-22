@@ -14,3 +14,9 @@ tools/profiles.json
 tools/profiles.json.tmp
 tools/maintenance
 tools/server.log
+tools/weekly.json
+tools/weekly.json.tmp
+# ご意見（このPCでだけ見る）
+tools/feedback.jsonl
+tools/feedback.html
+tools/feedback.html.tmp
