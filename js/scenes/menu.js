@@ -3,6 +3,56 @@
   'use strict';
   const { T, TO, TB, TR, C, panel, button, keyNav, forestBackdrop } = UI;
 
+  // 名前の入力パネル：ゲーム画面（Phaser）とは別の、ふつうのWebページの入力欄。
+  // 画面サイズが変わっても（スマホのキーボードが出ても）消えない。日本語の変換中の Enter では閉じない
+  function openNameEditor(game, opt) {
+    const old = document.getElementById('nameEditor');
+    if (old) old.remove();
+    const wrap = document.createElement('div');
+    wrap.id = 'nameEditor';
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(20,10,30,0.66);display:flex;align-items:flex-start;justify-content:center;padding-top:min(18vh,140px);';
+    const box = document.createElement('div');
+    box.style.cssText = 'width:min(420px,calc(100vw - 32px));background:#f6ead0;border:4px solid #8a5a1a;border-radius:18px;padding:18px 18px 16px;box-shadow:0 10px 30px rgba(0,0,0,0.5);font-family:"M PLUS Rounded 1c",sans-serif;text-align:center;';
+    const title = document.createElement('div');
+    title.textContent = opt.title || 'なまえ';
+    title.style.cssText = 'font-weight:900;font-size:22px;color:#3a2414;margin-bottom:4px;';
+    const sub = document.createElement('div');
+    sub.textContent = opt.sub || 'ランキングやほかの人の画面に表示されます（12文字まで）';
+    sub.style.cssText = 'font-weight:800;font-size:13px;color:#6a4a2a;margin-bottom:12px;';
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.maxLength = 12; inp.placeholder = 'ゆうしゃ'; inp.value = opt.value || '';
+    inp.autocomplete = 'off'; inp.enterKeyHint = 'done';
+    inp.style.cssText = 'width:100%;box-sizing:border-box;height:52px;border-radius:12px;border:3px solid #4a3a2e;background:#fff;padding:0 12px;font-family:inherit;font-weight:800;font-size:20px;color:#3a2414;outline:none;text-align:center;';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:10px;margin-top:14px;';
+    const mk = (label, bg, fg) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = `flex:1;height:50px;border-radius:12px;border:3px solid #2a1608;background:${bg};color:${fg};font-family:inherit;font-weight:900;font-size:19px;cursor:pointer;`; return b; };
+    const cancel = mk(opt.cancelLabel || 'やめる', '#b8ab98', '#2a1608'), ok = mk('けってい', '#ef7a6a', '#fff8ea');
+    row.append(cancel, ok); box.append(title, sub, inp, row); wrap.append(box);
+    document.body.appendChild(wrap);
+    // 入力中はゲームのキー操作を止める（WASD・スペースなどが打てなくならないように）
+    const kb = game && game.input && game.input.keyboard;
+    if (kb) kb.enabled = false;
+    let done = false;
+    const close = v => {
+      if (done) return;
+      done = true;
+      if (kb) kb.enabled = true;
+      wrap.remove();
+      if (v === null) { if (opt.onCancel) opt.onCancel(); } else opt.onDone(v.trim().slice(0, 12));
+    };
+    ok.addEventListener('click', () => close(inp.value));
+    cancel.addEventListener('click', () => close(null));
+    wrap.addEventListener('pointerdown', e => { if (e.target === wrap) close(null); });
+    inp.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.isComposing || e.keyCode === 229) return; // 日本語の変換を確定するEnterでは閉じない
+      if (e.key === 'Enter') { e.preventDefault(); close(inp.value); } else if (e.key === 'Escape') close(null);
+    });
+    inp.addEventListener('keyup', e => e.stopPropagation());
+    setTimeout(() => { inp.focus(); try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) { /* noop */ } }, 50);
+    return { close: () => close(null), isOpen: () => !done };
+  }
+
   const store = {
     get(k, d) { try { const v = localStorage.getItem('nakama_' + k); return v == null ? d : v; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem('nakama_' + k, v); } catch (e) { /* noop */ } },
@@ -202,7 +252,11 @@
       if (!GD.SPECIES[this.sp] || !Unlock.ok(this.sp)) this.sp = 'gekomaru';
       this.connecting = false;
       this.build();
-      this.onResize = () => { this.saveName(); this.scene.restart({ msg: this.msgText && this.msgText.text, keep: true }); };
+      this.onResize = () => {
+        // 名前の入力中（スマホのキーボードが出て画面サイズが変わったとき）は作り直さず、閉じてから
+        if (this.nameEditor && this.nameEditor.isOpen()) { this.resizePending = true; return; }
+        this.saveName(); this.scene.restart({ msg: this.msgText && this.msgText.text, keep: true });
+      };
       this.scale.on('resize', this.onResize);
       this.onKey = e => {
         const ae = document.activeElement;
@@ -214,9 +268,25 @@
         else if (e.key === 'Enter' || e.key === ' ') this.go();
       };
       this.input.keyboard.on('keydown', this.onKey);
-      this.events.once('shutdown', () => { this.scale.off('resize', this.onResize); this.saveName(); });
+      this.events.once('shutdown', () => { this.scale.off('resize', this.onResize); this.saveName(); if (this.nameEditor && this.nameEditor.isOpen()) this.nameEditor.close(); });
     }
     saveName() { if (this.input_ && this.input_.node) store.set('name', this.input_.node.value); }
+    // 名前の入力パネルを開く（then があれば決めたあとに呼ぶ）
+    editName(opt = {}) {
+      if (this.nameEditor && this.nameEditor.isOpen()) return;
+      this.nameEditor = openNameEditor(this.game, {
+        title: opt.title || 'なまえを入力', sub: opt.sub, value: this.input_ ? this.input_.node.value : '', cancelLabel: opt.cancelLabel,
+        onDone: v => {
+          this.nameEditor = null;
+          if (this.input_) this.input_.node.value = v;
+          store.set('name', v);
+          if (this.showName && this.sys.isActive()) this.showName();
+          if (this.resizePending) { this.resizePending = false; this.onResize(); }
+          if (opt.then) opt.then(v);
+        },
+        onCancel: () => { this.nameEditor = null; if (this.resizePending) { this.resizePending = false; this.onResize(); } if (opt.onCancel) opt.onCancel(); },
+      });
+    }
     getName() {
       const v = (this.input_ && this.input_.node.value || '').trim();
       return (v || 'ゆうしゃ').slice(0, 12);
@@ -260,15 +330,23 @@
         panel(this, x, y, pw, ph, { color: 0xf6ead0, alpha: 0.95, border: 0x8a5a1a, borderW: 4, shadow: 0.5 });
         this.add.graphics().lineStyle(1.5, 0xc89a4a, 0.8).strokeRoundedRect(x + 6, y + 6, pw - 12, ph - 12, 13);
       };
+      // 名前の欄：押すと入力パネルが開くボタン（画面の中に入力欄は置かない）
       const nameInput = (x, y, iw, ih, fs) => {
-        this.input_ = this.add.dom(x + iw / 2, y, 'input', [
-          `width:${iw}px`, `height:${ih}px`, 'box-sizing:border-box', 'border-radius:12px', 'border:3px solid #4a3a2e',
-          'background:#fff', 'padding:0 12px', `font-family:${UI.FONT}`, 'font-weight:800', `font-size:${fs}px`, 'color:#4a3a2e', 'outline:none',
-        ].join(';'));
-        this.input_.node.maxLength = 12;
-        this.input_.node.placeholder = 'ゆうしゃ';
-        this.input_.node.value = store.get('name', '');
-        this.input_.node.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') this.input_.node.blur(); });
+        this.input_ = { node: { value: store.get('name', ''), style: {} } }; // 名前の値（前と同じ形で読めるように）
+        const g = this.add.graphics();
+        const draw = hov => { g.clear(); g.fillStyle(hov ? 0xfff6e0 : 0xffffff, 1); g.fillRoundedRect(x, y - ih / 2, iw, ih, 12); g.lineStyle(3, 0x4a3a2e, 1); g.strokeRoundedRect(x, y - ih / 2, iw, ih, 12); };
+        draw(false);
+        const txt = this.add.text(x + 12, y, '', TR(fs, '#4a3a2e')).setOrigin(0, 0.5);
+        const pen = this.add.text(x + iw - 10, y, '✏️ 変える', TR(Math.max(12, fs - 5), '#c0501a')).setOrigin(1, 0.5);
+        this.showName = () => {
+          const v = this.input_.node.value.trim();
+          txt.setText(v || 'タップして名前を入力').setColor(v ? '#4a3a2e' : '#a89880');
+          while (txt.width > iw - pen.width - 30 && txt.text.length > 1) txt.setText(txt.text.slice(0, -2) + '…');
+        };
+        this.showName();
+        const zone = this.add.zone(x + iw / 2, y, iw, ih).setInteractive({ useHandCursor: true });
+        zone.on('pointerover', () => draw(true)); zone.on('pointerout', () => draw(false));
+        zone.on('pointerup', () => { Sfx.init(); Sfx.play('click'); this.editName(); });
       };
       const startButtons = (cx, by, bw, bh, fs) => {
         const gap = 14;
@@ -627,7 +705,7 @@
       this.events.once('shutdown', () => { clearTimeout(this.maintTimer); this.maintBox = null; });
     }
     // 名前の入力欄は画面のいちばん上に出てしまうので、ウィンドウを開いている間は隠す
-    hideInput(v) { if (this.input_ && this.input_.node) this.input_.node.style.visibility = v ? 'hidden' : 'visible'; }
+    hideInput() { /* 名前の欄はもう画面の中の入力欄ではないので、隠す必要はない */ }
 
     // 続きからのデータの表示
     setSave(d, checking, failed) {
@@ -666,42 +744,16 @@
       this.confirmBox = { close };
     }
 
-    // 名前が空のまま始めようとしたら、名前を入れてもらうカットイン（空のままOKなら「ゆうしゃ」で始める）
+    // 名前が空のまま始めようとしたら、名前を入れてもらう（空のまま「けってい」なら「ゆうしゃ」で始める）
     askName() {
       if (this.nameAsk) return;
-      const w = this.scale.width, h = this.scale.height;
-      const pw = Math.min(440, w - 30), ph = 210, x = w / 2 - pw / 2, y = h / 2 - ph / 2;
-      const objs = [];
-      const dim = this.add.rectangle(0, 0, w, h, 0x1d1020, 0.6).setOrigin(0).setInteractive().setDepth(50);
-      const band = this.add.rectangle(w / 2, h / 2, w, ph + 40, 0xef7a6a, 0.95).setDepth(50).setScale(0, 1);
-      const box = this.add.container(0, 0).setDepth(51);
-      box.add(panel(this, x, y, pw, ph));
-      box.add(this.add.text(w / 2, y + 34, 'なまえを入力してね！', TO(26, '#fff8ea', '#4a3a2e', 6)).setOrigin(0.5));
-      box.add(this.add.text(w / 2, y + 66, 'ランキングに表示されます', T(13, C.soft)).setOrigin(0.5));
-      const inp = this.add.dom(w / 2, y + 108, 'input', [
-        `width:${pw - 60}px`, 'height:46px', 'box-sizing:border-box', 'border-radius:12px', 'border:3px solid #4a3a2e',
-        'background:#fff', 'padding:0 12px', `font-family:${UI.FONT}`, 'font-weight:800', 'font-size:20px', 'color:#4a3a2e', 'outline:none', 'text-align:center',
-      ].join(';')).setDepth(52);
-      inp.node.maxLength = 12; inp.node.placeholder = 'ゆうしゃ';
-      const ok = () => {
-        const v = inp.node.value.trim();
-        if (this.input_) this.input_.node.value = v || 'ゆうしゃ';
-        this.nameAsked = true;
-        close();
-        this.go(this.goCont);
-      };
-      inp.node.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') ok(); });
-      const btn = button(this, w / 2, y + ph - 36, 200, 48, 'OK', ok, { color: 0xef7a6a, dark: 0xb24a3e, size: 22 }).setDepth(52);
-      objs.push(dim, band, box, inp, btn);
-      box.setX(-w); btn.setAlpha(0); inp.setAlpha(0);
-      this.tweens.add({ targets: band, scaleX: 1, duration: 220, ease: 'Cubic.out' });
-      this.tweens.add({ targets: box, x: 0, duration: 380, delay: 120, ease: 'Back.out' });
-      this.tweens.add({ targets: [btn, inp], alpha: 1, duration: 200, delay: 420, onComplete: () => inp.node.focus() });
-      this.tweens.add({ targets: band, alpha: 0, duration: 300, delay: 500 });
+      this.nameAsk = { close: () => {} };
       Sfx.play('card');
-      this.hideInput(true);
-      const close = () => { objs.forEach(o => o.destroy()); this.nameAsk = null; this.hideInput(false); };
-      this.nameAsk = { close };
+      this.editName({
+        title: 'なまえを入力してね！', sub: 'ランキングに表示されます（空のままなら「ゆうしゃ」）', cancelLabel: 'もどる',
+        then: v => { this.nameAsk = null; if (this.input_) this.input_.node.value = v || 'ゆうしゃ'; this.nameAsked = true; this.go(this.goCont); },
+        onCancel: () => { this.nameAsk = null; },
+      });
     }
 
     go(cont) {
