@@ -93,7 +93,7 @@
       trait: { id: 'steal', name: '横取り', desc: '倒した相手の経験値を多めに奪う' },
     },
     uroko: {
-      name: 'ウロコ', evoName: '大蛇ウロコ', color: 0xc89a5a, hp: 145, spd: 210, role: '妨害型',
+      name: 'ウロコ', evoName: 'コウリュウ', color: 0xc89a5a, hp: 145, spd: 210, role: '妨害型',
       atk: { pattern: 'single', dmg: 13, cd: 0.65, speed: 560, life: 0.95, r: 9, slow: 1.5 },
       skill: { id: 'venom', name: '毒霧', cd: 5, desc: 'まわりの敵にダメージ＋スロー', area: true },
       trait: { id: 'poison', name: '毒牙', desc: '体当たりした相手を毒にする' },
@@ -111,7 +111,7 @@
       trait: { id: 'curse', name: '道連れ', desc: 'やられたとき、倒した相手に大ダメージ' },
     },
     nejimaru: {
-      name: 'ネジまる', evoName: '分解ネジまる', color: 0x5ab0b0, hp: 120, spd: 205, role: '弾幕型',
+      name: 'ネジまる', evoName: 'ツクモガミ', color: 0x5ab0b0, hp: 120, spd: 205, role: '弾幕型',
       atk: { pattern: 'spread', n: 2, spread: 0.15, dmg: 9, cd: 0.65, speed: 580, life: 0.9, r: 8 },
       skill: { id: 'drone', name: 'パーツ発射', cd: 5, desc: '全方位にパーツを飛ばす', area: false },
       trait: { id: 'bomb', name: '自爆装置', desc: 'やられたとき大爆発してまわりにダメージ' },

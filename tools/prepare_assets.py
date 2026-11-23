@@ -544,6 +544,7 @@ CREATURES_V2 = {
     'kodama': ('kodama02', 'nekomata02'), 'kohaku': ('kohaku02', 'siranui02'),
     'kuroro': ('kuroro02', 'yatagarasu02'), 'komori': ('komori02', 'morigarudo02'),
     'hakua': ('hakua02', 'hakuouga02'), 'sinonome': ('sinonome02', 'kagurajika02'),
+    'uroko': ('uroko02', 'urokosinka02'), 'nejimaru': ('nejimaru02', 'tukumogami02'),
 }
 # コマ（丸アイコン）に入れる顔の位置と大きさ（新しい絵用）
 TOKEN_FOCUS_V2 = {
@@ -557,6 +558,8 @@ TOKEN_FOCUS_V2 = {
     'komori': (0.30, 0.46, 0.64), 'komori_e': (0.24, 0.56, 0.62),
     'hakua': (0.30, 0.36, 0.62), 'hakua_e': (0.30, 0.36, 0.62),
     'sinonome': (0.22, 0.46, 0.56), 'sinonome_e': (0.22, 0.46, 0.56),
+    'uroko': (0.36, 0.42, 0.78), 'uroko_e': (0.34, 0.38, 0.66),
+    'nejimaru': (0.50, 0.46, 0.92), 'nejimaru_e': (0.50, 0.46, 0.86),
 }
 
 
