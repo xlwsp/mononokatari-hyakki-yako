@@ -312,7 +312,8 @@
           <div style="font-weight:800;font-size:12.5px;color:#cfc2e6;text-align:center;margin:4px 0 10px">運営に届きます。ほかのプレイヤーには見えません</div>
           <div id="fbKinds" style="display:flex;gap:6px;margin-bottom:10px"></div>
           <div id="fbStars" style="text-align:center;font-size:30px;margin-bottom:6px;cursor:pointer;user-select:none"></div>
-          <textarea id="fbText" maxlength="2000" placeholder="ここに書いてね（2000文字まで）" style="width:100%;box-sizing:border-box;height:150px;border-radius:12px;border:2px solid #fff;background:#140e24;padding:10px;font-family:${F};font-weight:800;font-size:16px;color:#fff4e6;resize:vertical;outline:none"></textarea>
+          <textarea id="fbText" maxlength="2000" placeholder="ここに書いてね（2000文字まで）" style="width:100%;box-sizing:border-box;height:150px;border-radius:12px;border:2px solid #fff;background:#140e24;padding:10px;font-family:${F};font-weight:800;font-size:16px;color:#ffffff;-webkit-text-fill-color:#ffffff;caret-color:#ffffff;resize:vertical;outline:none"></textarea>
+          <style>#fbText::placeholder{color:rgba(255,255,255,0.55);-webkit-text-fill-color:rgba(255,255,255,0.55)}</style>
           <div id="fbMsg" style="font-weight:800;font-size:13px;color:#ff8a7a;min-height:18px;margin:4px 0"></div>
           <div style="display:flex;gap:10px">
             <button id="fbCancel" style="flex:1;height:48px;border-radius:12px;border:2px solid #fff;background:rgba(255,255,255,0.08);color:#fff4e6;font-family:${F};font-weight:900;font-size:18px">とじる</button>
