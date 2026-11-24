@@ -14,7 +14,7 @@
     { t: 'SUPPORT', s: '🔵 補助優先', l: '青（補助）を優先' }, { t: 'POWER', s: '🟣 覚醒優先', l: '紫（覚醒）を優先' },
   ];
   // レベルアップカードの透け具合（えらんでいるカードは少し濃く）
-  const CARD_A = 0.7, CARD_A_SEL = 0.8;
+  const CARD_A = 0.5, CARD_A_SEL = 0.5;
   const UP_SHORT = { dmg: '攻撃', rate: '連射', extra: '弾数', pierce: '貫通', skillPow: '技威力', skillCd: '技連発', area: '技範囲', hp: 'HP', regen: '回復', magnet: '吸引', bump: '体当り', trait: '覚醒' };
   const UP_ORDER = ['dmg', 'rate', 'extra', 'pierce', 'bump', 'skillPow', 'skillCd', 'area', 'hp', 'regen', 'magnet', 'trait'];
   // カードの「数値」と「説明」（数値は大きく色つきで見せる）
@@ -208,7 +208,7 @@
       g.clear();
       const cn = me.cn || [];
       if (!dp) return;
-      const r = L.phone ? 28 : L.compact ? 22 : 25, step = r * 2 + (L.phone ? 12 : 10);
+      const r = L.phone ? 34 : L.compact ? 22 : 25, step = r * 2 + (L.phone ? 12 : 10);
       // 置き場所：スマホ縦は ダッシュの上に縦に、スマホ横はレーダーの上に右から横に、パソコンは ダッシュの左に横に
       const pos = i => (L.portrait ? { x: dp.cx, y: dp.cy - dp.R - 18 - r - i * step }
         : L.phone ? { x: L.w - 12 - r - i * step, y: Math.min(L.mmY, dp.cy - dp.R) - 16 - r }
@@ -222,7 +222,7 @@
         g.fillStyle(0x07050f, used ? 0.35 : 0.65); g.fillCircle(x, y, r);
         g.lineStyle(2.5, 0xffffff, used ? 0.3 : 0.95); g.strokeCircle(x, y, r);
         UI.cornerGems(g, x - r, y - r, r * 2, r * 2, 3);
-        sl.t.setPosition(x, y - 1).setText(def.icon).setAlpha(used ? 0.3 : 1);
+        sl.t.setPosition(x, y - 1).setFontSize(Math.round(r * 0.88)).setText(def.icon).setAlpha(used ? 0.3 : 1);
         sl.k.setPosition(x + r * 0.7, y + r * 0.7);
         sl.z.setPosition(x, y).setSize(r * 2 + 6, r * 2 + 6);
         if (sl.z.input) sl.z.input.hitArea.setTo(0, 0, r * 2 + 6, r * 2 + 6);
@@ -233,7 +233,7 @@
       this.emoPos = e;
       g.fillStyle(0x07050f, 0.65); g.fillCircle(e.x, e.y, r);
       g.lineStyle(2.5, 0xffffff, 0.95); g.strokeCircle(e.x, e.y, r);
-      this.emoTxt.setPosition(e.x, e.y - 1).setAlpha(me.a ? 1 : 0.4);
+      this.emoTxt.setPosition(e.x, e.y - 1).setFontSize(Math.round(r * 0.88)).setAlpha(me.a ? 1 : 0.4);
       this.emoZone.setPosition(e.x, e.y).setSize(r * 2 + 6, r * 2 + 6);
       if (this.emoZone.input) this.emoZone.input.hitArea.setTo(0, 0, r * 2 + 6, r * 2 + 6);
       // ロックオン：スマホ縦はエモートの左、それ以外はダッシュの上
@@ -242,7 +242,7 @@
       g.fillStyle(lk ? 0x4a2a08 : 0x07050f, lk ? 0.85 : 0.65); g.fillCircle(lp.x, lp.y, r);
       g.lineStyle(2.5, lk ? 0xffc040 : 0xffffff, 0.95); g.strokeCircle(lp.x, lp.y, r);
       if (lk) { g.lineStyle(1.5, 0xffc040, 0.5); g.strokeCircle(lp.x, lp.y, r + 4); }
-      this.lockTxt.setPosition(lp.x, lp.y - 4).setAlpha(me.a ? 1 : 0.4);
+      this.lockTxt.setPosition(lp.x, lp.y - 4).setFontSize(Math.round(r * 0.8)).setAlpha(me.a ? 1 : 0.4);
       this.lockSub.setPosition(lp.x, lp.y + r * 0.55).setText((lk ? 'ON' : 'OFF') + (L.compact ? '' : ' Q')).setColor(lk ? '#ffd27a' : '#fff8ea');
       this.lockZone.setPosition(lp.x, lp.y).setSize(r * 2 + 6, r * 2 + 6);
       if (this.lockZone.input) this.lockZone.input.hitArea.setTo(0, 0, r * 2 + 6, r * 2 + 6);
@@ -266,7 +266,7 @@
     }
     drawDash(me) {
       const L = this.L, g = this.dashG;
-      const R = L.phone ? 50 : L.compact ? 38 : 44;
+      const R = L.phone ? 62 : L.compact ? 38 : 44;
       // 置き場所：パソコンはレーダーの左。スマホ横画面はレーダーの真上。
       // スマホ縦画面は右はしで、スキル欄・カード一覧より上（重ならないように実際の位置を見て決める）
       let cx, cy;
@@ -300,7 +300,7 @@
       for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + i / 3 * Math.PI * 2; g.lineBetween(cx + Math.cos(a) * (R - 7), cy + Math.sin(a) * (R - 7), cx + Math.cos(a) * (R + 3), cy + Math.sin(a) * (R + 3)); }
       g.lineStyle(2, on ? 0x9ff0ff : 0xd8a83a, 0.9); g.strokeCircle(cx, cy, R + 4);
       if (on) { g.fillStyle(0x6fe0ff, 0.15 + Math.sin(this.time.now / 80) * 0.08); g.fillCircle(cx, cy, R - 7); }
-      this.dashTxt.setPosition(cx, cy - (L.compact ? 5 : 6)).setText(on ? '💨 GO!' : '💨 ダッシュ').setFontSize(L.compact ? 12 : 14).setColor(lock ? '#ff9a8a' : '#fff8ea');
+      this.dashTxt.setPosition(cx, cy - (L.compact ? 5 : 6)).setText(on ? '💨 GO!' : '💨 ダッシュ').setFontSize(L.phone ? 16 : L.compact ? 12 : 14).setColor(lock ? '#ff9a8a' : '#fff8ea');
       const left = lock ? Math.ceil((1 - sta) * GD.DASH_RECHARGE) : 0;
       this.dashSub.setPosition(cx, cy + (L.compact ? 11 : 13)).setText(lock ? `あと${left}秒` : L.compact ? `${(sta * GD.DASH_TIME).toFixed(1)}秒` : `Shift／Space`).setColor(lock ? '#ff9a8a' : '#bfe8ff');
       this.dashG.setAlpha(me.a ? 1 : 0.4);
@@ -450,7 +450,7 @@
         this.bgmBtn.setPosition(L.hud.x + 37 + 82, L.hud.y + L.hud.h + 24).setScale(1);
       }
       // スマホ横画面：HPの下に小さめに1列
-      const bs = phone ? 0.8 : 1, by = L.hud.y + L.hud.h + (phone ? 18 : 24);
+      const bs = phone ? 1.1 : 1, by = L.hud.y + L.hud.h + (phone ? 24 : 24);
       if (phone) {
         this.exitBtn.setPosition(L.hud.x + 37 * bs, by).setScale(bs);
         this.bgmBtn.setPosition(L.hud.x + (37 + 82) * bs, by).setScale(bs);

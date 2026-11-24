@@ -212,7 +212,7 @@
   // 縦に持っているときは #vp を90度まわして横画面として表示する。
   // 大きさ（倍率）はどの画面でも同じ：スマホは高さ480相当に固定（タイトル・ロビー・プレイ中で大きさが変わらない）
   const VP = { rot: false, f: 1, iw: 0, phone: false };
-  const PHONE_H = 480;
+  const PHONE_H = 420;
   const phoneDev = () => !!(window.matchMedia && matchMedia('(pointer: coarse)').matches) && Math.min(innerWidth, innerHeight) < 520;
   function applyViewport() {
     const el = document.getElementById('vp');

@@ -400,10 +400,8 @@
         const vis = monsterH(this.me.lv, this.me.ev) * BODY_K;
         const minZ = Math.max(w, h) / 2300 / this.baseZoom;
         // スマホ（画面の短い辺が小さい）：キャラは小さくてもいいので、まわりを広く見せる（短い辺で約800〜1000見える）
-        const phone = Math.min(w, h) < 560;
-        const want = phone
-          ? Phaser.Math.Clamp(Math.min(w, h) / (780 + vis * 1.2) / this.baseZoom, Math.min(1, minZ), 1.25)
-          : Phaser.Math.Clamp(Math.min(w, h) * this.bodyFrac(vis) / (vis * this.baseZoom), Math.min(1, minZ), 1.25);
+        // スマホもパソコンと同じ：キャラが画面の短い辺の16〜30%の大きさに映る
+        const want = Phaser.Math.Clamp(Math.min(w, h) * this.bodyFrac(vis) / (vis * this.baseZoom), Math.min(1, minZ), 1.25);
         this.zoomCur += (want - this.zoomCur) * Math.min(1, dt * 2);
         this.cameras.main.setZoom(this.baseZoom * this.zoomCur * this.punch);
       }
