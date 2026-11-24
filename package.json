@@ -1,0 +1,12 @@
+{
+  "name": "nakama-survivor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "モノノカタリ -百鬼夜行- のゲームサーバー（server.py を起動する）",
+  "scripts": {
+    "start": "node tools/render_start.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -751,7 +751,7 @@ class World:
     async def start(self):
         self.seed = random.randint(1, 2 ** 31 - 1)
         self.proc = await asyncio.create_subprocess_exec(
-            JSC, DRIVER, '--', ROOT, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+            *sim_command(), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             limit=1 << 24)
         self.proc.stdin.write((json.dumps({'seed': self.seed}) + '\n').encode())
         await self.proc.stdin.drain()
@@ -1262,9 +1262,20 @@ def lan_ip():
         return None
 
 
+# ゲームの計算を動かすコマンド：macOS は標準の jsc、それ以外（Render など）は Node.js
+def sim_command():
+    if os.path.exists(JSC) and os.environ.get('SIM_ENGINE') != 'node':
+        return [JSC, DRIVER, '--', ROOT]
+    import shutil
+    node = shutil.which('node')
+    if node:
+        return [node, os.path.join(ROOT, 'tools', 'sim_node.js'), ROOT]
+    return None
+
+
 async def main():
-    if not os.path.exists(JSC):
-        print('JavaScriptCore (jsc) が見つかりません。macOS で実行してください。')
+    if not sim_command():
+        print('ゲームの計算に使う JavaScriptCore (jsc) も Node.js も見つかりません。')
         sys.exit(1)
     import signal
 

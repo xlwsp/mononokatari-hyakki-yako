@@ -1,0 +1,8 @@
+images/
+tools/bin/
+tools/*.json
+tools/*.conf
+tools/*.log
+tools/feedback.*
+__pycache__/
+.git/
