@@ -97,6 +97,7 @@
     const sub = scene.add.text(cx, y + 52, '', TR(13, opt.dark ? '#ece4fa' : '#5a3a1a', null, 0, { align: 'center', wordWrap: { width: width - 30, useAdvancedWrap: true } })).setOrigin(0.5, 0);
     return {
       set(k) {
+        if (!head.active || !sub.active) return; // 画面が閉じたあと
         gauge.forEach(o => o.destroy()); gauge = [];
         if (!Unlock.ok(k)) {
           head.setText(`🔒 ガチャで手に入る（レア度 ${RARE_NAME[GD.CHARA_RARITY[k] || 0]}）`).setColor(opt.dark ? '#d8b8c8' : '#8a5a5a');
@@ -272,6 +273,7 @@
       this.notice = data && data.msg;
       if (!(data && data.keep)) this.saveData = undefined; // 画面の向きが変わっただけのときは確認し直さない
       this.confirmBox = null; this.nameAsk = null; this.rankBox = null; this.shopBox = null; this.maintBox = null; this.splash = null;
+      this.starBox = null; this.evoBtn = null; // 前の画面の表示が残っていると、消えた文字を書きかえて固まる
     }
     create() {
       this.sp = store.get('sp', 'gekomaru');

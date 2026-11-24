@@ -86,9 +86,9 @@
       this.scale.on('resize', this.onResize);
       Bgm.start();
       this.events.once('shutdown', () => {
+        this.scale.off('resize', this.onResize);
         UI.setPlaying(false);
         Bgm.stop();
-        this.scale.off('resize', this.onResize);
         this.session.onSnapshot = null;
         this.session.onLost = null;
       });
@@ -98,6 +98,7 @@
     }
 
     applyZoom() {
+      if (!this.cameras || !this.cameras.main) return;
       const w = this.scale.width, h = this.scale.height;
       const z = h > w
         ? Phaser.Math.Clamp(w / 430, 0.7, 1.25)  // スマホ縦画面：キャラを大きく

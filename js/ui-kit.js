@@ -226,7 +226,13 @@
     s.width = Math.round(sw * VP.f) + 'px'; s.height = Math.round(sh * VP.f) + 'px';
     const sc = VP.f !== 1 ? ` scale(${1 / VP.f})` : '';
     s.transform = VP.rot ? `translate(${iw}px,0) rotate(90deg)${sc}` : (sc ? sc.trim() : 'none');
-    if (window.game && window.game.scale && window.game.scale.refresh) window.game.scale.refresh();
+    // 大きさが本当に変わったときだけ、次のフレームで Phaser に伝える（場面の切りかえ中に呼ぶと固まるため）
+    const key = s.width + 'x' + s.height + (VP.rot ? 'r' : '');
+    if (key !== VP.key) {
+      VP.key = key;
+      clearTimeout(VP.tm);
+      VP.tm = setTimeout(() => { try { const g = window.game; if (g && g.scale && g.scale.refresh) g.scale.refresh(); } catch (e) { /* noop */ } }, 0);
+    }
   }
   // Phaser に、まわした画面の大きさとタッチの位置を正しく伝える
   function attachViewport(game) {
@@ -292,7 +298,6 @@
   // プレイ中かどうか（スマホはプレイ中だけ横画面）
   function setPlaying(on) {
     document.body.classList.toggle('playing', !!on);
-    applyViewport();
   }
 
   window.UI = { FONT, DISPLAY, BRUSH, C, T, TO, TB, TR, panel, button, nightFrame, frameDraw, cornerGems, keyNav, forestBackdrop, isMobile, mobileEnter, lockOrient, setPlaying, applyViewport, attachViewport, domRoot, VP, pauseInput, guardDom };

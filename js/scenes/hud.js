@@ -88,6 +88,7 @@
 
       // レベルアップカード
       this.cards = null; this.cardSeq = -1; this.chosen = -1;
+      this.autoT = null; this.info = null; this.cardsHoldUntil = 0; // 前のプレイの残り（消えたタイマー・表示）を持ちこまない
       this.input.keyboard.on('keydown', e => {
         if (!this.cards || e.repeat) return;
         const i = ['1', '2', '3'].indexOf(e.key);
