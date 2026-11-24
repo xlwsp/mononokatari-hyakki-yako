@@ -14,7 +14,7 @@
     { t: 'SUPPORT', s: '🔵 補助優先', l: '青（補助）を優先' }, { t: 'POWER', s: '🟣 覚醒優先', l: '紫（覚醒）を優先' },
   ];
   // レベルアップカードの透け具合（えらんでいるカードは少し濃く）
-  const CARD_A = 0.72, CARD_A_SEL = 0.88;
+  const CARD_A = 0.7, CARD_A_SEL = 0.8;
   const UP_SHORT = { dmg: '攻撃', rate: '連射', extra: '弾数', pierce: '貫通', skillPow: '技威力', skillCd: '技連発', area: '技範囲', hp: 'HP', regen: '回復', magnet: '吸引', bump: '体当り', trait: '覚醒' };
   const UP_ORDER = ['dmg', 'rate', 'extra', 'pierce', 'bump', 'skillPow', 'skillCd', 'area', 'hp', 'regen', 'magnet', 'trait'];
   // カードの「数値」と「説明」（数値は大きく色つきで見せる）
@@ -835,17 +835,13 @@
       const cw = Math.min(250, (L.w - 16) / n - 6), chh = L.compact ? 214 : 262;
       const gap = L.compact ? 6 : 22;
       const total = n * cw + (n - 1) * gap;
-      // キャラクターは画面のまん中（足もとが中心）にいるので、カードは足もとより下に並べる。
-      // 入りきらないときは画面の下にそろえる。カードは少し透けて、後ろのようすも見える
-      const top0 = L.h * 0.5 + 34;
-      const cy = Math.min(top0 + chh / 2, L.h - 8 - chh / 2);
-      const below = cy + chh / 2 + 52 < L.h;
+      const cy = L.h * 0.5 + (L.compact ? 20 : 10);
       const objs = [];
+      // 後ろのようすが見えるように、画面はほとんど暗くしない（カードも少し透ける）
       const dim = this.add.rectangle(0, 0, L.w, L.h, 0x0d1020, 0.12).setOrigin(0).setDepth(39);
-      const ty = cy - chh / 2 - 44;
-      const title = this.add.text(L.w / 2, ty, 'レベルアップ！ 能力をのばそう', TR(L.compact ? 18 : 22, '#ffe07a', '#3a1a08', 6)).setOrigin(0.5).setDepth(41);
-      const hint = this.add.text(L.w / 2, cy + chh / 2 + 22, L.compact ? 'タップで決定' : '← → でえらぶ　Enter で決定　（1・2・3 キーでもOK）', TR(L.compact ? 14 : 16, '#fff', '#2a1a10', 5)).setOrigin(0.5).setDepth(41).setVisible(below);
-      const timer = this.add.text(below ? L.w / 2 : L.w / 2 + title.width / 2 + 12, below ? cy + chh / 2 + 44 : ty, '', TR(14, '#ffe7c0', '#2a1a10', 4)).setOrigin(below ? 0.5 : 0, 0.5).setDepth(41);
+      const title = this.add.text(L.w / 2, cy - chh / 2 - 62, 'レベルアップ！ 能力をのばそう', TR(L.compact ? 21 : 28, '#ffe07a', '#3a1a08', 7)).setOrigin(0.5).setDepth(41);
+      const hint = this.add.text(L.w / 2, cy + chh / 2 + 30, L.compact ? 'タップで決定' : '← → でえらぶ　Enter で決定　（1・2・3 キーでもOK）', TR(L.compact ? 15 : 17, '#fff', '#2a1a10', 5)).setOrigin(0.5).setDepth(41);
+      const timer = this.add.text(L.w / 2, cy + chh / 2 + 56, '', TR(14, '#ffe7c0', '#2a1a10', 4)).setOrigin(0.5).setDepth(41);
       const arrow = this.add.text(0, 0, '▼', TO(24, '#ffe07a', '#7a4a1e', 5)).setOrigin(0.5).setDepth(42);
       this.tweens.add({ targets: arrow, scaleY: 0.8, duration: 300, yoyo: true, repeat: -1 });
       objs.push(dim, title, hint, timer, arrow);
