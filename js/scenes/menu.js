@@ -28,7 +28,7 @@
     const mk = (label, bg, fg) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = `flex:1;height:50px;border-radius:12px;border:2px solid #fff;background:${bg};color:${fg};font-family:inherit;font-weight:900;font-size:19px;cursor:pointer;`; return b; };
     const cancel = mk(opt.cancelLabel || 'やめる', 'rgba(255,255,255,0.08)', '#fff4e6'), ok = mk('けってい', 'rgba(255,110,90,0.35)', '#fff8ea');
     row.append(cancel, ok); box.append(title, sub, inp, row); wrap.append(box);
-    UI.domRoot().appendChild(wrap);
+    UI.domRoot().appendChild(wrap); UI.guardDom(wrap);
     // 入力中はゲームのキー操作を止める（WASD・スペースなどが打てなくならないように）
     const kb = game && game.input && game.input.keyboard;
     if (kb) kb.enabled = false;
@@ -320,7 +320,7 @@
             <button id="fbSend" style="flex:1;height:48px;border-radius:12px;border:2px solid #fff;background:rgba(255,110,90,0.35);color:#fff8ea;font-family:${F};font-weight:900;font-size:18px">送信する</button>
           </div>
         </div>`;
-      UI.domRoot().appendChild(wrap);
+      UI.domRoot().appendChild(wrap); UI.guardDom(wrap);
       const $ = id => wrap.querySelector('#' + id);
       const KINDS = [['review', '⭐ レビュー'], ['idea', '🙏 改善してほしい'], ['bug', '🐞 バグ報告']];
       let kind = 'idea', stars = 0;
@@ -423,7 +423,8 @@
         this.showName();
         const zone = this.add.zone(x + iw / 2, y, iw, ih).setInteractive({ useHandCursor: true });
         zone.on('pointerover', () => draw(true)); zone.on('pointerout', () => draw(false));
-        zone.on('pointerup', () => { Sfx.init(); Sfx.play('click'); this.editName(); });
+        zone.on('pointerdown', () => { zone.down = true; });
+        zone.on('pointerup', () => { if (!zone.down) return; zone.down = false; Sfx.init(); Sfx.play('click'); this.editName(); });
       };
       // 真ん中の妖怪（ロッカー）：左右の ◀ ▶ で切り替え
       const stage = (cx, top, bot, halfW, moonY, moonR) => {
@@ -440,7 +441,8 @@
         // 何番目か
         this.lockerNo = this.add.text(cx, bot + 6, '', TR(13, '#d8ccf0', '#0a0614', 3)).setOrigin(0.5, 0);
         // 絵をタップしても一覧が開く
-        this.add.zone(cx, (top + bot) / 2, halfW * 1.2, bot - top).setInteractive({ useHandCursor: true }).on('pointerup', openList);
+        const sz = this.add.zone(cx, (top + bot) / 2, halfW * 1.2, bot - top).setInteractive({ useHandCursor: true });
+        sz.on('pointerdown', () => { sz.down = true; }).on('pointerout', () => { sz.down = false; }).on('pointerup', () => { if (sz.down) openList(); sz.down = false; });
         // 進化させたことのある妖怪は、進化後の姿と進化技を見られる
         this.evoBtn = NB(cx + halfW - 74, top + 22, 140, 36, '✨ 進化後を見る', () => { Sfx.play('click'); this.showEvo = !this.showEvo; this.pick(this.sp, true); }, { size: 14, accent: 0xffc040 }).setDepth(5);
         this.evoBtn.setVisible(false);
@@ -730,6 +732,7 @@
         if (!this.splash) return;
         this.splash = null;
         window.__titleSeen = true;
+        UI.pauseInput(this, 350); // タイトルをタップした指で、ロビーのボタンが押されないように
         this.input.keyboard.off('keydown', onKey);
         zone.destroy();
         this.hideInput(false);
@@ -800,7 +803,7 @@
       box.add(this.add.text(w / 2, y + 34, '初めからにする？', TO(24, '#fff8ea', '#0a0614', 6)).setOrigin(0.5));
       box.add(this.add.text(w / 2, y + 72, `今のセーブ（${this.saveData.ev ? sp.evoName : sp.name} Lv${this.saveData.lv}）は消えます`, T(14, '#ff8a7a', { align: 'center', wordWrap: { width: pw - 30 } })).setOrigin(0.5));
       this.hideInput(true);
-      const close = () => { [dim, box, b1, b2].forEach(o => o.destroy()); this.confirmBox = null; this.hideInput(false); };
+      const close = () => { [dim, box, b1, b2].forEach(o => o.destroy()); this.confirmBox = null; this.hideInput(false); UI.pauseInput(this); };
       const b1 = button(this, w / 2 - 80, y + ph - 44, 140, 48, '初めから', () => { close(); this.go(false); }, { color: C.blue, dark: C.blueDark, size: 20 }).setDepth(52);
       const b2 = button(this, w / 2 + 80, y + ph - 44, 140, 48, 'やめる', close, { color: C.gray, dark: C.grayDark, size: 20 }).setDepth(52);
       box.setScale(0.6).setAlpha(0);

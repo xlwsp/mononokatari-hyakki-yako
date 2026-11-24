@@ -86,6 +86,7 @@
         if (onKey) scene.input.keyboard.off('keydown', onKey);
         scene[slot] = null;
         scene.hideInput && scene.hideInput(false);
+        UI.pauseInput(scene); // 閉じた瞬間の指の離しで、後ろのボタンが押されないように
         scene.refreshPts && scene.refreshPts();
       },
     };

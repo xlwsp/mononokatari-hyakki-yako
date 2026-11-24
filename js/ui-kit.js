@@ -254,6 +254,24 @@
   // 向きを変えた直後は画面の大きさがまだ変わっていないことがあるので、少し待ってからも合わせ直す
   window.addEventListener('orientationchange', () => { setTimeout(applyViewport, 120); setTimeout(applyViewport, 500); });
   applyViewport();
+  // 画面の上に出したパネルを押したとき、後ろのボタンが反応しないように：しばらくゲームの入力を止める
+  function pauseInput(scene, ms) {
+    if (!scene || !scene.input) return;
+    scene.input.enabled = false;
+    scene.time.delayedCall(ms || 250, () => { if (scene.sys && scene.sys.isActive()) scene.input.enabled = true; });
+  }
+  // HTMLのパネル（名前入力・ご意見）を開いている間は、後ろのゲーム画面に操作を伝えない
+  function guardDom(wrap) {
+    const g = window.game;
+    if (g && g.input) g.input.enabled = false;
+    ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'click'].forEach(t => wrap.addEventListener(t, e => e.stopPropagation()));
+    const obs = new MutationObserver(() => {
+      if (wrap.isConnected) return;
+      obs.disconnect();
+      setTimeout(() => { if (g && g.input && !document.querySelector('#nameEditor, #fbPanel')) g.input.enabled = true; }, 250);
+    });
+    obs.observe(wrap.parentNode || document.body, { childList: true });
+  }
   // 画面に重ねるHTML（名前入力・ご意見・チャット）を置く場所。まわした画面と一緒にまわる
   const domRoot = () => document.getElementById('vp') || document.body;
 
@@ -277,5 +295,5 @@
     applyViewport();
   }
 
-  window.UI = { FONT, DISPLAY, BRUSH, C, T, TO, TB, TR, panel, button, nightFrame, frameDraw, cornerGems, keyNav, forestBackdrop, isMobile, mobileEnter, lockOrient, setPlaying, applyViewport, attachViewport, domRoot, VP };
+  window.UI = { FONT, DISPLAY, BRUSH, C, T, TO, TB, TR, panel, button, nightFrame, frameDraw, cornerGems, keyNav, forestBackdrop, isMobile, mobileEnter, lockOrient, setPlaying, applyViewport, attachViewport, domRoot, VP, pauseInput, guardDom };
 })();
