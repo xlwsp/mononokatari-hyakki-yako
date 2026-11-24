@@ -849,39 +849,74 @@
       this.sp = d.session.sp || store.get('sp', 'gekomaru');
       if (!Unlock.ok(this.sp)) this.sp = 'gekomaru';
       this.add.rectangle(-w, -h, w * 3, h * 3, 0x1d1020, 0.55).setOrigin(0);
+      // 背の低い画面（スマホ横）：左に結果と大きなボタン、右に妖怪えらび（画面を縮めない）
+      if (h < 560 && w > h) { this.buildWide(d, w, h); return; }
       const pw = Math.min(520, w - 20);
       const tmp = monsterPicker(this, w / 2, -9999, pw - 30, this.sp, () => {});
       const gridH = tmp.height; tmp.destroy();
       const ph = 200 + gridH + 150 + 56;
-      // スマホ横画面などで入りきらないときは、画面の真ん中を中心に全体を縮めて表示
-      const fit = ph > h - 16;
-      const x = w / 2 - pw / 2, y = fit ? h / 2 - ph / 2 : Math.max(10, h / 2 - ph / 2);
-      if (fit) this.cameras.main.setZoom((h - 16) / ph);
+      const x = w / 2 - pw / 2, y = Math.max(10, h / 2 - ph / 2);
       UI.nightFrame(this, x, y, pw, ph, { alpha: 0.9, fill: 0x0c0818, r: 18, gem: 9 });
-      const title = this.add.text(w / 2, y + 38, 'やられた…', TO(40, '#c8d8ff', '#3a2a40', 8)).setOrigin(0.5).setScale(0.3);
-      this.tweens.add({ targets: title, scale: 1, duration: 400, ease: 'Back.out' });
-      Sfx.play('lose');
-      const by = d.by ? `${d.by} に倒された` : '敵の群れにやられた';
-      this.add.text(w / 2, y + 80, by, T(16, '#cfc2e6')).setOrigin(0.5);
-      this.add.text(w / 2, y + 112, `スコア ${Number(d.sc || 0).toLocaleString()}　撃破 ${d.k || 0}　倒したプレイヤー ${d.pk || 0}`, T(16, '#fff4e6')).setOrigin(0.5);
-      const best = parseInt(store.get('best', '0'), 10) || 0;
-      if ((d.sc || 0) > best) {
-        store.set('best', d.sc);
-        const nb = this.add.text(w / 2, y + 142, `ベストスコア更新！ ${Number(d.sc).toLocaleString()}`, TO(18, '#ffe07a', '#4a3a2e', 5)).setOrigin(0.5);
-        this.tweens.add({ targets: nb, scale: 1.08, duration: 500, yoyo: true, repeat: -1 });
-      }
+      this.resultHead(d, w / 2, y);
       this.add.text(w / 2, y + 172, '次のモンスターをえらんで再出撃！', T(14, '#cfc2e6')).setOrigin(0.5);
-      this.lockMsg = this.add.text(w / 2, y + 192 + gridH + 10, '', T(12, '#ff8a7a')).setOrigin(0.5, 0);
-      this.picker = monsterPicker(this, w / 2, y + 192, pw - 30, this.sp, k => {
-        if (!Unlock.ok(k)) { this.lockMsg.setText(`🔒 ${GD.SPECIES[k].name} はガチャで手に入ります`); return; }
-        this.lockMsg.setText(''); this.sp = k; store.set('sp', k); this.picker.set(k); sb.set(k);
-      });
-      const sb = starInfo(this, w / 2, y + ph - 186, pw, { dark: true });
-      sb.set(this.sp);
+      const sb = this.resultPicker(w / 2, y + 192, pw - 30, gridH);
+      const sbi = starInfo(this, w / 2, y + ph - 186, pw, { dark: true });
+      sbi.set(this.sp); this.starBox = sbi;
       const b1 = button(this, w / 2, y + ph - 70, Math.min(300, pw - 40), 50, '再出撃！', () => this.respawn(), { color: C.orange, dark: C.orangeDark, size: 22 });
       const route = window.__lastRoute && window.__lastRoute.r && window.__lastRoute.r.length > 2 ? window.__lastRoute : null;
       const b2 = button(this, w / 2 - (route ? 78 : 0), y + ph - 22, 140, 32, 'タイトルへ', () => this.toTitle(), { color: C.gray, dark: C.grayDark, size: 14 });
       if (route) button(this, w / 2 + 78, y + ph - 22, 140, 32, '🗺 通った道', () => Records.openRoute(this, route, d.session.seed), { night: true, size: 14 });
+      keyNav(this, [b1, b2], { delay: 600 });
+    }
+    // やられた…・倒した相手・スコア（真ん中 cx、上 y から）
+    resultHead(d, cx, y, small) {
+      const k = small ? 0.85 : 1;
+      const title = this.add.text(cx, y + 38 * k, 'やられた…', TO(40 * k, '#c8d8ff', '#3a2a40', 8)).setOrigin(0.5).setScale(0.3);
+      this.tweens.add({ targets: title, scale: 1, duration: 400, ease: 'Back.out' });
+      Sfx.play('lose');
+      const by = d.by ? `${d.by} に倒された` : '敵の群れにやられた';
+      this.add.text(cx, y + 80 * k, by, T(16, '#cfc2e6')).setOrigin(0.5);
+      const sc = small ? `スコア ${Number(d.sc || 0).toLocaleString()}\n撃破 ${d.k || 0}　倒したプレイヤー ${d.pk || 0}` : `スコア ${Number(d.sc || 0).toLocaleString()}　撃破 ${d.k || 0}　倒したプレイヤー ${d.pk || 0}`;
+      this.add.text(cx, y + (small ? 116 : 112), sc, T(16, '#fff4e6', { align: 'center' })).setOrigin(0.5);
+      const best = parseInt(store.get('best', '0'), 10) || 0;
+      if ((d.sc || 0) > best) {
+        store.set('best', d.sc);
+        const nb = this.add.text(cx, y + (small ? 154 : 142), `ベストスコア更新！ ${Number(d.sc).toLocaleString()}`, TO(18, '#ffe07a', '#4a3a2e', 5)).setOrigin(0.5);
+        this.tweens.add({ targets: nb, scale: 1.08, duration: 500, yoyo: true, repeat: -1 });
+      }
+    }
+    // 次の妖怪えらび
+    resultPicker(cx, top, width, gridH, opt) {
+      this.lockMsg = this.add.text(cx, top + gridH + 10, '', T(12, '#ff8a7a')).setOrigin(0.5, 0);
+      this.picker = monsterPicker(this, cx, top, width, this.sp, k => {
+        if (!Unlock.ok(k)) { this.lockMsg.setText(`🔒 ${GD.SPECIES[k].name} はガチャで手に入ります`); return; }
+        this.lockMsg.setText(''); this.sp = k; store.set('sp', k); this.picker.set(k); if (this.starBox) this.starBox.set(k);
+      }, opt);
+      return this.picker;
+    }
+    // スマホ横画面用：左に結果と大きなボタン、右に妖怪えらび
+    buildWide(d, w, h) {
+      const M = 10, x = M, y = M, pw = w - M * 2, ph = h - M * 2;
+      UI.nightFrame(this, x, y, pw, ph, { alpha: 0.92, fill: 0x0c0818, r: 18, gem: 9 });
+      const lw = Math.min(330, pw * 0.4), lcx = x + 14 + lw / 2;
+      this.resultHead(d, lcx, y - 6, true);
+      // 大きなボタン：再出撃（いちばん大きく）・タイトルへ・通った道
+      const route = window.__lastRoute && window.__lastRoute.r && window.__lastRoute.r.length > 2 ? window.__lastRoute : null;
+      const bw = lw - 10, bh1 = Math.min(76, ph * 0.2), bh2 = Math.min(58, ph * 0.15);
+      const yb2 = y + ph - 14 - bh2 / 2;
+      const b1 = button(this, lcx, yb2 - bh2 / 2 - 12 - bh1 / 2, bw, bh1, '再出撃！', () => this.respawn(), { color: C.orange, dark: C.orangeDark, size: 30 });
+      const half = (bw - 10) / 2;
+      const b2 = button(this, route ? lcx - half / 2 - 5 : lcx, yb2, route ? half : bw, bh2, 'タイトルへ', () => this.toTitle(), { color: C.gray, dark: C.grayDark, size: 20 });
+      if (route) button(this, lcx + half / 2 + 5, yb2, half, bh2, '🗺 通った道', () => Records.openRoute(this, route, d.session.seed), { night: true, size: 18 });
+      // 右：次の妖怪
+      const rx = x + 14 + lw + 16, rw = x + pw - 14 - rx, rcx = rx + rw / 2;
+      this.add.text(rcx, y + 18, '次のモンスターをえらんで再出撃！', T(16, '#cfc2e6')).setOrigin(0.5, 0);
+      const cols = 7, maxSize = Math.min(64, (ph - 150) / 2 - 10);
+      const tmp = monsterPicker(this, rcx, -9999, rw, this.sp, () => {}, { cols, maxSize });
+      const gridH = tmp.height; tmp.destroy();
+      this.resultPicker(rcx, y + 48, rw, gridH, { cols, maxSize });
+      this.starBox = starInfo(this, rcx, y + 48 + gridH + 26, rw, { dark: true });
+      this.starBox.set(this.sp);
       keyNav(this, [b1, b2], { delay: 600 });
     }
     respawn() {

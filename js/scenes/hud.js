@@ -13,6 +13,8 @@
     { t: 'SKILL', s: '🟠 技優先', l: '橙（スキル）を優先' }, { t: 'GUARD', s: '🟢 守り優先', l: '緑（守り）を優先' },
     { t: 'SUPPORT', s: '🔵 補助優先', l: '青（補助）を優先' }, { t: 'POWER', s: '🟣 覚醒優先', l: '紫（覚醒）を優先' },
   ];
+  // 自動選択の一覧で使う色（カードの色と同じ）
+  const AUTO_COL = { '': 0x8a6aff, ATTACK: 0xe8505a, SKILL: 0xf08a20, GUARD: 0x3cb85a, SUPPORT: 0x3a8ae8, POWER: 0x9a5ae8 };
   // レベルアップカードの透け具合（えらんでいるカードは少し濃く）
   const CARD_A = 0.5, CARD_A_SEL = 0.5;
   const UP_SHORT = { dmg: '攻撃', rate: '連射', extra: '弾数', pierce: '貫通', skillPow: '技威力', skillCd: '技連発', area: '技範囲', hp: 'HP', regen: '回復', magnet: '吸引', bump: '体当り', trait: '覚醒' };
@@ -73,15 +75,16 @@
       try { this.autoCard = localStorage.getItem('nakama_autocard') === '1'; this.autoPri = localStorage.getItem('nakama_autopri') || ''; } catch (e) { this.autoCard = false; this.autoPri = ''; }
       if (!AUTO_MODES.some(m => m.t === this.autoPri)) this.autoPri = '';
       const autoLabel = () => (!this.autoCard ? '🤖 自動OFF' : AUTO_MODES.find(m => m.t === this.autoPri).s);
-      this.autoBtn = button(this, 0, 0, 84, 30, autoLabel(), () => {
-        const cur = this.autoCard ? AUTO_MODES.findIndex(m => m.t === this.autoPri) : -1;
-        const nx = cur + 1 >= AUTO_MODES.length ? -1 : cur + 1;
+      // 押すと「どの色のカードを優先するか」の一覧が開く
+      this.setAuto = nx => {
         this.autoCard = nx >= 0; this.autoPri = nx >= 0 ? AUTO_MODES[nx].t : '';
         try { localStorage.setItem('nakama_autocard', this.autoCard ? '1' : '0'); localStorage.setItem('nakama_autopri', this.autoPri); } catch (e) { /* noop */ }
         this.autoBtn.setLabel(autoLabel());
         this.banner(this.autoCard ? '🤖 カード自動選択：' + AUTO_MODES[nx].l : 'カード自動選択 OFF', '#bfe8ff');
         if (this.autoCard && this.cards) this.autoPick();
-      }, { color: this.autoCard ? 0x3aa86a : C.gray, dark: C.grayDark, size: 13 });
+      };
+      this.autoBtn = button(this, 0, 0, 84, 30, autoLabel(), () => this.toggleAutoPanel(), { color: this.autoCard ? 0x3aa86a : C.gray, dark: C.grayDark, size: 13 });
+      this.autoPanel = null;
 
       // レベルアップカード
       this.cards = null; this.cardSeq = -1; this.chosen = -1;
@@ -131,7 +134,8 @@
       this.setupDash();
       this.setupItems();
       this.layout();
-      this.onResize = () => { this.layout(); if (this.cards) { this.hideCards(); this.cardSeq = -1; } };
+      // 画面の切り替え中（終わりかけ）に呼ばれても止まらないように
+      this.onResize = () => { if (!this.sys.isActive() || !this.cpText || !this.cpText.active) return; try { this.layout(); if (this.cards) { this.hideCards(); this.cardSeq = -1; } } catch (e) { /* noop */ } };
       this.scale.on('resize', this.onResize);
       this.events.once('shutdown', () => this.scale.off('resize', this.onResize));
       this.ready = true;
@@ -172,6 +176,25 @@
       if (!cn || !cn[i] || cn[i][1] || !me.a) return;
       this.gs.session.useItem(i);
       Sfx.play('click');
+    }
+    // カード自動選択：OFF／おまかせ／色ごとの優先 をえらぶ一覧
+    toggleAutoPanel() {
+      if (this.autoPanel) { this.autoPanel.forEach(o => o.destroy()); this.autoPanel = null; return; }
+      const L = this.L, s = L.phone ? 1.15 : 1;
+      const list = [{ i: -1, s: '⏹ 自動OFF', col: 0x8a8a96 }].concat(AUTO_MODES.map((m, i) => ({ i, s: m.s, col: AUTO_COL[m.t] })));
+      const bw = Math.round(150 * s), bh = Math.round(36 * s), gap = 6;
+      const pw = bw + 16, ph = list.length * (bh + gap) + gap + 26;
+      const ab = this.autoBtn;
+      const px = Phaser.Math.Clamp(ab.x - pw / 2, 8, L.w - pw - 8), py = Phaser.Math.Clamp(ab.y + 22 * ab.scaleY, 8, L.h - ph - 8);
+      const cur = this.autoCard ? AUTO_MODES.findIndex(m => m.t === this.autoPri) : -1;
+      const objs = [UI.nightFrame(this, px, py, pw, ph, { alpha: 0.88 }).setDepth(60)];
+      objs.push(this.add.text(px + pw / 2, py + 7, '優先するカードの色', TR(12 * s, '#d8ccf0', '#0a0614', 3)).setOrigin(0.5, 0).setDepth(61));
+      list.forEach((it, k) => {
+        const b = button(this, px + pw / 2, py + 26 + gap + bh / 2 + k * (bh + gap), bw, bh, (it.i === cur ? '✔ ' : '') + it.s, () => { this.setAuto(it.i); this.toggleAutoPanel(); }, { night: true, accent: it.col, size: 14 * s }).setDepth(61);
+        if (it.i === cur) b.setFocus(true);
+        objs.push(b);
+      });
+      this.autoPanel = objs;
     }
     toggleLock() {
       const me = this.gs.me;
