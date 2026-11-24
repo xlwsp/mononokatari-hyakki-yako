@@ -817,7 +817,7 @@
       if (!cont && !Unlock.ok(this.sp)) { this.msg(`🔒 ${GD.SPECIES[this.sp].name} はガチャで手に入ります`); Sfx.play('click'); return; }
       this.connecting = true;
       Sfx.init();
-      UI.mobileEnter();
+      UI.mobileEnter('landscape'); // プレイ中は横画面
       this.saveName();
       this.msg('接続中…');
       Net.connect(this.getName(), cont ? (this.saveData && this.saveData.sp) || this.sp : this.sp, cont).then(session => {
@@ -839,12 +839,15 @@
       const d = this.d, w = this.scale.width, h = this.scale.height;
       this.sp = d.session.sp || store.get('sp', 'gekomaru');
       if (!Unlock.ok(this.sp)) this.sp = 'gekomaru';
-      this.add.rectangle(0, 0, w, h, 0x1d1020, 0.55).setOrigin(0);
+      this.add.rectangle(-w, -h, w * 3, h * 3, 0x1d1020, 0.55).setOrigin(0);
       const pw = Math.min(520, w - 20);
       const tmp = monsterPicker(this, w / 2, -9999, pw - 30, this.sp, () => {});
       const gridH = tmp.height; tmp.destroy();
       const ph = 200 + gridH + 150 + 56;
-      const x = w / 2 - pw / 2, y = Math.max(10, h / 2 - ph / 2);
+      // スマホ横画面などで入りきらないときは、画面の真ん中を中心に全体を縮めて表示
+      const fit = ph > h - 16;
+      const x = w / 2 - pw / 2, y = fit ? h / 2 - ph / 2 : Math.max(10, h / 2 - ph / 2);
+      if (fit) this.cameras.main.setZoom((h - 16) / ph);
       UI.nightFrame(this, x, y, pw, ph, { alpha: 0.9, fill: 0x0c0818, r: 18, gem: 9 });
       const title = this.add.text(w / 2, y + 38, 'やられた…', TO(40, '#c8d8ff', '#3a2a40', 8)).setOrigin(0.5).setScale(0.3);
       this.tweens.add({ targets: title, scale: 1, duration: 400, ease: 'Back.out' });

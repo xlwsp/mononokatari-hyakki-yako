@@ -208,15 +208,25 @@
 
   // スマホなら全画面＆縦向き固定を試みる（できない端末では何もしない）
   const isMobile = () => window.matchMedia && window.matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820;
-  function mobileEnter() {
+  // 画面の向きを固定（できる端末だけ。全画面のときのみ効く）
+  function lockOrient(o) {
+    try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock(o).catch(() => {}); } catch (e) { /* noop */ }
+  }
+  // スマホ：全画面にして向きを固定（メニューは縦、プレイ中は横）
+  function mobileEnter(orient) {
     if (!isMobile()) return;
+    const o = orient || 'portrait';
     try {
       const el = document.documentElement;
-      const p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : null;
-      const lock = () => { try { screen.orientation && screen.orientation.lock && screen.orientation.lock('portrait').catch(() => {}); } catch (e) { /* noop */ } };
-      if (p && p.then) p.then(lock).catch(() => {}); else lock();
+      const p = !document.fullscreenElement && el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : null;
+      if (p && p.then) p.then(() => lockOrient(o)).catch(() => {}); else lockOrient(o);
     } catch (e) { /* noop */ }
   }
+  // プレイ中かどうか（スマホはプレイ中だけ横画面）
+  function setPlaying(on) {
+    document.body.classList.toggle('playing', !!on);
+    if (isMobile() && document.fullscreenElement) lockOrient(on ? 'landscape' : 'portrait');
+  }
 
-  window.UI = { FONT, DISPLAY, BRUSH, C, T, TO, TB, TR, panel, button, nightFrame, frameDraw, cornerGems, keyNav, forestBackdrop, isMobile, mobileEnter };
+  window.UI = { FONT, DISPLAY, BRUSH, C, T, TO, TB, TR, panel, button, nightFrame, frameDraw, cornerGems, keyNav, forestBackdrop, isMobile, mobileEnter, lockOrient, setPlaying };
 })();

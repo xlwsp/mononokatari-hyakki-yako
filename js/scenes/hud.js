@@ -196,9 +196,11 @@
       g.clear();
       const cn = me.cn || [];
       if (!dp) return;
-      const r = L.compact ? 22 : 25, step = r * 2 + 10;
-      // 置き場所：スマホ縦は ダッシュの上に縦に、それ以外は ダッシュの左に横に
-      const pos = i => (L.portrait ? { x: dp.cx, y: dp.cy - dp.R - 18 - r - i * step } : { x: dp.cx - dp.R - 18 - r - i * step, y: dp.cy });
+      const r = L.phone ? 28 : L.compact ? 22 : 25, step = r * 2 + (L.phone ? 12 : 10);
+      // 置き場所：スマホ縦は ダッシュの上に縦に、スマホ横はレーダーの上に右から横に、パソコンは ダッシュの左に横に
+      const pos = i => (L.portrait ? { x: dp.cx, y: dp.cy - dp.R - 18 - r - i * step }
+        : L.phone ? { x: L.w - 12 - r - i * step, y: Math.min(L.mmY, dp.cy - dp.R) - 16 - r }
+          : { x: dp.cx - dp.R - 18 - r - i * step, y: dp.cy });
       this.itSlots.forEach((sl, i) => {
         const it = cn[i], def = it && GD.CONSUMABLES.find(c => c.id === it[0]);
         const show = !!def;
@@ -223,7 +225,7 @@
       this.emoZone.setPosition(e.x, e.y).setSize(r * 2 + 6, r * 2 + 6);
       if (this.emoZone.input) this.emoZone.input.hitArea.setTo(0, 0, r * 2 + 6, r * 2 + 6);
       // ロックオン：スマホ縦はエモートの左、それ以外はダッシュの上
-      const lp = L.portrait ? { x: e.x - step, y: e.y } : { x: dp.cx, y: dp.cy - dp.R - 16 - r };
+      const lp = L.portrait ? { x: e.x - step, y: e.y } : L.phone ? pos(n + 1) : { x: dp.cx, y: dp.cy - dp.R - 16 - r };
       const lk = !!me.lk;
       g.fillStyle(lk ? 0x4a2a08 : 0x07050f, lk ? 0.85 : 0.65); g.fillCircle(lp.x, lp.y, r);
       g.lineStyle(2.5, lk ? 0xffc040 : 0xffffff, 0.95); g.strokeCircle(lp.x, lp.y, r);
@@ -252,13 +254,15 @@
     }
     drawDash(me) {
       const L = this.L, g = this.dashG;
-      const R = L.compact ? 38 : 44;
+      const R = L.phone ? 50 : L.compact ? 38 : 44;
       // 置き場所：パソコンはレーダーの左。スマホ横画面はレーダーの真上。
       // スマホ縦画面は右はしで、スキル欄・カード一覧より上（重ならないように実際の位置を見て決める）
       let cx, cy;
       if (L.portrait) {
         const stackTop = Math.min(this.skPos ? this.skPos.y : L.h, this.bagTop || L.h);
         cx = L.w - R - 14; cy = Math.min(L.h * 0.6, stackTop - R - 18);
+      } else if (L.phone) {
+        cx = L.mmX - R - 18; cy = L.h - R - 16; // レーダーの左（親指の届くところ）
       } else if (L.compact) {
         cx = L.mmX + L.mm / 2; cy = L.mmY - R - 16;
       } else { cx = L.mmX - R - 22; cy = L.h - R - 26; }
@@ -396,8 +400,9 @@
       if (this.vig) this.vig.setDisplaySize(this.scale.width, this.scale.height);
       const w = this.scale.width, h = this.scale.height;
       const portrait = h > w && w < 760; // スマホ縦画面
-      const compact = w < 760;
-      const L = this.L = { w, h, compact, portrait };
+      const phone = !portrait && h < 520; // スマホ横画面（パソコンと同じ並びで、ボタンを大きく）
+      const compact = w < 760 || phone;
+      const L = this.L = { w, h, compact, portrait, phone };
       if (portrait) {
         L.mm = 118;
         L.mmX = w - 10 - L.mm; L.mmY = 10;
@@ -409,6 +414,16 @@
         this.protText.setPosition(L.cx, 124);
         this.exitBtn.setPosition(40, h - 30).setScale(0.85);
         this.bgmBtn.setPosition(40, h - 62).setScale(0.85);
+      } else if (phone) {
+        L.mm = 112;
+        L.mmX = w - 12 - L.mm; L.mmY = h - 12 - L.mm;
+        L.lb = { w: 150, rows: 3, alpha: 0.75 };
+        L.lb.x = w - 12 - L.lb.w; L.lb.y = 10;
+        L.hud = { x: 12, y: 10, w: Math.min(240, w * 0.32), h: 64 };
+        L.cx = w / 2;
+        this.cpText.setPosition(w / 2, 10).setFontSize(20);
+        this.subText.setPosition(w / 2, 38);
+        this.protText.setPosition(w / 2, 56);
       } else {
         L.mm = compact ? 140 : 190;
         L.mmX = w - 12 - L.mm; L.mmY = h - 12 - L.mm;
@@ -422,12 +437,18 @@
         this.exitBtn.setPosition(L.hud.x + 37, L.hud.y + L.hud.h + 24).setScale(1);
         this.bgmBtn.setPosition(L.hud.x + 37 + 82, L.hud.y + L.hud.h + 24).setScale(1);
       }
+      // スマホ横画面：HPの下に小さめに1列
+      const bs = phone ? 0.8 : 1, by = L.hud.y + L.hud.h + (phone ? 18 : 24);
+      if (phone) {
+        this.exitBtn.setPosition(L.hud.x + 37 * bs, by).setScale(bs);
+        this.bgmBtn.setPosition(L.hud.x + (37 + 82) * bs, by).setScale(bs);
+      }
       if (portrait) this.autoBtn.setPosition(44, h - 126).setScale(0.85);
-      else this.autoBtn.setPosition(L.hud.x + 37 + 164 + 87, L.hud.y + L.hud.h + 24).setScale(1);
+      else this.autoBtn.setPosition(L.hud.x + (37 + 164 + 87) * bs, by).setScale(bs);
       if (this.chatBtn) {
         if (portrait) this.chatBtn.setPosition(40, h - 94).setScale(0.85);
-        else this.chatBtn.setPosition(L.hud.x + 37 + 164, L.hud.y + L.hud.h + 24).setScale(1);
-        this.chatBox.style.top = (portrait ? 150 : L.hud.y + L.hud.h + 50) + 'px';
+        else this.chatBtn.setPosition(L.hud.x + (37 + 164) * bs, by).setScale(bs);
+        this.chatBox.style.top = (portrait ? 150 : by + 26) + 'px';
         this.chatBox.style.maxWidth = Math.min(340, w - 150) + 'px';
       }
       this.hurt.setSize(w, h);
@@ -565,8 +586,10 @@
         if (!rd) { g.lineStyle(3.5, 0xff9a3a, 1); g.beginPath(); g.arc(ex, ey, er, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - me.sc2)); g.strokePath(); }
         this.sk2Txt.setPosition(ex, ey).setText(rd ? '進化\nOK' : '進化技');
       }
-      this.skZone.setPosition(x + w / 2, cy).setSize(w, h);
-      if (this.skZone.input) this.skZone.input.hitArea.setTo(0, 0, w, h);
+      // スマホ横画面：左下は移動スティックを置く場所なので、説明が出るのはアイコンだけ
+      const zw = L.phone ? 56 : w, zh = L.phone ? 56 : h;
+      this.skZone.setPosition(L.phone ? cx : x + w / 2, cy).setSize(zw, zh);
+      if (this.skZone.input) this.skZone.input.hitArea.setTo(0, 0, zw, zh);
       this.skPos = { x, y, w };
     }
 
@@ -964,7 +987,7 @@
       if (n < 3) return;
       const L = this.L;
       const tier = n >= 100 ? '#ff7ad9' : n >= 50 ? '#ff8a4a' : n >= 25 ? '#ffd84f' : n >= 10 ? '#a8ff90' : '#ffffff';
-      const x = L.w - 16, y = L.portrait ? L.h * 0.55 : L.h * 0.5;
+      const x = L.w - 16, y = L.portrait ? L.h * 0.55 : L.phone ? L.h * 0.36 : L.h * 0.5;
       this.comboText.setText(`${n}`).setColor(tier).setPosition(x, y).setAlpha(1).setFontSize(Math.min(64, 28 + n * 0.3));
       this.comboSub.setPosition(x, y + 30).setAlpha(1);
       this.tweens.killTweensOf(this.comboText);

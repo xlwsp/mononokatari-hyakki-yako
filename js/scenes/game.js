@@ -76,6 +76,7 @@
       this.dashHold = false; // スマホのダッシュボタン（HUDが押している間 true にする）
 
       this.session.onSnapshot = s => this.onSnap(s);
+      UI.setPlaying(true);
       // ロックオンの設定はこの端末で覚えておく
       try { if (localStorage.getItem('nakama_lock') === '1') this.session.lock(true); } catch (e) { /* noop */ }
       this.session.onLost = msg => this.lost(msg);
@@ -85,6 +86,7 @@
       this.scale.on('resize', this.onResize);
       Bgm.start();
       this.events.once('shutdown', () => {
+        UI.setPlaying(false);
         Bgm.stop();
         this.scale.off('resize', this.onResize);
         this.session.onSnapshot = null;
