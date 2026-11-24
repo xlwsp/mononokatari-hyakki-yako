@@ -632,17 +632,35 @@
       g.clear();
       const meX = this.gs.local ? this.gs.local.x : me.x, meY = this.gs.local ? this.gs.local.y : me.y;
       const y0 = this.protText.y + (this.protText.visible ? 26 : 4);
+      // 置き場所：左上（HP・ボタン）と右上（ランキング）のあいだ。せまいときはボタンの段より下へ
+      const sp = this.bbSpot(y0);
+      const fit = t => t.setScale(Math.min(1, (sp.w + 40) / Math.max(1, t.width)));
       if (bb && Math.hypot(bb[0] - meX, bb[1] - meY) < 2600) {
-        const w = Math.min(420, L.w - (L.portrait ? 150 : 40)), x = L.cx - w / 2, y = y0 + 22;
+        const w = sp.w, x = sp.cx - w / 2, y = sp.y + 22;
         const bt = `大妖 オオマガツ　Lv${bb[3] || 200}`;
         if (this.bbName.text !== bt) this.bbName.setText(bt);
-        this.bbName.setVisible(true).setPosition(L.cx, y - 2);
+        fit(this.bbName.setVisible(true).setPosition(sp.cx, y - 2));
         this.bar(g, x, y, w, 14, bb[2] / 1000, 0xa050ff, 0x140820);
-        this.bbHint.setVisible(true).setPosition(L.cx, y + 16).setText(`${(bb[2] / 10).toFixed(1)}%　倒すと世界の中央に経験値がばらまかれる！`);
+        fit(this.bbHint.setVisible(true).setPosition(sp.cx, y + 16).setText(`${(bb[2] / 10).toFixed(1)}%　倒すと世界の中央に経験値がばらまかれる！`));
       } else if (!bb && this.gs.bbt > 0 && this.gs.bbt <= 30) {
         this.bbName.setVisible(false);
-        this.bbHint.setVisible(true).setPosition(L.cx, y0).setText(`👹 大妖が世界の中央に現れるまで ${this.gs.bbt}秒`);
+        fit(this.bbHint.setVisible(true).setPosition(sp.cx, sp.y).setText(`👹 大妖が世界の中央に現れるまで ${this.gs.bbt}秒`));
       } else { this.bbName.setVisible(false); this.bbHint.setVisible(false); }
+    }
+    // 大妖のHPバーを置ける場所（ほかの表示と重ならないところ）
+    bbSpot(y0) {
+      const L = this.L;
+      if (L.portrait) return { cx: L.cx, y: y0, w: Math.min(420, L.w - 150) };
+      // 左：HPの枠と、その下のボタンの段（退出・♪・チャット・自動）の右はし
+      let left = L.hud.x + L.hud.w;
+      const btns = [this.exitBtn, this.bgmBtn, this.chatBtn, this.autoBtn].filter(b => b && b.visible);
+      const rowBot = Math.max(...btns.map(b => b.y + 17 * b.scaleY), L.hud.y + L.hud.h);
+      btns.forEach(b => { left = Math.max(left, b.x + 46 * b.scaleX); });
+      const right = L.lb.x;
+      const w = Math.min(420, right - left - 24);
+      if (w >= 220) return { cx: (left + right) / 2, y: y0, w };
+      // せまい：ボタンの段より下に、画面のまん中に置く
+      return { cx: L.w / 2, y: Math.max(y0, rowBot + 8), w: Math.min(420, L.w - 40) };
     }
     bigBossFx(spawn, name, lv) {
       if (!this.ready) return;
