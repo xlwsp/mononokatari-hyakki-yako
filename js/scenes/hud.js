@@ -7,6 +7,12 @@
     hp: 0x3cb85a, regen: 0x3cb85a, magnet: 0x3a8ae8, bump: 0xe8505a, trait: 0x9a5ae8 };
   const UP_TAG = { dmg: 'ATTACK', rate: 'ATTACK', extra: 'ATTACK', pierce: 'ATTACK', skillPow: 'SKILL', skillCd: 'SKILL', area: 'SKILL',
     hp: 'GUARD', regen: 'GUARD', magnet: 'SUPPORT', bump: 'ATTACK', trait: 'POWER' };
+  // カード自動選択のモード（色で優先を決める）
+  const AUTO_MODES = [
+    { t: '', s: '🤖 おまかせ', l: 'おまかせ' }, { t: 'ATTACK', s: '🔴 攻撃優先', l: '赤（攻撃）を優先' },
+    { t: 'SKILL', s: '🟠 技優先', l: '橙（スキル）を優先' }, { t: 'GUARD', s: '🟢 守り優先', l: '緑（守り）を優先' },
+    { t: 'SUPPORT', s: '🔵 補助優先', l: '青（補助）を優先' }, { t: 'POWER', s: '🟣 覚醒優先', l: '紫（覚醒）を優先' },
+  ];
   const UP_SHORT = { dmg: '攻撃', rate: '連射', extra: '弾数', pierce: '貫通', skillPow: '技威力', skillCd: '技連発', area: '技範囲', hp: 'HP', regen: '回復', magnet: '吸引', bump: '体当り', trait: '覚醒' };
   const UP_ORDER = ['dmg', 'rate', 'extra', 'pierce', 'bump', 'skillPow', 'skillCd', 'area', 'hp', 'regen', 'magnet', 'trait'];
   // カードの「数値」と「説明」（数値は大きく色つきで見せる）
@@ -61,13 +67,17 @@
       const bgmLabel = v => (v >= 1 ? '♪ 大' : v > 0 ? '♪ 小' : '♪ OFF');
       this.bgmBtn = button(this, 0, 0, 74, 30, bgmLabel(Bgm.vol), () => this.bgmBtn.setLabel(bgmLabel(Bgm.toggle())), { color: C.blue, dark: C.blueDark, size: 14 });
       // カードの自動選択（ONにするとAIがいちばん良さそうなカードを選ぶ。初心者向け）
-      try { this.autoCard = localStorage.getItem('nakama_autocard') === '1'; } catch (e) { this.autoCard = false; }
-      const autoLabel = () => (this.autoCard ? '🤖 自動ON' : '🤖 自動OFF');
+      // 押すたびに OFF → おまかせ → 赤（攻撃）→ 橙（スキル）→ 緑（守り）→ 青（補助）→ 紫（覚醒）優先 → OFF
+      try { this.autoCard = localStorage.getItem('nakama_autocard') === '1'; this.autoPri = localStorage.getItem('nakama_autopri') || ''; } catch (e) { this.autoCard = false; this.autoPri = ''; }
+      if (!AUTO_MODES.some(m => m.t === this.autoPri)) this.autoPri = '';
+      const autoLabel = () => (!this.autoCard ? '🤖 自動OFF' : AUTO_MODES.find(m => m.t === this.autoPri).s);
       this.autoBtn = button(this, 0, 0, 84, 30, autoLabel(), () => {
-        this.autoCard = !this.autoCard;
-        try { localStorage.setItem('nakama_autocard', this.autoCard ? '1' : '0'); } catch (e) { /* noop */ }
+        const cur = this.autoCard ? AUTO_MODES.findIndex(m => m.t === this.autoPri) : -1;
+        const nx = cur + 1 >= AUTO_MODES.length ? -1 : cur + 1;
+        this.autoCard = nx >= 0; this.autoPri = nx >= 0 ? AUTO_MODES[nx].t : '';
+        try { localStorage.setItem('nakama_autocard', this.autoCard ? '1' : '0'); localStorage.setItem('nakama_autopri', this.autoPri); } catch (e) { /* noop */ }
         this.autoBtn.setLabel(autoLabel());
-        this.banner(this.autoCard ? '🤖 カード自動選択 ON' : 'カード自動選択 OFF', '#bfe8ff');
+        this.banner(this.autoCard ? '🤖 カード自動選択：' + AUTO_MODES[nx].l : 'カード自動選択 OFF', '#bfe8ff');
         if (this.autoCard && this.cards) this.autoPick();
       }, { color: this.autoCard ? 0x3aa86a : C.gray, dark: C.grayDark, size: 13 });
 
@@ -297,8 +307,8 @@
     // ---------- 右側の記録（プレイヤー同士のキル・大妖の討伐・ドロップ） ----------
     setupFeed() {
       const box = this.feedBox = document.createElement('div');
-      box.style.cssText = 'position:fixed;right:12px;top:140px;width:min(300px,46vw);z-index:20;pointer-events:none;font-family:"M PLUS Rounded 1c",sans-serif;font-weight:800;font-size:13.5px;line-height:1.35;display:flex;flex-direction:column;align-items:flex-end;';
-      document.body.appendChild(box);
+      box.style.cssText = 'position:fixed;right:12px;top:140px;width:min(300px,46%);z-index:20;pointer-events:none;font-family:"M PLUS Rounded 1c",sans-serif;font-weight:800;font-size:13.5px;line-height:1.35;display:flex;flex-direction:column;align-items:flex-end;';
+      UI.domRoot().appendChild(box);
       this.events.once('shutdown', () => box.remove());
       const ss = this.gs.session;
       const note = m => {
@@ -343,16 +353,16 @@
       if (!ss || !ss.say) return;
       const box = this.chatBox = document.createElement('div');
       box.style.cssText = 'position:fixed;left:12px;top:150px;max-width:340px;z-index:20;pointer-events:none;font-family:"M PLUS Rounded 1c",sans-serif;font-weight:800;font-size:14px;line-height:1.35;';
-      document.body.appendChild(box);
+      UI.domRoot().appendChild(box);
       const bar = this.chatBar = document.createElement('div');
-      bar.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);width:min(440px,calc(100vw - 32px));display:none;gap:6px;z-index:30;';
+      bar.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);width:min(440px,calc(100% - 32px));display:none;gap:6px;z-index:30;';
       const inp = document.createElement('input');
       inp.maxLength = 60; inp.placeholder = 'みんなにメッセージ（Enterで送信）';
       inp.style.cssText = 'flex:1;min-width:0;font-size:16px;padding:10px 12px;border-radius:10px;border:3px solid #f0c35a;background:#1a1020ee;color:#fff8ea;font-family:inherit;outline:none;';
       const send = document.createElement('button');
       send.textContent = '送信';
       send.style.cssText = 'font-size:16px;font-weight:900;padding:0 16px;border-radius:10px;border:3px solid #5a3a14;background:#f0a830;color:#2a1608;';
-      bar.append(inp, send); document.body.appendChild(bar);
+      bar.append(inp, send); UI.domRoot().appendChild(bar);
       const kb = this.game.input.keyboard;
       const close = () => {
         bar.style.display = 'none'; inp.blur(); this.chatOpen = false;
@@ -939,7 +949,8 @@
         return v;
       };
       let best = 0, bs = -1;
-      opts.forEach((k, i) => { const v = score(k); if (v > bs) { bs = v; best = i; } });
+      const pri = this.autoPri; // えらんだ色のカードがあれば、その中でいちばん良いもの
+      opts.forEach((k, i) => { const v = score(k) + (pri && UP_TAG[k] === pri ? 100 : 0); if (v > bs) { bs = v; best = i; } });
       return best;
     }
     autoPick() {

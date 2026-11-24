@@ -672,6 +672,18 @@
       p.xp += v; p.txp += v;
       this.addXpRaw(p);
     }
+    // 倒れたプレイヤーの経験値を、まわりに玉にしてばらまく
+    scatterXp(p, total) {
+      const n = clamp(Math.round(10 + p.lv / 8), 10, 28), R0 = this.radius(p) + 60;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + rand(-0.2, 0.2), R = R0 + rand(40, 220);
+        this.dropGem(p.x + Math.cos(a) * R, p.y + Math.sin(a) * R, total / n);
+      }
+    }
+    // レベルをn上げる（金色のおばけ）
+    addLevels(p, n) {
+      for (let i = 0; i < n && p.alive; i++) { p.xp = Math.max(p.xp, p.xpn); this.addXpRaw(p); }
+    }
     addXpRaw(p) {
       while (p.xp >= p.xpn) {
         p.xp -= p.xpn;
@@ -832,7 +844,9 @@
           this.ev({ e: 'btk', g: 1, n: killer.name, v: p.name, k: killer.id });
           this.bounty = null; this.bountyT = 3;
         }
-        this.addXp(killer, 40 + p.lv * 20 + p.txp * absorb); // プレイヤーを倒すと経験値がたくさん
+        // プレイヤーを倒すと経験値がたくさん：倒れた場所のまわりにばらまく（近くにいる人みんなで取り合い）
+        this.scatterXp(p, 40 + p.lv * 20 + p.txp * 0.85);
+        if (absorb > 0.85) this.addXp(killer, p.txp * (absorb - 0.85)); // 吸収の特性は倒した人に直接
         // 道連れ：倒した相手に大ダメージ
         if (tr === 'curse') {
           killer.hp -= killer.mhp * Math.min(0.8, 0.35 * w);
@@ -2071,6 +2085,8 @@
           const n = e.ty === 18 ? 10 : e.ty === 21 ? 14 : e.ty === 24 ? 18 : 22;
           for (let i = 0; i < n; i++) this.dropGem(e.x + rand(-80, 80), e.y + rand(-80, 80), e.xp * 5 / n);
         } else if (e.ty === 7) {
+          // 金色のおばけ：倒した人は確実に1〜2レベルアップ（上位どうしの取り合いに）
+          if (owner && owner.alive) { const n = randInt(1, 2); this.addLevels(owner, n); if (owner.human) this.ev({ e: 'glv', p: owner.id, n }); }
           for (let i = 0; i < 10; i++) this.dropGem(e.x + rand(-60, 60), e.y + rand(-60, 60), e.xp / 8);
         } else if (!e.el) this.dropGem(e.x, e.y, e.xp);
       }

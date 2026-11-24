@@ -942,7 +942,7 @@ def save_feedback(tok, m):
     _fb_recent[:] = [t for t in _fb_recent if now - t < 3600]
     if len(_fb_recent) >= 100:
         return 'wait'
-    text = ''.join(ch for ch in str(m.get('m') or '') if ch >= ' ' or ch == '\n').strip()[:500]
+    text = ''.join(ch for ch in str(m.get('m') or '') if ch >= ' ' or ch == '\n').strip()[:2000]
     if len(text) < 2:
         return 'ng'
     kind = m.get('k') if m.get('k') in FB_KINDS else 'idea'

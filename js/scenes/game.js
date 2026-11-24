@@ -403,7 +403,7 @@
         const phone = Math.min(w, h) < 560;
         const want = phone
           ? Phaser.Math.Clamp(Math.min(w, h) / (780 + vis * 1.2) / this.baseZoom, Math.min(1, minZ), 1.25)
-          : Phaser.Math.Clamp(Math.min(w, h) * 0.2 / (vis * this.baseZoom), Math.min(1, minZ), 1.25);
+          : Phaser.Math.Clamp(Math.min(w, h) * this.bodyFrac(vis) / (vis * this.baseZoom), Math.min(1, minZ), 1.25);
         this.zoomCur += (want - this.zoomCur) * Math.min(1, dt * 2);
         this.cameras.main.setZoom(this.baseZoom * this.zoomCur * this.punch);
       }
@@ -414,6 +414,12 @@
       if (this.frame % 3 === 1) this.updateChunks();
       this.canopyFade();
       this.checkDeath();
+    }
+
+    // 画面の短い辺に対して、キャラが占める割合。大きくなるほど少しずつ大きく映る（育った感じが出るように）。3割で頭打ち
+    bodyFrac(vis) {
+      const v0 = monsterH(1, 0) * BODY_K;
+      return Phaser.Math.Clamp(0.16 * Math.pow(vis / v0, 0.35), 0.16, 0.3);
     }
 
     // 端末が重いときは演出を控えめにする
@@ -624,7 +630,7 @@
         const hid = alive && pb.hd && !isMe;
         o.body.setAlpha(!alive ? 0.25 : pb.hd ? (isMe ? 0.4 : 0.06) : pb.iv ? (Math.floor(time / 80) % 2 ? 0.55 : 1) : 1);
         o.shadow.setVisible(!hid);
-        o.pb = pb;
+        o.pb = pb; o.hid = hid; // 透明のあいだは、オーラ・足もとの輪・キラキラ・まわる装備も見せない
         // 着せ替え：妖怪の色
         const tintC = cs[0] ? GD.COSMETICS.tint[cs[0] - 1] : null;
         if (pb.so) o.body.setTint(0x8c8c94); // 石になっている
@@ -635,7 +641,7 @@
         o.ring.setVisible(false);
         // 足もとの輪（自分は金、他の人はチームの色）
         const fxOk0 = !this.lowFx || isMe;
-        if (alive) {
+        if (alive && !hid) {
           const col = isMe ? 0xffd84f : GD.COLORS[pb.cl % GD.COLORS.length];
           const ringC = cs[1] ? GD.COSMETICS.ring[cs[1] - 1] : null;
           if (ringC) {
@@ -654,7 +660,7 @@
         }
         // オーラ（レベルが上がるほど強そうに）
         const tier = pb.au || 0;
-        const fxOk = !this.lowFx || isMe;
+        const fxOk = (!this.lowFx || isMe) && !hid;
         o.glow.setVisible(alive && tier > 0 && fxOk);
         if (tier > 0 && fxOk) {
           const c = tier === 6 ? Phaser.Display.Color.HSVToRGB((time / 1500) % 1, 0.6, 1).color : AURA[tier];
@@ -673,7 +679,7 @@
           if (o.twT <= 0) { o.twT = 0.25 - tier * 0.02; FX.twinkle(this, x + Phaser.Math.Between(-D / 2, D / 2), cy + Phaser.Math.Between(-D / 2, D / 2), 1); }
         }
         // シールド・保護中
-        const showBubble = alive && (!!pb.sh || !!pb.pr);
+        const showBubble = alive && !hid && (!!pb.sh || !!pb.pr);
         o.bubble.setVisible(showBubble);
         if (showBubble) {
           o.bubble.setPosition(x, cy).setDepth(y + 2).setTint(pb.pr ? 0xfff6a0 : 0x8fd8ff)
@@ -755,13 +761,13 @@
         }
       }
       if (!o.orb) return;
-      const vis = alive && (!this.lowFx || o === this.pSprites.get(this.myId) || o.orb.length <= 3);
+      const vis = alive && !o.hid && (!this.lowFx || o === this.pSprites.get(this.myId) || o.orb.length <= 3);
       const n = o.orb.length, R = D / 2 + 46;
       const base = (this.rt || 0) * GD.ORBIT_SPEED, now = this.time.now;
       const leg = o.orbR === 4;
       o.orb.forEach((e, i) => {
-        e.img.setVisible(alive); e.aura.setVisible(vis);
-        if (!alive) return;
+        e.img.setVisible(alive && !o.hid); e.aura.setVisible(vis);
+        if (!alive || o.hid) return;
         const a = base + (i / n) * Math.PI * 2;
         const ox = x + Math.cos(a) * R, oy = cy + 24 + Math.sin(a) * R - 20;
         const front = Math.sin(a) > 0;
@@ -1010,6 +1016,9 @@
             break;
           case 'cb':
             if (ev.p === me) { this.ui.banner('✨ 組み合わせ効果アップ！', '#ffe07a'); Sfx.play('lvlBig'); }
+            break;
+          case 'glv':
+            if (ev.p === me) { this.ui.banner(`💰 金のおばけを倒した！ レベル +${ev.n}`, '#ffd84f'); Sfx.play('lvlBig'); }
             break;
                     case 'zp': {
             // 雷太鼓：ジグザグの稲妻

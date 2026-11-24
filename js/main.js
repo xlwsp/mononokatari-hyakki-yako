@@ -33,5 +33,6 @@
       fps: { target: 60 },
       scene: [BootScene, TitleScene, GameScene, UIScene, ResultScene],
     });
+    UI.attachViewport(window.game); // スマホは横画面に固定
   });
 })();

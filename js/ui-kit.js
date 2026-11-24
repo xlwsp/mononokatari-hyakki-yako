@@ -208,6 +208,52 @@
 
   // スマホなら全画面＆縦向き固定を試みる（できない端末では何もしない）
   const isMobile = () => window.matchMedia && window.matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820;
+  // ---------- スマホは横画面に固定 ----------
+  // 縦に持っているときは #vp を90度まわして横画面として表示する。メニューは高さ600相当に縮めてパソコンと同じ並びに
+  const VP = { rot: false, f: 1, iw: 0 };
+  const MENU_H = 600;
+  const phoneDev = () => !!(window.matchMedia && matchMedia('(pointer: coarse)').matches) && Math.min(innerWidth, innerHeight) < 520;
+  function applyViewport() {
+    const el = document.getElementById('vp');
+    if (!el) return;
+    const iw = window.innerWidth, ih = window.innerHeight, phone = phoneDev();
+    VP.rot = phone && ih > iw; VP.iw = iw;
+    const sw = VP.rot ? ih : iw, sh = VP.rot ? iw : ih;
+    VP.f = phone && !document.body.classList.contains('playing') ? Math.max(1, MENU_H / sh) : 1;
+    const s = el.style;
+    s.width = Math.round(sw * VP.f) + 'px'; s.height = Math.round(sh * VP.f) + 'px';
+    const sc = VP.f !== 1 ? ` scale(${1 / VP.f})` : '';
+    s.transform = VP.rot ? `translate(${iw}px,0) rotate(90deg)${sc}` : (sc ? sc.trim() : 'none');
+    if (window.game && window.game.scale && window.game.scale.refresh) window.game.scale.refresh();
+  }
+  // Phaser に、まわした画面の大きさとタッチの位置を正しく伝える
+  function attachViewport(game) {
+    const sm = game.scale;
+    sm.getParentBounds = function () {
+      if (!this.parent) return false;
+      const W = this.parent.offsetWidth, H = this.parent.offsetHeight; // まわす前の大きさ
+      if (this.parentSize.width !== W || this.parentSize.height !== H) { this.parentSize.setSize(W, H); return true; }
+      return false;
+    };
+    const im = game.input, orig = im.transformPointer;
+    im.transformPointer = function (pointer, pageX, pageY, wasMove) {
+      if (!VP.rot && VP.f === 1) return orig.call(this, pointer, pageX, pageY, wasMove);
+      const sx = pageX - (window.scrollX || 0), sy = pageY - (window.scrollY || 0);
+      const x = VP.rot ? sy * VP.f : sx * VP.f, y = VP.rot ? (VP.iw - sx) * VP.f : sy * VP.f;
+      const p0 = pointer.position, p1 = pointer.prevPosition;
+      p1.x = p0.x; p1.y = p0.y;
+      const a = pointer.smoothFactor;
+      if (!wasMove || a === 0) { p0.x = x; p0.y = y; } else { p0.x = x * a + p1.x * (1 - a); p0.y = y * a + p1.y * (1 - a); }
+    };
+    applyViewport();
+    setTimeout(applyViewport, 300);
+  }
+  window.addEventListener('resize', () => applyViewport());
+  window.addEventListener('orientationchange', () => setTimeout(applyViewport, 120));
+  applyViewport();
+  // 画面に重ねるHTML（名前入力・ご意見・チャット）を置く場所。まわした画面と一緒にまわる
+  const domRoot = () => document.getElementById('vp') || document.body;
+
   // 画面の向きを固定（できる端末だけ。全画面のときのみ効く）
   function lockOrient(o) {
     try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock(o).catch(() => {}); } catch (e) { /* noop */ }
@@ -215,7 +261,7 @@
   // スマホ：全画面にして向きを固定（メニューは縦、プレイ中は横）
   function mobileEnter(orient) {
     if (!isMobile()) return;
-    const o = orient || 'portrait';
+    const o = orient || 'landscape';
     try {
       const el = document.documentElement;
       const p = !document.fullscreenElement && el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : null;
@@ -225,8 +271,8 @@
   // プレイ中かどうか（スマホはプレイ中だけ横画面）
   function setPlaying(on) {
     document.body.classList.toggle('playing', !!on);
-    if (isMobile() && document.fullscreenElement) lockOrient(on ? 'landscape' : 'portrait');
+    applyViewport(); // メニューは縮めて表示、プレイ中は等倍
   }
 
-  window.UI = { FONT, DISPLAY, BRUSH, C, T, TO, TB, TR, panel, button, nightFrame, frameDraw, cornerGems, keyNav, forestBackdrop, isMobile, mobileEnter, lockOrient, setPlaying };
+  window.UI = { FONT, DISPLAY, BRUSH, C, T, TO, TB, TR, panel, button, nightFrame, frameDraw, cornerGems, keyNav, forestBackdrop, isMobile, mobileEnter, lockOrient, setPlaying, applyViewport, attachViewport, domRoot, VP };
 })();

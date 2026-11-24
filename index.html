@@ -15,27 +15,12 @@
     html, body { margin: 0; height: 100%; background: #141022; overflow: hidden; touch-action: none; overscroll-behavior: none; }
     #game { width: 100%; height: 100%; }
     canvas { display: block; }
-    /* スマホを横にしたときは「縦にしてね」 */
-    #rotate, #rotate2 { display: none; position: fixed; inset: 0; z-index: 99; background: #141022; color: #fff8ea;
-      font-family: "M PLUS Rounded 1c", sans-serif; font-weight: 800; font-size: 22px; text-align: center;
-      align-items: center; justify-content: center; flex-direction: column; gap: 14px; text-shadow: 0 3px 0 #4a3a2e; }
-    #rotate .phone, #rotate2 .phone { font-size: 56px; animation: tilt 1.6s ease-in-out infinite; }
-    @keyframes tilt { 0%, 30% { transform: rotate(-90deg); } 60%, 100% { transform: rotate(0deg); } }
-    #rotate2 .phone { animation-name: tilt2; }
-    @keyframes tilt2 { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
-    /* メニューは縦、プレイ中は横 */
-    @media (orientation: landscape) and (pointer: coarse) and (max-height: 520px) {
-      body:not(.playing) #rotate { display: flex; }
-    }
-    @media (orientation: portrait) and (pointer: coarse) and (max-width: 520px) {
-      body.playing #rotate2 { display: flex; }
-    }
+    /* スマホはいつも横画面（縦に持っているときは画面ごと90度まわす。js/ui-kit.js の applyViewport） */
+    #vp { position: fixed; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; overflow: hidden; }
   </style>
 </head>
 <body>
-  <div id="game"></div>
-  <div id="rotate"><div class="phone">📱</div><div>スマホを縦にして遊んでね</div></div>
-  <div id="rotate2"><div class="phone">📱</div><div>スマホを横にして遊んでね</div><div style="font-size:14px;opacity:.75">プレイ中は横画面です</div></div>
+  <div id="vp"><div id="game"></div></div>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
   <script>
     // ゲームのファイルを読み込む。更新のたびに古いファイルが残らないよう、版番号を付けて読む

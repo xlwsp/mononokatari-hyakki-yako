@@ -10,9 +10,9 @@
     if (old) old.remove();
     const wrap = document.createElement('div');
     wrap.id = 'nameEditor';
-    wrap.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(20,10,30,0.66);display:flex;align-items:flex-start;justify-content:center;padding-top:min(18vh,140px);';
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(20,10,30,0.66);display:flex;align-items:flex-start;justify-content:center;padding-top:40px;';
     const box = document.createElement('div');
-    box.style.cssText = 'width:min(420px,calc(100vw - 32px));background:rgba(12,8,24,0.94);border:3px solid #fff;border-radius:18px;padding:18px 18px 16px;box-shadow:0 10px 30px rgba(0,0,0,0.5);font-family:"M PLUS Rounded 1c",sans-serif;text-align:center;';
+    box.style.cssText = 'width:min(420px,calc(100% - 32px));background:rgba(12,8,24,0.94);border:3px solid #fff;border-radius:18px;padding:18px 18px 16px;box-shadow:0 10px 30px rgba(0,0,0,0.5);font-family:"M PLUS Rounded 1c",sans-serif;text-align:center;';
     const title = document.createElement('div');
     title.textContent = opt.title || 'なまえ';
     title.style.cssText = 'font-weight:900;font-size:22px;color:#fff4e6;margin-bottom:4px;';
@@ -28,7 +28,7 @@
     const mk = (label, bg, fg) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = `flex:1;height:50px;border-radius:12px;border:2px solid #fff;background:${bg};color:${fg};font-family:inherit;font-weight:900;font-size:19px;cursor:pointer;`; return b; };
     const cancel = mk(opt.cancelLabel || 'やめる', 'rgba(255,255,255,0.08)', '#fff4e6'), ok = mk('けってい', 'rgba(255,110,90,0.35)', '#fff8ea');
     row.append(cancel, ok); box.append(title, sub, inp, row); wrap.append(box);
-    document.body.appendChild(wrap);
+    UI.domRoot().appendChild(wrap);
     // 入力中はゲームのキー操作を止める（WASD・スペースなどが打てなくならないように）
     const kb = game && game.input && game.input.keyboard;
     if (kb) kb.enabled = false;
@@ -304,22 +304,22 @@
       const kb = this.game.input.keyboard; if (kb) kb.enabled = false;
       const wrap = document.createElement('div');
       wrap.id = 'fbPanel';
-      wrap.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(20,10,30,0.66);display:flex;align-items:flex-start;justify-content:center;padding-top:min(8vh,60px);overflow:auto;';
+      wrap.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(20,10,30,0.66);display:flex;align-items:flex-start;justify-content:center;padding-top:20px;overflow:auto;';
       const F = '"M PLUS Rounded 1c",sans-serif';
       wrap.innerHTML = `
-        <div style="width:min(480px,calc(100vw - 28px));background:rgba(12,8,24,0.94);border:3px solid #fff;border-radius:18px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-family:${F};color:#fff4e6;">
+        <div style="width:min(480px,calc(100% - 28px));background:rgba(12,8,24,0.94);border:3px solid #fff;border-radius:18px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-family:${F};color:#fff4e6;">
           <div style="font-weight:900;font-size:22px;text-align:center">📮 ご意見・バグ報告</div>
           <div style="font-weight:800;font-size:12.5px;color:#cfc2e6;text-align:center;margin:4px 0 10px">運営に届きます。ほかのプレイヤーには見えません</div>
           <div id="fbKinds" style="display:flex;gap:6px;margin-bottom:10px"></div>
           <div id="fbStars" style="text-align:center;font-size:30px;margin-bottom:6px;cursor:pointer;user-select:none"></div>
-          <textarea id="fbText" maxlength="500" placeholder="ここに書いてね（500文字まで）" style="width:100%;box-sizing:border-box;height:150px;border-radius:12px;border:2px solid #fff;background:#140e24;padding:10px;font-family:${F};font-weight:800;font-size:16px;color:#fff4e6;resize:vertical;outline:none"></textarea>
+          <textarea id="fbText" maxlength="2000" placeholder="ここに書いてね（2000文字まで）" style="width:100%;box-sizing:border-box;height:150px;border-radius:12px;border:2px solid #fff;background:#140e24;padding:10px;font-family:${F};font-weight:800;font-size:16px;color:#fff4e6;resize:vertical;outline:none"></textarea>
           <div id="fbMsg" style="font-weight:800;font-size:13px;color:#ff8a7a;min-height:18px;margin:4px 0"></div>
           <div style="display:flex;gap:10px">
             <button id="fbCancel" style="flex:1;height:48px;border-radius:12px;border:2px solid #fff;background:rgba(255,255,255,0.08);color:#fff4e6;font-family:${F};font-weight:900;font-size:18px">とじる</button>
             <button id="fbSend" style="flex:1;height:48px;border-radius:12px;border:2px solid #fff;background:rgba(255,110,90,0.35);color:#fff8ea;font-family:${F};font-weight:900;font-size:18px">送信する</button>
           </div>
         </div>`;
-      document.body.appendChild(wrap);
+      UI.domRoot().appendChild(wrap);
       const $ = id => wrap.querySelector('#' + id);
       const KINDS = [['review', '⭐ レビュー'], ['idea', '🙏 改善してほしい'], ['bug', '🐞 バグ報告']];
       let kind = 'idea', stars = 0;
@@ -371,21 +371,26 @@
       const v = (this.input_ && this.input_.node.value || '').trim();
       return (v || 'ゆうしゃ').slice(0, 12);
     }
-    pick(k) {
+    // その妖怪を進化させたことがあるか（妖怪ごとの最高レベルで判断）
+    evolved(k) { const st = this.prof && this.prof.st; return !!st && (st[k + ':lv'] || 0) >= GD.EVOLVE_LV; }
+    pick(k, keepEvo) {
+      if (!keepEvo) this.showEvo = false;
       this.sp = k;
       if (Unlock.ok(k)) store.set('sp', k);
       this.picker.set(k);
       if (this.starBox) this.starBox.set(k);
       const info = speciesInfo(k);
-      this.infoTitle.setText(info.title);
-      this.infoLine.setText(info.line);
+      const evo = this.showEvo && this.evolved(k), def = GD.SPECIES[k], es = GD.EVO_SKILLS[k];
+      if (this.evoBtn && this.evoBtn.active) { this.evoBtn.setVisible(this.evolved(k)); if (this.evoBtn.setLabel) this.evoBtn.setLabel(evo ? '↩ 進化前にもどす' : '✨ 進化後を見る'); }
+      this.infoTitle.setText(evo ? `✨ ${def.evoName}` : info.title);
+      this.infoLine.setText(evo ? `${def.name}の進化した姿\n進化技【${es.name}】${es.desc}` : info.line);
       // 説明が枠に入りきらないときは縮める
       this.infoLine.setScale(1);
       if (this.infoMaxH && this.infoLine.height > this.infoMaxH) this.infoLine.setScale(this.infoMaxH / this.infoLine.height);
       if (this.infoTitle.width > this.infoMaxW) this.infoTitle.setScale(this.infoMaxW / this.infoTitle.width); else this.infoTitle.setScale(1);
       if (this.lockerNo && this.lockerNo.active) { const ks = PICK_KEYS(); this.lockerNo.setText(`◀ ${ks.indexOf(k) + 1} / ${ks.length} ▶　タップで一覧`); }
       if (this.preview) {
-        this.preview.setTexture('cr_' + k).setTint(Unlock.ok(k) ? 0xffffff : 0x111111);
+        this.preview.setTexture('cr_' + k + (evo ? '_e' : '')).setTint(Unlock.ok(k) ? 0xffffff : 0x111111);
         const s = Math.min(this.previewH / this.preview.height, this.previewW / this.preview.width);
         this.preview.setScale(s * 0.6);
         this.tweens.add({ targets: this.preview, scale: s, duration: 260, ease: 'Back.out' });
@@ -434,6 +439,9 @@
         this.lockerNo = this.add.text(cx, bot + 6, '', TR(13, '#d8ccf0', '#0a0614', 3)).setOrigin(0.5, 0);
         // 絵をタップしても一覧が開く
         this.add.zone(cx, (top + bot) / 2, halfW * 1.2, bot - top).setInteractive({ useHandCursor: true }).on('pointerup', openList);
+        // 進化させたことのある妖怪は、進化後の姿と進化技を見られる
+        this.evoBtn = NB(cx + halfW - 74, top + 22, 140, 36, '✨ 進化後を見る', () => { Sfx.play('click'); this.showEvo = !this.showEvo; this.pick(this.sp, true); }, { size: 14, accent: 0xffc040 }).setDepth(5);
+        this.evoBtn.setVisible(false);
       };
       const infoBox = (cx, y, iw, ih, big) => {
         nightFrame(this, cx - iw / 2, y, iw, ih);
@@ -667,6 +675,7 @@
         if (!this.ptsText || !this.ptsText.active) return;
         this.ptsText.setText(`ガチャポイント  ${p.pts.toLocaleString()}P`);
         this.prof = p;
+        if (this.evoBtn && this.evoBtn.active) this.evoBtn.setVisible(this.evolved(this.sp));
         // お知らせ（実績達成・週間ランキングのごほうび）
         (p.box || []).forEach((b, i) => {
           const a = b.k === 'ach' ? GD.ACHIEVEMENTS[b.i - 1] : null;
