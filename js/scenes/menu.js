@@ -400,7 +400,8 @@
     build() {
       const w = this.scale.width, h = this.scale.height;
       // 横長で十分な広さ → ロッカー型（左右にメニュー・真ん中の月の前に妖怪）。それ以外は縦1列
-      const two = w >= 760 && w / h >= 1.15;
+      // スマホもいつも横画面なので、パソコンと同じ並びにする（横長なら幅に関係なくロッカー型）
+      const two = w / h >= 1.15;
       const bg = homeBackdrop(this, two);
       const best = parseInt(store.get('best', '0'), 10) || 0;
       const NB = (x, y, bw, bh, label, fn, o = {}) => button(this, x, y, bw, bh, label, fn, Object.assign({ night: true }, o, { size: Math.min(o.size || 99, bh * 0.42, bw / Math.max(3, label.length * 0.95 + 0.6)) }));
@@ -460,7 +461,7 @@
       if (two) {
         // ---------- パソコン（横長）：左右にメニュー、真ん中の月の前に妖怪 ----------
         const M = Math.max(16, Math.round(w * 0.022));
-        const colW = Phaser.Math.Clamp(Math.round(w * 0.24), 230, 380);
+        const colW = Phaser.Math.Clamp(Math.round(w * 0.24), 180, 380); // 幅のせまいスマホでも真ん中に妖怪が見えるように
         const top = Math.max(bg.logoBottom + 12, h * 0.3);
         const bot = h - M;
         // 左：大きなボタン5つ
