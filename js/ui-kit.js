@@ -253,12 +253,17 @@
       const a = pointer.smoothFactor;
       if (!wasMove || a === 0) { p0.x = x; p0.y = y; } else { p0.x = x * a + p1.x * (1 - a); p0.y = y * a + p1.y * (1 - a); }
     };
-    applyViewport();
-    setTimeout(applyViewport, 300);
+    // つないだ直後は、大きさが同じでも必ず Phaser に伝える（最初の大きさが回転前のままにならないように）
+    const force = () => { VP.key = null; applyViewport(); };
+    force();
+    setTimeout(force, 300);
+    setTimeout(force, 1000);
   }
   window.addEventListener('resize', () => applyViewport());
   // 向きを変えた直後は画面の大きさがまだ変わっていないことがあるので、少し待ってからも合わせ直す
   window.addEventListener('orientationchange', () => { setTimeout(applyViewport, 120); setTimeout(applyViewport, 500); });
+  // iPhone のアドレスバーの出し入れなど、resize が来ないことがある変化にも合わせる
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', () => applyViewport());
   applyViewport();
   // 画面の上に出したパネルを押したとき、後ろのボタンが反応しないように：しばらくゲームの入力を止める
   function pauseInput(scene, ms) {
