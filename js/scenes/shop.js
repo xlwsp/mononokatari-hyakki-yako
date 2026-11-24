@@ -68,10 +68,11 @@
     add(scene.add.rectangle(0, 0, w, h, 0x0c0816, 0.78).setOrigin(0).setInteractive().setDepth(60));
     // 夜の枠（白い線＋角の◆）の中に、読みやすい紙の板
     // 夜の枠：半透明の黒＋白い線＋角の◆（ロビーとおそろい）
-    add(UI.nightFrame(scene, x, y, pw, ph, { alpha: 0.96 }).setDepth(61));
-    // 見出し：枠の上の線に、左よせで重ねる（区分けのラベル）
-    const tt = add(scene.add.text(x + 20, y, title, { fontFamily: UI.SANS, fontSize: (w < 500 ? 18 : 20) + 'px', color: '#f4f4f6', fontStyle: '700' }).setOrigin(0, 0.5).setDepth(62));
-    add(scene.add.rectangle(x + 12, y, tt.width + 16, tt.height + 4, UI.FLAT.bg, 1).setOrigin(0, 0.5).setDepth(61.5));
+    add(UI.nightFrame(scene, x, y, pw, ph, { alpha: 0.9, fill: 0x0c0818, r: 18, gem: 9 }).setDepth(61));
+    // 見出しの帯
+    const bandW = Math.min(pw - 40, 380);
+    add(UI.nightFrame(scene, w / 2 - bandW / 2, y - 18, bandW, 50, { alpha: 0.95, fill: 0x120c24, gem: 6, inner: false }).setDepth(61));
+    add(scene.add.text(w / 2, y + 7, title, Object.assign(TB(w < 500 ? 24 : 28, '#fff8f0', '#0a0614', 4), { shadow: { offsetX: 0, offsetY: 0, color: 'rgba(190,150,255,0.85)', blur: 8, stroke: true, fill: false } })).setOrigin(0.5).setDepth(62));
     scene.hideInput && scene.hideInput(true);
     let onKey = null;
     const slot = opt.slot || 'shopBox';
