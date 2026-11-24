@@ -217,8 +217,8 @@
         sl.t.setVisible(show); sl.k.setVisible(show && !L.compact); sl.z.setVisible(show);
         if (!show) { sl.z.setPosition(-100, -100); return; }
         const { x, y } = pos(i), used = it[1];
-        g.fillStyle(0x07050f, used ? 0.35 : 0.65); g.fillCircle(x, y, r);
-        g.lineStyle(2.5, 0xffffff, used ? 0.3 : 0.95); g.strokeCircle(x, y, r);
+        g.fillStyle(UI.FLAT.bg, used ? 0.35 : 0.65); g.fillCircle(x, y, r);
+        g.lineStyle(1.5, UI.FLAT.lineHover, used ? 0.3 : 1); g.strokeCircle(x, y, r);
         UI.cornerGems(g, x - r, y - r, r * 2, r * 2, 3);
         sl.t.setPosition(x, y - 1).setText(def.icon).setAlpha(used ? 0.3 : 1);
         sl.k.setPosition(x + r * 0.7, y + r * 0.7);
@@ -229,16 +229,16 @@
       const n = cn.length;
       const e = L.portrait ? { x: dp.cx - dp.R - 18 - r, y: dp.cy } : pos(n);
       this.emoPos = e;
-      g.fillStyle(0x07050f, 0.65); g.fillCircle(e.x, e.y, r);
-      g.lineStyle(2.5, 0xffffff, 0.95); g.strokeCircle(e.x, e.y, r);
+      g.fillStyle(UI.FLAT.bg, 0.65); g.fillCircle(e.x, e.y, r);
+      g.lineStyle(1.5, UI.FLAT.lineHover, 1); g.strokeCircle(e.x, e.y, r);
       this.emoTxt.setPosition(e.x, e.y - 1).setAlpha(me.a ? 1 : 0.4);
       this.emoZone.setPosition(e.x, e.y).setSize(r * 2 + 6, r * 2 + 6);
       if (this.emoZone.input) this.emoZone.input.hitArea.setTo(0, 0, r * 2 + 6, r * 2 + 6);
       // ロックオン：スマホ縦はエモートの左、それ以外はダッシュの上
       const lp = L.portrait ? { x: e.x - step, y: e.y } : L.phone ? pos(n + 1) : { x: dp.cx, y: dp.cy - dp.R - 16 - r };
       const lk = !!me.lk;
-      g.fillStyle(lk ? 0x4a2a08 : 0x07050f, lk ? 0.85 : 0.65); g.fillCircle(lp.x, lp.y, r);
-      g.lineStyle(2.5, lk ? 0xffc040 : 0xffffff, 0.95); g.strokeCircle(lp.x, lp.y, r);
+      g.fillStyle(lk ? 0x4a2a08 : UI.FLAT.bg, lk ? 0.85 : 0.65); g.fillCircle(lp.x, lp.y, r);
+      g.lineStyle(1.5, lk ? 0xffc040 : UI.FLAT.lineHover, 1); g.strokeCircle(lp.x, lp.y, r);
       if (lk) { g.lineStyle(1.5, 0xffc040, 0.5); g.strokeCircle(lp.x, lp.y, r + 4); }
       this.lockTxt.setPosition(lp.x, lp.y - 4).setAlpha(me.a ? 1 : 0.4);
       this.lockSub.setPosition(lp.x, lp.y + r * 0.55).setText((lk ? 'ON' : 'OFF') + (L.compact ? '' : ' Q')).setColor(lk ? '#ffd27a' : '#fff8ea');
@@ -307,7 +307,7 @@
     // ---------- 右側の記録（プレイヤー同士のキル・大妖の討伐・ドロップ） ----------
     setupFeed() {
       const box = this.feedBox = document.createElement('div');
-      box.style.cssText = 'position:fixed;right:12px;top:140px;width:min(300px,46%);z-index:20;pointer-events:none;font-family:"M PLUS Rounded 1c",sans-serif;font-weight:800;font-size:13.5px;line-height:1.35;display:flex;flex-direction:column;align-items:flex-end;';
+      box.style.cssText = 'position:fixed;right:12px;top:140px;width:min(300px,46%);z-index:20;pointer-events:none;font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;font-weight:800;font-size:13.5px;line-height:1.35;display:flex;flex-direction:column;align-items:flex-end;';
       UI.domRoot().appendChild(box);
       this.events.once('shutdown', () => box.remove());
       const ss = this.gs.session;
@@ -339,7 +339,7 @@
     feed(html, bg) {
       if (!this.feedBox) return;
       const d = document.createElement('div');
-      d.style.cssText = `margin-top:4px;padding:4px 10px;border-radius:8px;background:${bg || '#10141f'}d0;color:#fff8ea;text-shadow:0 1px 2px #000;transition:opacity 1s;max-width:100%;`;
+      d.style.cssText = `margin-top:4px;padding:4px 10px;border-radius:2px;background:${bg || '#10141f'}d0;color:#fff8ea;text-shadow:0 1px 2px #000;transition:opacity 1s;max-width:100%;`;
       d.innerHTML = html;
       this.feedBox.appendChild(d);
       while (this.feedBox.children.length > 6) this.feedBox.removeChild(this.feedBox.firstChild);
@@ -352,16 +352,16 @@
       const ss = this.gs.session;
       if (!ss || !ss.say) return;
       const box = this.chatBox = document.createElement('div');
-      box.style.cssText = 'position:fixed;left:12px;top:150px;max-width:340px;z-index:20;pointer-events:none;font-family:"M PLUS Rounded 1c",sans-serif;font-weight:800;font-size:14px;line-height:1.35;';
+      box.style.cssText = 'position:fixed;left:12px;top:150px;max-width:340px;z-index:20;pointer-events:none;font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;font-weight:800;font-size:14px;line-height:1.35;';
       UI.domRoot().appendChild(box);
       const bar = this.chatBar = document.createElement('div');
       bar.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);width:min(440px,calc(100% - 32px));display:none;gap:6px;z-index:30;';
       const inp = document.createElement('input');
       inp.maxLength = 60; inp.placeholder = 'みんなにメッセージ（Enterで送信）';
-      inp.style.cssText = 'flex:1;min-width:0;font-size:16px;padding:10px 12px;border-radius:10px;border:3px solid #f0c35a;background:#1a1020ee;color:#fff8ea;font-family:inherit;outline:none;';
+      inp.style.cssText = 'flex:1;min-width:0;font-size:16px;padding:10px 12px;border-radius:2px;border:1px solid #3a3a42;background:#1a1020ee;color:#fff8ea;font-family:inherit;outline:none;';
       const send = document.createElement('button');
       send.textContent = '送信';
-      send.style.cssText = 'font-size:16px;font-weight:900;padding:0 16px;border-radius:10px;border:3px solid #5a3a14;background:#f0a830;color:#2a1608;';
+      send.style.cssText = 'font-size:16px;font-weight:900;padding:0 16px;border-radius:2px;border:1px solid #3a3a42;background:#f4f4f6;color:#0c0c0e;';
       bar.append(inp, send); UI.domRoot().appendChild(bar);
       const kb = this.game.input.keyboard;
       const close = () => {
@@ -389,7 +389,7 @@
       const add = rows => rows.forEach(r => {
         const d = document.createElement('div');
         const mine = r.id === this.gs.myId;
-        d.style.cssText = 'margin-top:3px;padding:3px 9px;border-radius:8px;background:#10141fb8;color:#fff8ea;text-shadow:0 1px 2px #000;transition:opacity 1s;word-break:break-all;';
+        d.style.cssText = 'margin-top:3px;padding:3px 9px;border-radius:2px;background:#10141fb8;color:#fff8ea;text-shadow:0 1px 2px #000;transition:opacity 1s;word-break:break-all;';
         d.innerHTML = `<span style="color:${mine ? '#fff07a' : '#7fdcff'}">${esc(r.n)}</span>：${esc(r.m)}`;
         box.appendChild(d);
         while (box.children.length > 7) box.removeChild(box.firstChild);
@@ -681,13 +681,10 @@
 
     // ゲームっぽいパネル：暗いガラス＋金のフチ
     panelG(g, x, y, w, h, accent) {
-      const r = 12;
-      g.fillStyle(0x000000, 0.35); g.fillRoundedRect(x + 2, y + 5, w, h, r);
-      g.fillStyle(0x161c30, 0.86); g.fillRoundedRect(x, y, w, h, r);
-      g.fillStyle(0x34406a, 0.55); g.fillRoundedRect(x + 3, y + 3, w - 6, Math.min(h * 0.42, 30), { tl: r - 2, tr: r - 2, bl: 4, br: 4 });
-      g.lineStyle(3, accent || 0xf0c35a, 1); g.strokeRoundedRect(x, y, w, h, r);
-      g.lineStyle(1.2, 0xfff3c0, 0.35); g.strokeRoundedRect(x + 4, y + 4, w - 8, h - 8, r - 4);
-      if (w > 60 && h > 40) UI.cornerGems(g, x + 1, y + 1, w - 2, h - 2, 4); // 角の◆（ロビーの枠とおそろい）
+      // シンプルな区分け：黒い面＋細い線（色つきのパネルは、ひだりはしに細い帯）
+      g.fillStyle(UI.FLAT.bg, 0.78); g.fillRect(x, y, w, h);
+      g.lineStyle(1, UI.FLAT.line, 1); g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+      if (accent) { g.fillStyle(accent, 0.9); g.fillRect(x, y, 3, h); }
     }
     bar(g, x, y, w, h, v, col, back) {
       v = Phaser.Math.Clamp(v || 0, 0, 1);

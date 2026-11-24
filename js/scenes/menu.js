@@ -12,7 +12,7 @@
     wrap.id = 'nameEditor';
     wrap.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(20,10,30,0.66);display:flex;align-items:flex-start;justify-content:center;padding-top:40px;';
     const box = document.createElement('div');
-    box.style.cssText = 'width:min(420px,calc(100% - 32px));background:rgba(12,8,24,0.94);border:3px solid #fff;border-radius:18px;padding:18px 18px 16px;box-shadow:0 10px 30px rgba(0,0,0,0.5);font-family:"M PLUS Rounded 1c",sans-serif;text-align:center;';
+    box.style.cssText = 'width:min(420px,calc(100% - 32px));background:rgba(12,12,14,0.97);border:1px solid #3a3a42;border-radius:2px;padding:18px 18px 16px;box-shadow:0 10px 30px rgba(0,0,0,0.5);font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;text-align:center;';
     const title = document.createElement('div');
     title.textContent = opt.title || 'なまえ';
     title.style.cssText = 'font-weight:900;font-size:22px;color:#fff4e6;margin-bottom:4px;';
@@ -22,11 +22,11 @@
     const inp = document.createElement('input');
     inp.type = 'text'; inp.maxLength = 12; inp.placeholder = 'ゆうしゃ'; inp.value = opt.value || '';
     inp.autocomplete = 'off'; inp.enterKeyHint = 'done';
-    inp.style.cssText = 'width:100%;box-sizing:border-box;height:52px;border-radius:12px;border:2px solid #fff;background:#140e24;padding:0 12px;font-family:inherit;font-weight:800;font-size:20px;color:#fff4e6;outline:none;text-align:center;';
+    inp.style.cssText = 'width:100%;box-sizing:border-box;height:52px;border-radius:2px;border:1px solid #3a3a42;background:#0c0c0e;padding:0 12px;font-family:inherit;font-weight:800;font-size:20px;color:#fff4e6;outline:none;text-align:center;';
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;gap:10px;margin-top:14px;';
-    const mk = (label, bg, fg) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = `flex:1;height:50px;border-radius:12px;border:2px solid #fff;background:${bg};color:${fg};font-family:inherit;font-weight:900;font-size:19px;cursor:pointer;`; return b; };
-    const cancel = mk(opt.cancelLabel || 'やめる', 'rgba(255,255,255,0.08)', '#fff4e6'), ok = mk('けってい', 'rgba(255,110,90,0.35)', '#fff8ea');
+    const mk = (label, bg, fg) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = `flex:1;height:50px;border-radius:2px;border:1px solid #3a3a42;background:${bg};color:${fg};font-family:inherit;font-weight:700;font-size:18px;cursor:pointer;`; return b; };
+    const cancel = mk(opt.cancelLabel || 'やめる', 'rgba(255,255,255,0.08)', '#fff4e6'), ok = mk('けってい', '#f4f4f6', '#0c0c0e');
     row.append(cancel, ok); box.append(title, sub, inp, row); wrap.append(box);
     UI.domRoot().appendChild(wrap);
     // 入力中はゲームのキー操作を止める（WASD・スペースなどが打てなくならないように）
@@ -305,18 +305,18 @@
       const wrap = document.createElement('div');
       wrap.id = 'fbPanel';
       wrap.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(20,10,30,0.66);display:flex;align-items:flex-start;justify-content:center;padding-top:20px;overflow:auto;';
-      const F = '"M PLUS Rounded 1c",sans-serif';
+      const F = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif';
       wrap.innerHTML = `
-        <div style="width:min(480px,calc(100% - 28px));background:rgba(12,8,24,0.94);border:3px solid #fff;border-radius:18px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-family:${F};color:#fff4e6;">
+        <div style="width:min(480px,calc(100% - 28px));background:rgba(12,12,14,0.97);border:1px solid #3a3a42;border-radius:2px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-family:${F};color:#fff4e6;">
           <div style="font-weight:900;font-size:22px;text-align:center">📮 ご意見・バグ報告</div>
           <div style="font-weight:800;font-size:12.5px;color:#cfc2e6;text-align:center;margin:4px 0 10px">運営に届きます。ほかのプレイヤーには見えません</div>
           <div id="fbKinds" style="display:flex;gap:6px;margin-bottom:10px"></div>
           <div id="fbStars" style="text-align:center;font-size:30px;margin-bottom:6px;cursor:pointer;user-select:none"></div>
-          <textarea id="fbText" maxlength="2000" placeholder="ここに書いてね（2000文字まで）" style="width:100%;box-sizing:border-box;height:150px;border-radius:12px;border:2px solid #fff;background:#140e24;padding:10px;font-family:${F};font-weight:800;font-size:16px;color:#fff4e6;resize:vertical;outline:none"></textarea>
+          <textarea id="fbText" maxlength="2000" placeholder="ここに書いてね（2000文字まで）" style="width:100%;box-sizing:border-box;height:150px;border-radius:2px;border:1px solid #3a3a42;background:#0c0c0e;padding:10px;font-family:${F};font-weight:800;font-size:16px;color:#fff4e6;resize:vertical;outline:none"></textarea>
           <div id="fbMsg" style="font-weight:800;font-size:13px;color:#ff8a7a;min-height:18px;margin:4px 0"></div>
           <div style="display:flex;gap:10px">
-            <button id="fbCancel" style="flex:1;height:48px;border-radius:12px;border:2px solid #fff;background:rgba(255,255,255,0.08);color:#fff4e6;font-family:${F};font-weight:900;font-size:18px">とじる</button>
-            <button id="fbSend" style="flex:1;height:48px;border-radius:12px;border:2px solid #fff;background:rgba(255,110,90,0.35);color:#fff8ea;font-family:${F};font-weight:900;font-size:18px">送信する</button>
+            <button id="fbCancel" style="flex:1;height:48px;border-radius:2px;border:1px solid #3a3a42;background:rgba(255,255,255,0.08);color:#fff4e6;font-family:${F};font-weight:900;font-size:18px">とじる</button>
+            <button id="fbSend" style="flex:1;height:48px;border-radius:2px;border:1px solid #3a3a42;background:#f4f4f6;color:#0c0c0e;font-family:${F};font-weight:700;font-size:18px">送信する</button>
           </div>
         </div>`;
       UI.domRoot().appendChild(wrap);
@@ -324,7 +324,7 @@
       const KINDS = [['review', '⭐ レビュー'], ['idea', '🙏 改善してほしい'], ['bug', '🐞 バグ報告']];
       let kind = 'idea', stars = 0;
       const drawKinds = () => {
-        $('fbKinds').innerHTML = KINDS.map(([k, l]) => `<button data-k="${k}" style="flex:1;height:42px;border-radius:10px;border:2px solid ${k === kind ? '#ffd76a' : 'rgba(255,255,255,0.6)'};background:${k === kind ? 'rgba(255,215,106,0.25)' : 'rgba(255,255,255,0.06)'};color:#fff4e6;font-family:${F};font-weight:900;font-size:14px">${l}</button>`).join('');
+        $('fbKinds').innerHTML = KINDS.map(([k, l]) => `<button data-k="${k}" style="flex:1;height:42px;border-radius:2px;border:2px solid ${k === kind ? '#ffd76a' : 'rgba(255,255,255,0.6)'};background:${k === kind ? 'rgba(255,215,106,0.25)' : 'rgba(255,255,255,0.06)'};color:#fff4e6;font-family:${F};font-weight:900;font-size:14px">${l}</button>`).join('');
         $('fbKinds').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { kind = b.dataset.k; drawKinds(); }));
         $('fbStars').style.display = kind === 'review' ? 'block' : 'none';
         $('fbStars').innerHTML = [1, 2, 3, 4, 5].map(i => `<span data-s="${i}" style="color:${i <= stars ? '#ffd23a' : '#5a5070'}">★</span>`).join('');

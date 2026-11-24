@@ -6,6 +6,10 @@
   const DISPLAY = '"Dela Gothic One", "M PLUS Rounded 1c", "Hiragino Sans", sans-serif';
   // タイトル画面のロゴに合わせた筆文字（見出し・演出用）
   const BRUSH = '"Yuji Syuku", "Hiragino Mincho ProN", "Yu Mincho", serif';
+  // シンプルなUI用（端末に入っている標準のゴシック）
+  const SANS = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Noto Sans CJK JP", "Yu Gothic UI", "Meiryo", sans-serif';
+  // シンプルUIの色
+  const FLAT = { bg: 0x0c0c0e, bgHover: 0x1c1c21, line: 0x3a3a42, lineHover: 0x9a9aa6, text: '#ededed', sub: '#9a9aa6' };
   const C = {
     cream: 0xfff8ea, creamDark: 0xe9dcc3, brown: 0x4a3a2e, brownCss: '#4a3a2e', soft: '#7a6656',
     green: 0x7cc46a, greenDark: 0x4f8a42, orange: 0xf5a25d, orangeDark: 0xc4733a,
@@ -34,11 +38,11 @@
   }
 
   // 筆文字の見出し：古い紙のような金色＋こげ茶のフチ＋ほのかな光
+  // 見出し：シンプルな太字ゴシック（うすい黒フチ）
   function TB(size, color, stroke, thick) {
     return {
-      fontFamily: BRUSH, fontSize: Math.round(size) + 'px', color: color || '#fbeccb', fontStyle: 'normal',
-      stroke: stroke || '#2a160a', strokeThickness: thick == null ? Math.max(3, size / 8) : thick,
-      shadow: { offsetX: 0, offsetY: 0, color: 'rgba(255,190,90,0.75)', blur: Math.max(6, size / 4), stroke: true, fill: false },
+      fontFamily: SANS, fontSize: Math.round(size) + 'px', color: color || '#f4f4f6', fontStyle: '700',
+      stroke: '#000', strokeThickness: Math.min(thick == null ? 3 : thick, 3),
     };
   }
 
@@ -64,20 +68,21 @@
     const g = scene.add.graphics();
     const col = opt.color || C.green, dark = opt.dark || C.greenDark;
     const txt = scene.add.text(0, 0, label, opt.night
-      ? Object.assign(TB(opt.size || Math.min(26, h * 0.42), '#fff8f0', '#0a0614', 3), { shadow: { offsetX: 0, offsetY: 0, color: 'rgba(190,150,255,0.85)', blur: 8, stroke: true, fill: false } })
+      ? { fontFamily: SANS, fontSize: Math.round(Math.min((opt.size || Math.min(26, h * 0.42)) * 0.9, h * 0.5)) + 'px', color: FLAT.text, fontStyle: '600' }
       : opt.brush
       ? Object.assign(TB(opt.size || Math.min(26, h * 0.42), '#fff', Tex.rgb(dark, -0.45), 4), { shadow: undefined })
       : TO(opt.size || Math.min(26, h * 0.42), '#fff', Tex.rgb(dark, -0.35), 4)).setOrigin(0.5);
     let hover = false, down = false, disabled = false, focused = false;
     const draw = () => {
       g.clear();
-      if (opt.night) { // 夜の枠：半透明の黒＋白い線＋角の◆
-        const dy = down ? 2 : 0, hl = (hover || focused) && !disabled;
-        frameDraw(g, -w / 2, -h / 2 + dy, w, h, {
-          glow: hl ? 0xb48cff : null, alpha: disabled ? 0.4 : hl ? 0.72 : 0.6,
-          tint: opt.accent, lineA: disabled ? 0.4 : 1, line: focused ? 0xffe7a0 : 0xffffff, inner: false,
-        });
-        txt.y = dy + (opt.labelDy || 0); txt.setAlpha(disabled ? 0.5 : 1);
+      if (opt.night) { // シンプルな区分け：黒い面＋細い線（色はひだりはしの細い帯だけ）
+        const hl = (hover || focused) && !disabled;
+        g.fillStyle(down ? 0x26262c : hl ? FLAT.bgHover : FLAT.bg, disabled ? 0.5 : 0.92);
+        g.fillRect(-w / 2, -h / 2, w, h);
+        g.lineStyle(1, hl ? FLAT.lineHover : FLAT.line, disabled ? 0.5 : 1);
+        g.strokeRect(-w / 2 + 0.5, -h / 2 + 0.5, w - 1, h - 1);
+        if (opt.accent != null && !disabled) { g.fillStyle(opt.accent, 0.9); g.fillRect(-w / 2, -h / 2, 3, h); }
+        txt.y = opt.labelDy || 0; txt.setAlpha(disabled ? 0.45 : 1);
         return;
       }
       const dy = down ? 4 : 0;
@@ -124,25 +129,15 @@
     g.fillStyle(col, a);
     g.fillPoints([{ x, y: y - s }, { x: x + s, y }, { x, y: y + s }, { x: x - s, y }], true);
   }
-  function cornerGems(g, x, y, w, h, s, col) {
-    for (const [cx, cy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
-      gem(g, cx, cy, s + 2, 0x0a0614, 0.9);
-      gem(g, cx, cy, s, col == null ? 0xfff6e6 : col, 1);
-    }
-  }
+  function cornerGems() { /* シンプルなデザインでは角の飾りはつけない */ }
   function frameDraw(g, x, y, w, h, opt = {}) {
-    const r = opt.r == null ? Math.min(14, h * 0.2) : opt.r;
-    if (opt.glow) { g.fillStyle(opt.glow, 0.22); g.fillRoundedRect(x - 6, y - 6, w + 12, h + 12, r + 6); }
-    g.fillStyle(opt.fill == null ? 0x07050f : opt.fill, opt.alpha == null ? 0.6 : opt.alpha);
-    g.fillRoundedRect(x, y, w, h, r);
-    if (opt.tint != null) { g.fillStyle(opt.tint, 0.18); g.fillRoundedRect(x, y, w, h, r); }
-    g.lineStyle(opt.lw || (h > 80 ? 3 : 2.5), opt.line || 0xffffff, opt.lineA == null ? 0.95 : opt.lineA);
-    g.strokeRoundedRect(x, y, w, h, r);
-    if (opt.inner !== false && h > 70 && w > 70) {
-      g.lineStyle(1, opt.line || 0xffffff, 0.2); g.strokeRoundedRect(x + 6, y + 6, w - 12, h - 12, Math.max(2, r - 5));
-    }
-    const s = opt.gem == null ? Phaser.Math.Clamp(Math.min(w, h) * 0.07, 4, 8) : opt.gem;
-    if (s) cornerGems(g, x + 1, y + 1, w - 2, h - 2, s, opt.gemCol);
+    // シンプルな区分け：黒い面＋細いグレーの線（角は四角、飾りなし）
+    g.fillStyle(FLAT.bg, Math.max(opt.alpha == null ? 0.85 : opt.alpha, 0.82));
+    g.fillRect(x, y, w, h);
+    if (opt.tint != null) { g.fillStyle(opt.tint, 0.06); g.fillRect(x, y, w, h); }
+    const lc = opt.line != null && opt.line !== 0xffffff ? opt.line : FLAT.line;
+    g.lineStyle(1, lc, opt.lineA == null ? 1 : opt.lineA);
+    g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
     return g;
   }
   function nightFrame(scene, x, y, w, h, opt = {}) { return frameDraw(scene.add.graphics(), x, y, w, h, opt); }
@@ -208,6 +203,14 @@
 
   // スマホなら全画面＆縦向き固定を試みる（できない端末では何もしない）
   const isMobile = () => window.matchMedia && window.matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820;
+  // シンプルなデザイン：角丸はほとんど四角に（2px）
+  (function () {
+    const G = Phaser.GameObjects.Graphics.prototype, sq = r => (typeof r === 'number' ? Math.min(r, 2) : 2);
+    const f0 = G.fillRoundedRect, s0 = G.strokeRoundedRect;
+    G.fillRoundedRect = function (x, y, w, h, r) { return f0.call(this, x, y, w, h, sq(r == null ? 20 : r)); };
+    G.strokeRoundedRect = function (x, y, w, h, r) { return s0.call(this, x, y, w, h, sq(r == null ? 20 : r)); };
+  })();
+
   // ---------- スマホは横画面に固定 ----------
   // 縦に持っているときは #vp を90度まわして横画面として表示する。メニューは高さ600相当に縮めてパソコンと同じ並びに
   const VP = { rot: false, f: 1, iw: 0 };
@@ -274,5 +277,5 @@
     applyViewport(); // メニューは縮めて表示、プレイ中は等倍
   }
 
-  window.UI = { FONT, DISPLAY, BRUSH, C, T, TO, TB, TR, panel, button, nightFrame, frameDraw, cornerGems, keyNav, forestBackdrop, isMobile, mobileEnter, lockOrient, setPlaying, applyViewport, attachViewport, domRoot, VP };
+  window.UI = { FONT, DISPLAY, BRUSH, SANS, FLAT, C, T, TO, TB, TR, panel, button, nightFrame, frameDraw, cornerGems, keyNav, forestBackdrop, isMobile, mobileEnter, lockOrient, setPlaying, applyViewport, attachViewport, domRoot, VP };
 })();
