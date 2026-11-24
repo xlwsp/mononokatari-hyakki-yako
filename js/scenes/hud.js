@@ -850,8 +850,9 @@
       this.hideCards();
       this.cardSeq = ch.s;
       const L = this.L, n = ch.o.length;
-      const cw = Math.min(250, (L.w - 16) / n - 6), chh = L.compact ? 214 : 262;
-      const gap = L.compact ? 6 : 22;
+      // カードは小さめにして、あいだをあける
+      const gap = L.compact ? 22 : 40;
+      const cw = Math.min(L.compact ? 170 : 210, (L.w - 16 - (n - 1) * gap) / n), chh = L.compact ? 190 : 226;
       const total = n * cw + (n - 1) * gap;
       const cy = L.h * 0.5 + (L.compact ? 20 : 10);
       const objs = [];
@@ -871,7 +872,7 @@
         const g = this.add.graphics();
         const col = UP_COLOR[key] || 0x3a8ae8;
         const dark = Phaser.Display.Color.ValueToColor(col).darken(30).color;
-        const fsz = L.compact ? 0.88 : 1;
+        const fsz = L.compact ? 0.8 : 0.9;
         // 上半分：アイコンと名前 ／ 下半分：大きな数値＋説明（クリーム色の地に濃い文字）
         const iconY = -chh * 0.29, nameY = -chh * 0.075, descTop = nameY + 19 * fsz;
         const dsp = GD.SPECIES[sp];
