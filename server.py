@@ -38,6 +38,130 @@ SAVE_FILE = os.path.join(ROOT, 'tools', 'saves.json')  # tools/ は配信しな�
 MAINT_FILE = os.path.join(ROOT, 'tools', 'maintenance')  # このファイルがある間はメンテナンス中（遊べない）
 
 
+# ---------------- データの預け先（Render など、再起動でファイルが消えるサーバー用） ----------------
+# 環境変数 DATA_REPO（例: xlwsp/nakama-data）と DATA_TOKEN（そのリポジトリだけ読み書きできるトークン）を
+# 設定すると、起動時に GitHub の非公開リポジトリからセーブ等を読み込み、変わった分を数分おきと終了時に書き戻す。
+# 設定していないとき（このMacなど）は何もしない。
+DATA_REPO = os.environ.get('DATA_REPO', '').strip()
+DATA_TOKEN = os.environ.get('DATA_TOKEN', '').strip()
+CLOUD_FILES = ['saves.json', 'profiles.json', 'highscores.json', 'weekly.json', 'feedback.jsonl']
+CLOUD_EVERY = 120  # 秒
+
+
+class Cloud:
+    def __init__(self):
+        self.on = bool(DATA_REPO and DATA_TOKEN)
+        self.ok = False      # 読み込みに成功したときだけ書き戻す（失敗したまま空のデータで上書きしないため）
+        self.sha = {}        # リポジトリ側のファイルの sha
+        self.pushed = {}     # 最後に書き戻した中身のハッシュ
+        self.lock = None
+
+    def _req(self, method, path, body=None):
+        import urllib.request
+        import urllib.error
+        req = urllib.request.Request('https://api.github.com/repos/' + DATA_REPO + path, method=method,
+                                     data=json.dumps(body).encode() if body is not None else None)
+        req.add_header('Authorization', 'Bearer ' + DATA_TOKEN)
+        req.add_header('Accept', 'application/vnd.github+json')
+        req.add_header('User-Agent', 'game-server')
+        if body is not None:
+            req.add_header('Content-Type', 'application/json')
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.status, json.loads(r.read() or b'null')
+        except urllib.error.HTTPError as e:
+            return e.code, None
+
+    def pull(self):
+        if not self.on:
+            return
+        import threading
+        self.lock = threading.Lock()
+        for attempt in range(5):
+            try:
+                got = {}
+                for name in CLOUD_FILES:
+                    code, j = self._req('GET', '/contents/' + name)
+                    if code == 404:
+                        continue
+                    if code != 200 or not j:
+                        raise RuntimeError(f'{name}: HTTP {code}')
+                    code, b = self._req('GET', '/git/blobs/' + j['sha'])  # 1MBをこえても読める
+                    if code != 200 or not b:
+                        raise RuntimeError(f'{name} blob: HTTP {code}')
+                    got[name] = (j['sha'], base64.b64decode(b['content']))
+                for name, (sha, data) in got.items():
+                    path = os.path.join(ROOT, 'tools', name)
+                    with open(path + '.tmp', 'wb') as f:
+                        f.write(data)
+                    os.replace(path + '.tmp', path)
+                    self.sha[name] = sha
+                    self.pushed[name] = hashlib.sha1(data).hexdigest()
+                self.ok = True
+                print(f'データを {DATA_REPO} から読み込みました（{len(got)}ファイル）', flush=True)
+                return
+            except Exception as e:
+                print('データの読み込みに失敗:', repr(e), flush=True)
+                time.sleep(3 * (attempt + 1))
+        # 読めなかった：上書き事故を防ぐため、このまま書き戻さない
+        print('⚠️ データを読み込めなかったので、今回は書き戻しをしません', flush=True)
+
+    def push(self):
+        if not (self.on and self.ok):
+            return
+        with self.lock:
+            for name in CLOUD_FILES:
+                path = os.path.join(ROOT, 'tools', name)
+                try:
+                    with open(path, 'rb') as f:
+                        data = f.read()
+                except OSError:
+                    continue
+                h = hashlib.sha1(data).hexdigest()
+                if self.pushed.get(name) == h:
+                    continue
+                for _ in range(2):
+                    body = {'message': 'update ' + name, 'content': base64.b64encode(data).decode()}
+                    if name in self.sha:
+                        body['sha'] = self.sha[name]
+                    try:
+                        code, j = self._req('PUT', '/contents/' + name, body)
+                    except Exception as e:
+                        log('data push error:', name, repr(e))
+                        break
+                    if code in (200, 201) and j:
+                        self.sha[name] = j['content']['sha']
+                        self.pushed[name] = h
+                        break
+                    if code in (409, 422):  # sha がずれた：取り直してもう一度
+                        c2, j2 = self._req('GET', '/contents/' + name)
+                        if c2 == 200 and j2:
+                            self.sha[name] = j2['sha']
+                        else:
+                            self.sha.pop(name, None)
+                        continue
+                    log('data push failed:', name, code)
+                    break
+
+    def start_loop(self):
+        if not (self.on and self.ok):
+            return
+        import threading
+
+        def loop():
+            while True:
+                time.sleep(CLOUD_EVERY)
+                try:
+                    self.push()
+                except Exception as e:
+                    log('data push error:', repr(e))
+        threading.Thread(target=loop, daemon=True).start()
+
+
+cloud = Cloud()
+cloud.pull()  # セーブ等を読み込むより前に、預け先から取ってくる
+
+
 # ---------------- セーブ（端末ごとの合言葉 tok で保存。サーバーを再起動しても残る） ----------------
 class Saves:
     def __init__(self):
@@ -1283,6 +1407,10 @@ async def main():
         saves.flush()  # kill されたときもセーブを書き出してから終わる
         highscores.flush()
         profiles.flush()
+        try:
+            cloud.push()  # 預け先にも書き戻す（Render が止まるときなど）
+        except Exception as e:
+            log('data push error:', repr(e))
         os._exit(0)
 
     def on_term():
@@ -1293,6 +1421,7 @@ async def main():
     asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, on_term)
     server = await asyncio.start_server(handle, '0.0.0.0', PORT)
     asyncio.create_task(world.run())
+    cloud.start_loop()
     print('=' * 52)
     print(' モノノカタリ -百鬼夜行- サーバー起動（ずっと続く世界）')
     print(f'  このPC:        http://localhost:{PORT}')
@@ -1315,3 +1444,7 @@ if __name__ == '__main__':
         saves.flush()  # 止めるときにセーブを書き出す
         highscores.flush()
         profiles.flush()
+        try:
+            cloud.push()
+        except Exception:
+            pass
