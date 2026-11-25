@@ -307,7 +307,7 @@
       const wrap = document.createElement('div');
       wrap.id = 'fbPanel';
       wrap.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(20,10,30,0.66);display:flex;align-items:flex-start;justify-content:center;padding-top:20px;overflow:auto;';
-      const F = '"M PLUS Rounded 1c",sans-serif';
+      const F = "'M PLUS Rounded 1c',sans-serif"; // style="..." の中に入れるので、" ではなく ' でかこむ
       wrap.innerHTML = `
         <div style="width:min(480px,calc(100% - 28px));background:rgba(12,8,24,0.94);border:3px solid #fff;border-radius:18px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-family:${F};color:#fff4e6;">
           <div style="font-weight:900;font-size:22px;text-align:center">📮 ご意見・バグ報告</div>
