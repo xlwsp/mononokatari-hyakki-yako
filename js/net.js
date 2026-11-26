@@ -80,11 +80,18 @@
     }
     const owner = location.hostname.split('.')[0];
     const repo = location.pathname.split('/').filter(Boolean)[0] || (owner + '.github.io');
-    // GitHub の API から読む（ページのキャッシュに左右されず、いつも最新）。server ブランチに置いてある
-    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/server.json?ref=server&t=${Date.now()}`, { cache: 'no-store' });
-    if (!res.ok) throw new Error('サーバーの場所がわかりませんでした');
-    const j = await res.json();
-    const info = JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\s/g, '')))));
+    // GitHub の API から読む（いつも最新）。server ブランチに置いてある。
+    // API は同じネット回線から1時間に60回までなので、断られたら raw（回数制限なし・最大5分前の内容）から読む
+    let info = null;
+    try {
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/server.json?ref=server&t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) { const j = await res.json(); info = JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\s/g, ''))))); }
+    } catch (e) { /* 下で raw を試す */ }
+    if (!info) {
+      const res = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/server/server.json?t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('サーバーの場所がわかりませんでした');
+      info = await res.json();
+    }
     if (!info.ws) throw new Error('サーバーが起動していません');
     return info.ws;
   }
