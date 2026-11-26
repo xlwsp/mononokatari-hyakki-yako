@@ -5,7 +5,7 @@
 # 先に GitHub へのログインが必要:  tools/bin/gh auth login
 cd "$(dirname "$0")"
 GH=tools/bin/gh
-NAME=${REPO_NAME:-nakama-survivor}
+NAME=${REPO_NAME:-mononokatari-hyakki-yako}
 "$GH" auth status >/dev/null 2>&1 || { echo "先に GitHub にログインしてね:  tools/bin/gh auth login"; exit 1; }
 OWNER=$("$GH" api user --jq .login)
 REPO="$OWNER/$NAME"

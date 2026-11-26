@@ -13,7 +13,7 @@ PC（キーボード）とスマホ（縦画面・ドラッグ操作）の両方
 
 ### ずっと同じURLで遊んでもらう（GitHub Pages）
 
-遊ぶ人に送るURL: **https://xlwsp.github.io/nakama-survivor/**
+遊ぶ人に送るURL: **https://xlwsp.github.io/mononokatari-hyakki-yako/**
 
 - ゲームの画面は GitHub Pages から配信。ゲームの計算はこのMacで行う
 - `bash start_online.sh` を起動すると、その時のサーバーのURLが GitHub（`server` ブランチの `server.json`）に自動で書き込まれ、
