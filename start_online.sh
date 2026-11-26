@@ -9,12 +9,18 @@
 # URLを知っている人は誰でもアクセスできるので、共有する相手に注意してください。
 
 cd "$(dirname "$0")"
-PORT=${PORT:-8000}
+PORT=${PORT:-8765}   # このゲーム専用（8000番はほかのテスト用サーバーとぶつかりやすい）
+# 自動の見張り（tools/install_keep_online.sh）が動いているときは、そちらにまかせる
+if launchctl print "gui/$(id -u)/com.mononokatari.keeponline" >/dev/null 2>&1; then
+  echo "サーバーは自動の見張りで動いています（tools/keep_online.log を見てね）。作り直しを頼みました。"
+  launchctl kickstart -k "gui/$(id -u)/com.mononokatari.keeponline"
+  exit 0
+fi
 BIN=tools/bin/cloudflared
 
 # すでにサーバーが動いていなければ起動（下の公開方法どちらでも共通）
 start_server() {
-  if ! lsof -nP -iTCP:$PORT -sTCP:LISTEN >/dev/null 2>&1; then
+  if ! pgrep -f "server.py $PORT" >/dev/null; then
     python3 server.py $PORT &
     SERVER_PID=$!
     sleep 1
@@ -51,7 +57,7 @@ if [ -n "$NGROK_AUTHTOKEN" ] && [ -n "$NGROK_DOMAIN" ]; then
   echo "  （止めるときは Ctrl + C）"
   echo "=========================================================="
   echo ""
-  "$NG" http "$PORT" --url "https://$NGROK_DOMAIN" --authtoken "$NGROK_AUTHTOKEN" --log stdout --log-level warn
+  "$NG" http "127.0.0.1:$PORT" --url "https://$NGROK_DOMAIN" --authtoken "$NGROK_AUTHTOKEN" --log stdout --log-level warn
   [ -n "$SERVER_PID" ] && kill $SERVER_PID 2>/dev/null
   exit 0
 fi
@@ -83,7 +89,7 @@ cleanup() {
 trap cleanup INT TERM
 
 LOG=$(mktemp)
-"$BIN" tunnel --no-autoupdate --url "http://localhost:$PORT" >"$LOG" 2>&1 &
+"$BIN" tunnel --no-autoupdate --url "http://127.0.0.1:$PORT" >"$LOG" 2>&1 &
 TUNNEL_PID=$!
 
 echo "公開用URLを準備中..."

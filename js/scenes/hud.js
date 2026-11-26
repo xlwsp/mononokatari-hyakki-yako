@@ -659,14 +659,8 @@
       // 置き場所：左上（HP・ボタン）と右上（ランキング）のあいだ。せまいときはボタンの段より下へ
       const sp = this.bbSpot(y0);
       const fit = t => t.setScale(Math.min(1, (sp.w + 40) / Math.max(1, t.width)));
-      if (bb && Math.hypot(bb[0] - meX, bb[1] - meY) < 2600) {
-        const w = sp.w, x = sp.cx - w / 2, y = sp.y + 22;
-        const bt = `大妖 オオマガツ　Lv${bb[3] || 200}`;
-        if (this.bbName.text !== bt) this.bbName.setText(bt);
-        fit(this.bbName.setVisible(true).setPosition(sp.cx, y - 2));
-        this.bar(g, x, y, w, 14, bb[2] / 1000, 0xa050ff, 0x140820);
-        fit(this.bbHint.setVisible(true).setPosition(sp.cx, y + 16).setText(`${(bb[2] / 10).toFixed(1)}%　倒すと世界の中央に経験値がばらまかれる！`));
-      } else if (!bb && this.gs.bbt > 0 && this.gs.bbt <= 30) {
+      if (bb) { this.bbName.setVisible(false); this.bbHint.setVisible(false); return; } // 大妖のHPは頭の上に出す（画面の上のUIと重ならないように）
+      if (this.gs.bbt > 0 && this.gs.bbt <= 30) {
         this.bbName.setVisible(false);
         fit(this.bbHint.setVisible(true).setPosition(sp.cx, sp.y).setText(`👹 大妖が世界の中央に現れるまで ${this.gs.bbt}秒`));
       } else { this.bbName.setVisible(false); this.bbHint.setVisible(false); }

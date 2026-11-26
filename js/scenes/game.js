@@ -393,6 +393,7 @@
         if (ei > 0) this.esnaps.splice(0, ei);
         this.renderEnemies(ea, eb, eal, dt);
       }
+      this.renderBigBossLabel();
       this.watchFps(dt);
       if (this.me) {
         // 体が大きくなったらカメラを引く：キャラが画面の短い辺の約2割に収まるように。
@@ -507,6 +508,22 @@
         this.overlay.fillStyle(0xff5a3a, 1); this.overlay.fillRoundedRect(x - bw / 2, top, bw * Phaser.Math.Clamp(hp / 1000, 0, 1), bh, 5);
       });
       for (let i = list.length; i < this.nushiTx.length; i++) this.nushiTx[i].setVisible(false);
+    }
+
+    // ---------- 大妖の頭の上の名前とHPバー（画面の上のUIと重ならないように） ----------
+    renderBigBossLabel() {
+      const o = this.bigO, bb = this.bb;
+      if (!this.bigTx) this.bigTx = this.add.text(0, 0, '', TR(22, '#e8d0ff', '#1a0a2a', 6)).setOrigin(0.5, 1).setDepth(FX_DEPTH - 2);
+      if (!o || !bb) { this.bigTx.setVisible(false); return; }
+      const z = Math.max(0.3, this.cameras.main.zoom);
+      const x = o.lx, top = o.ly - o.img.displayHeight * 0.85 - 20 / z; // 絵の上はし（origin 0.85）より少し上
+      const bw = Math.max(260, o.img.displayWidth * 0.8), bh = 16 / z;
+      const t = `大妖 オオマガツ　Lv${bb[3] || 200}　${(bb[2] / 10).toFixed(1)}%`;
+      if (this.bigTx.text !== t) this.bigTx.setText(t);
+      this.bigTx.setVisible(true).setPosition(x, top - 6 / z).setScale(1 / z);
+      const g = this.overlay;
+      g.fillStyle(0x140820, 0.9); g.fillRoundedRect(x - bw / 2 - 3 / z, top - 3 / z, bw + 6 / z, bh + 6 / z, 6 / z);
+      g.fillStyle(0xa050ff, 1); g.fillRoundedRect(x - bw / 2, top, bw * Phaser.Math.Clamp(bb[2] / 1000, 0, 1), bh, 5 / z);
     }
 
     // ---------- 妖気の渦（地面に紫のうず。中にいると経験値アップ） ----------
@@ -812,6 +829,7 @@
       const stamp = this.frame;
       const v = this.cameras.main.worldView;
       let bossNear = false;
+      this.bigO = null; // 画面に映っている大妖
       for (let i = 0; i < be.length; i += 4) {
         const id = be[i], raw = be[i + 1], ty = raw & 63, el = raw >= 64; // 強敵は種類+64
         if (ty === 4 || ty === 15 || ty >= 28 || FIELD_BOSS[ty]) bossNear = true;
@@ -842,6 +860,7 @@
         else o.img.setScale(s);
         const lift = ty === 1 || ty === 2 || ty === 13 || ty === 16 || ty === 17 ? 14 + wob * 40 : ty === 19 ? Math.abs(wob) * 90 : ty === 10 || ty === 27 ? Math.abs(wob) * 140 : ty === 26 ? 10 + wob * 30 : ty === 11 ? 6 + wob * 30 : 0; // 浮く・跳ねる
         o.img.setPosition(x, y - lift).setDepth(y); o.ly = y - lift;
+        if (ty === 15) { this.bigO = o; o.lx = x; }
         o.shadow.setPosition(x, y + 2).setDepth(y - 1);
         if (FIELD_BOSS[ty] && Math.random() < 0.06 * FIELD_BOSS[ty]) this.burst(x + Phaser.Math.Between(-60, 60), y - Phaser.Math.Between(20, 140), ENEMY_BURST[ty], 1); // ボスの妖気
         if ((ty === 28 || ty === 29) && Math.random() < 0.25) this.burst(x + Phaser.Math.Between(-110, 110), y - Phaser.Math.Between(40, 260), ENEMY_BURST[ty], 1); // ヌシの妖気

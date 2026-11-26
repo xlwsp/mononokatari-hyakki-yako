@@ -540,7 +540,7 @@
       this.setSave(this.saveData === undefined ? null : this.saveData, this.saveData === undefined);
       if (this.saveData === undefined) {
         Net.saveInfo().then(d => { this.saveData = d; if (this.sys.isActive()) this.setSave(d); })
-          .catch(() => { this.saveData = null; if (this.sys.isActive()) { this.setSave(null, false, true); this.showMaint(); } });
+          .catch(() => { this.saveData = null; if (this.sys.isActive()) { this.setSave(null, false, true); this.showMaint(true); } });
       }
       this.pick(this.sp);
       this.refreshPts();
@@ -746,7 +746,8 @@
       this.time.delayedCall(200, () => this.splash && this.input.keyboard.on('keydown', onKey));
     }
 
-    showMaint() {
+    // offline=true：メンテナンスではなく、サーバーにつながらないとき
+    showMaint(offline) {
       if (this.splash) this.splash.close();
       if (this.maintBox) return;
       const w = this.scale.width, h = this.scale.height;
@@ -754,8 +755,8 @@
       objs.push(this.add.rectangle(0, 0, w, h, 0x10081a, 0.82).setOrigin(0).setInteractive().setDepth(90));
       const pw = Math.min(460, w - 30), ph = 220;
       objs.push(UI.nightFrame(this, w / 2 - pw / 2, h / 2 - ph / 2, pw, ph, { alpha: 0.92, fill: 0x0c0818 }).setDepth(91));
-      objs.push(this.add.text(w / 2, h / 2 - 62, '🔧 メンテナンス中', TO(30, '#ffe07a', '#0a0614', 7)).setOrigin(0.5).setDepth(92));
-      objs.push(this.add.text(w / 2, h / 2 - 6, 'ゲームを更新しています。\n終わると自動で始められるようになります。\n（セーブは消えません）', T(15, '#fff4e6', { align: 'center', lineSpacing: 4 })).setOrigin(0.5).setDepth(92));
+      objs.push(this.add.text(w / 2, h / 2 - 62, offline ? '📡 サーバーに接続中' : '🔧 メンテナンス中', TO(30, '#ffe07a', '#0a0614', 7)).setOrigin(0.5).setDepth(92));
+      objs.push(this.add.text(w / 2, h / 2 - 6, offline ? 'サーバーにつながりません。\nつながりしだい、自動で始められるようになります。\n（セーブは消えません）' : 'ゲームを更新しています。\n終わると自動で始められるようになります。\n（セーブは消えません）', T(15, '#fff4e6', { align: 'center', lineSpacing: 4 })).setOrigin(0.5).setDepth(92));
       const dots = this.add.text(w / 2, h / 2 + 66, '', T(16, '#cfc2e6')).setOrigin(0.5).setDepth(92);
       objs.push(dots);
       this.hideInput(true);

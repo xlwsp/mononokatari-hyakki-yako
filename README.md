@@ -8,7 +8,7 @@ PC（キーボード）とスマホ（縦画面・ドラッグ操作）の両方
 
 | やりたいこと | コマンド |
 |---|---|
-| 自分のPC・同じWi-Fiで遊ぶ | `python3 server.py` → http://localhost:8000 |
+| 自分のPC・同じWi-Fiで遊ぶ | `python3 server.py` → http://localhost:8765 |
 | **インターネットに公開**（URLを知っている人なら誰でも） | `bash start_online.sh` |
 
 ### ずっと同じURLで遊んでもらう（GitHub Pages）

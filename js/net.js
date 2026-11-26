@@ -102,8 +102,18 @@
     return t;
   }
 
-  let urlCache = null;
-  const getUrl = () => (urlCache || (urlCache = serverUrl().catch(e => { urlCache = null; throw new Error(e.message || 'サーバーの場所がわかりませんでした'); })));
+  // サーバーの場所（GitHub に1時間60回までしか聞けないので、聞き直しは30秒に1回まで）
+  let urlCache = null, lastUrl = null, lastAsk = 0, lastErr = null;
+  const getUrl = () => {
+    if (urlCache) return urlCache;
+    if (lastAsk && performance.now() - lastAsk < 30000) {
+      if (lastUrl) return (urlCache = Promise.resolve(lastUrl));
+      return Promise.reject(new Error(lastErr || 'サーバーが起動していません'));
+    }
+    lastAsk = performance.now();
+    return (urlCache = serverUrl().then(u => { lastErr = null; return (lastUrl = u); })
+      .catch(e => { urlCache = null; lastUrl = null; lastErr = e.message || 'サーバーの場所がわかりませんでした'; throw new Error(lastErr); }));
+  };
 
   // サーバーにつないで世界に参加する。cont=true なら続きから。成功したら Session を返す
   function connect(name, sp, cont) {
@@ -119,7 +129,7 @@
       relay.on('open', () => relay.send(Object.assign({ t: q, tok: token() }, extra || {})));
       relay.on(a, m => { clearTimeout(timer); relay.close(); resolve(m.d || null); });
       relay.on('error', () => { clearTimeout(timer); reject(new Error('error')); });
-    }));
+    })).catch(e => { urlCache = null; throw e; }); // つながらなかったら、次はサーバーの場所から調べ直す（URLが変わっていることがある）
   }
   // 続きからのデータがあるか（{sp, lv, ev} か null）
   const saveInfo = () => ask('save?', 'save');
@@ -147,7 +157,7 @@
 
   function openSession(url, name, sp, cont) {
     return new Promise((resolve, reject) => {
-      if (location.protocol === 'file:') { reject(new Error('server.py を起動して http://localhost:8000 を開いてね')); return; }
+      if (location.protocol === 'file:') { reject(new Error('server.py を起動して http://localhost:8765 を開いてね')); return; }
       let relay;
       try { relay = new Net.Relay(url); } catch (e) { reject(new Error('サーバーに接続できませんでした')); return; }
       const offs = [];

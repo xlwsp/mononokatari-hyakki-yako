@@ -6,7 +6,7 @@
 - ゲームの計算は「ずっと続く1つの世界」として、このサーバーが macOS 標準の
   JavaScriptCore (jsc) で js/sim.js を動かして行う。だれかが抜けても世界は止まらない。
 
-使い方:  python3 server.py [ポート番号]   (既定 8000)
+使い方:  python3 server.py [ポート番号]   (既定 8765)
 """
 import asyncio
 import base64
@@ -23,7 +23,7 @@ import time
 from urllib.parse import unquote, urlparse
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get('PORT', 8000))
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get('PORT', 8765))
 GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 MAX_HUMANS = 50
 # 全体チャット（友達と遊ぶ間だけ。Falseにすると消える）

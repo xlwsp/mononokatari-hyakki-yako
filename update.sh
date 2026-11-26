@@ -6,7 +6,7 @@
 #   4. メンテナンス終了：遊んでいる人の画面は自動で最新版に読み込み直される
 #   使い方:  bash update.sh
 cd "$(dirname "$0")"
-PORT=${PORT:-8000}
+PORT=${PORT:-8765}   # このゲーム専用（8000番はほかのテスト用サーバーとぶつかりやすい）
 GH=tools/bin/gh
 
 echo "🔧 メンテナンスを開始します…"
@@ -33,13 +33,13 @@ if [ -n "$REPO" ]; then
 fi
 
 echo "🔄 サーバーを起動し直しています…"
-PID=$(lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null | head -1)
+PID=$(pgrep -f "server.py $PORT" | head -1)   # このゲームのサーバーだけ（同じポートの別のサーバーは止めない）
 if [ -n "$PID" ]; then
   kill "$PID" 2>/dev/null
   for i in $(seq 1 50); do kill -0 "$PID" 2>/dev/null || break; sleep 0.2; done
 fi
 nohup python3 server.py "$PORT" >> tools/server.log 2>&1 &
-for i in $(seq 1 25); do lsof -nP -iTCP:$PORT -sTCP:LISTEN >/dev/null 2>&1 && break; sleep 0.2; done
+for i in $(seq 1 25); do pgrep -f "server.py $PORT" >/dev/null && break; sleep 0.2; done
 sleep 1
 
 rm -f tools/maintenance
