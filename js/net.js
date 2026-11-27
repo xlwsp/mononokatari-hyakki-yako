@@ -109,34 +109,57 @@
     return t;
   }
 
-  // サーバーの場所（GitHub に1時間60回までしか聞けないので、聞き直しは30秒に1回まで）
-  let urlCache = null, lastUrl = null, lastAsk = 0, lastErr = null;
-  const getUrl = () => {
-    if (urlCache) return urlCache;
-    if (lastAsk && performance.now() - lastAsk < 30000) {
-      if (lastUrl) return (urlCache = Promise.resolve(lastUrl));
-      return Promise.reject(new Error(lastErr || 'サーバーが起動していません'));
+  // サーバーの場所。わかったURLは、つながらなくなるまで使い回す。
+  // 調べ直しは5秒に1回まで（GitHub に1時間60回までしか聞けないため）
+  let lastUrl = null, stale = true, lastAt = 0, urlP = null;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  function getUrl() {
+    if (lastUrl && !stale) return Promise.resolve(lastUrl);
+    if (urlP) return urlP; // 同時に何回も聞かない
+    urlP = (async () => {
+      const wait = 5000 - (performance.now() - lastAt);
+      if (lastAt && wait > 0) await sleep(wait);
+      lastAt = performance.now();
+      const u = await serverUrl();
+      lastUrl = u; stale = false;
+      return u;
+    })().finally(() => { urlP = null; });
+    return urlP;
+  }
+  // つながらなかったら、サーバーの場所を調べ直して何回かやり直す
+  // （公開URLが新しくなった直後でも、遊んでいる人には「つながりません」を出さないため）
+  async function retry(fn) {
+    let err = null;
+    for (let i = 0; i < 4; i++) {
+      let url = null;
+      try { url = await getUrl(); } catch (e) { err = e; }
+      if (url) {
+        try { return await fn(url); } catch (e) {
+          if (e.maint || e.full) throw e; // メンテ中・満員はやり直さない
+          err = e;
+          if (lastUrl === url) stale = true;
+        }
+      }
+      if (i < 3) await sleep(1500 + i * 2500);
     }
-    lastAsk = performance.now();
-    return (urlCache = serverUrl().then(u => { lastErr = null; return (lastUrl = u); })
-      .catch(e => { urlCache = null; lastUrl = null; lastErr = e.message || 'サーバーの場所がわかりませんでした'; throw new Error(lastErr); }));
-  };
+    throw err || new Error('サーバーにつながりません');
+  }
 
   // サーバーにつないで世界に参加する。cont=true なら続きから。成功したら Session を返す
   function connect(name, sp, cont) {
-    return getUrl().then(url => openSession(url, name, sp, cont)).catch(e => { urlCache = null; throw e; });
+    return retry(url => openSession(url, name, sp, cont));
   }
 
   // サーバーに1回だけ質問して答えをもらう
   function ask(q, a, extra) {
-    return getUrl().then(url => new Promise((resolve, reject) => {
+    return retry(url => new Promise((resolve, reject) => {
       let relay;
       try { relay = new Relay(url); } catch (e) { reject(e); return; }
       const timer = setTimeout(() => { relay.close(); reject(new Error('timeout')); }, 8000);
       relay.on('open', () => relay.send(Object.assign({ t: q, tok: token() }, extra || {})));
       relay.on(a, m => { clearTimeout(timer); relay.close(); resolve(m.d || null); });
       relay.on('error', () => { clearTimeout(timer); reject(new Error('error')); });
-    })).catch(e => { urlCache = null; throw e; }); // つながらなかったら、次はサーバーの場所から調べ直す（URLが変わっていることがある）
+    }));
   }
   // 続きからのデータがあるか（{sp, lv, ev} か null）
   const saveInfo = () => ask('save?', 'save');
@@ -164,7 +187,7 @@
 
   function openSession(url, name, sp, cont) {
     return new Promise((resolve, reject) => {
-      if (location.protocol === 'file:') { reject(new Error('server.py を起動して http://localhost:8765 を開いてね')); return; }
+      if (location.protocol === 'file:') { const e = new Error('server.py を起動して http://localhost:8765 を開いてね'); e.full = true; reject(e); return; }
       let relay;
       try { relay = new Net.Relay(url); } catch (e) { reject(new Error('サーバーに接続できませんでした')); return; }
       const offs = [];
@@ -176,7 +199,7 @@
         const ss = new Session({ myId: m.id, seed: m.seed, relay, sp, name }); ss.cont = !!m.cont; if (m.sp) ss.sp = m.sp; resolve(ss);
       }));
       offs.push(relay.on('maint', () => { clearTimeout(timer); done(); relay.close(); const e = new Error('メンテナンス中です'); e.maint = true; reject(e); }));
-      offs.push(relay.on('full', () => { clearTimeout(timer); done(); relay.close(); reject(new Error('満員です（最大50人）。少し待ってね')); }));
+      offs.push(relay.on('full', () => { clearTimeout(timer); done(); relay.close(); const e = new Error('満員です（最大50人）。少し待ってね'); e.full = true; reject(e); }));
       offs.push(relay.on('error', () => { clearTimeout(timer); done(); reject(new Error('サーバーに接続できませんでした（今はサーバーが止まっているかも）')); }));
     });
   }

@@ -32,7 +32,7 @@ start_tunnel() {
   TPID=$!
   URL=""
   for i in $(seq 1 40); do
-    URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$TL" | head -1)
+    URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$TL" | grep -v '//api\.' | head -1)
     [ -n "$URL" ] && break
     kill -0 $TPID 2>/dev/null || break
     sleep 1
@@ -48,6 +48,7 @@ start_tunnel() {
     sleep 2
   done
   bash tools/set_server_url.sh "wss://${URL#https://}/ws" >/dev/null 2>&1
+  echo "$URL" > tools/tunnel_url
   say "公開しました: $URL"
 }
 
@@ -56,9 +57,9 @@ tunnel_ok() {
     [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$URL/")" = 200 ]
 }
 
+# 見張りが止まっても、公開URLはそのまま残す（見張りを再起動してもURLが変わらないように）
+# 完全に止めるのは tools/install_keep_online.sh --remove
 cleanup() {
-  bash tools/set_server_url.sh "" >/dev/null 2>&1   # 「止まっている」と書く
-  [ -n "$TPID" ] && kill $TPID 2>/dev/null
   [ -n "$CAF" ] && kill $CAF 2>/dev/null
   say "見張りを止めました"
   exit 0
@@ -69,7 +70,14 @@ trap cleanup INT TERM
 caffeinate -s -w $$ &
 CAF=$!
 
-say "見張りを始めました"
+# 前の見張りが作った公開URLがまだ生きていれば、それを使い続ける
+if [ -f tools/tunnel_url ]; then
+  OLD=$(cat tools/tunnel_url); OPID=$(pgrep -f "cloudflared tunnel" | head -1)
+  if [ -n "$OPID" ] && [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$OLD/")" = 200 ]; then
+    URL=$OLD; TPID=$OPID
+  fi
+fi
+say "見張りを始めました${URL:+（今の公開URLを引きつぎ: $URL）}"
 while true; do
   start_server
   if tunnel_ok; then FAIL=0; else FAIL=$((FAIL + 1)); fi

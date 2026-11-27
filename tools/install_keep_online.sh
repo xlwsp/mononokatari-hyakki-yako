@@ -11,6 +11,9 @@ DOM="gui/$(id -u)"
 launchctl bootout "$DOM/$LABEL" 2>/dev/null
 if [ "$1" = "--remove" ]; then
   rm -f "$PLIST"
+  pkill -f "cloudflared tunnel" 2>/dev/null
+  rm -f tools/tunnel_url
+  bash tools/set_server_url.sh "" >/dev/null 2>&1   # 「止まっている」と書く
   echo "見張りを外しました（サーバーは手動で bash start_online.sh で起動してね）"
   exit 0
 fi
